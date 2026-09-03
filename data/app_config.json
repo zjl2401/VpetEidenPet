@@ -1,0 +1,43 @@
+{
+  "font_size": 12,
+  "display_size": 128,
+  "display_preset": "中",
+  "difficulty": "中",
+  "rhythm_speed": "中",
+  "rhythm_chart_diff": "中",
+  "rhythm_auto": false,
+  "weather_city": "北京",
+  "seen_hints": {
+    "startup_warmup": true,
+    "startup_first_warmup": true,
+    "startup_first_warmup_v2": true,
+    "operation_guide": true,
+    "post_owner_guide": true,
+    "companion_bar": true,
+    "first_play:nu_src:home": true,
+    "music_mode": true,
+    "first_play:nu_src:rhythm_game": true
+  },
+  "work_mode": {
+    "show_props": true,
+    "show_stack": true
+  },
+  "show_timers": true,
+  "voice_mode": false,
+  "voice_interval_ms": 10000,
+  "voice_interval_preset": "中",
+  "difficulty_t": 0.5,
+  "strip_outer_black": false,
+  "sprite_pack": "normal",
+  "display_layer": "top",
+  "persona": "default",
+  "pet_id_api_url": "",
+  "pet_id_activation_code": "",
+  "launch_at_login": true,
+  "spawn_on_launcher_start": true,
+  "companion_aster": true,
+  "companion_morvay": true,
+  "home_ui": {
+    "last_edit_mode": "decorate"
+  }
+}

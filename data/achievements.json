@@ -1,0 +1,80 @@
+{
+  "unlocked": {
+    "owner_named": "2026-09-02 20:42",
+    "mode_follow": "2026-09-02 21:47",
+    "companion_on": "2026-09-02 21:48",
+    "home_visit": "2026-09-02 21:52",
+    "timer_use": "2026-09-02 21:53",
+    "weather_peek": "2026-09-02 21:54",
+    "memory_open": "2026-09-02 21:56",
+    "mode_work": "2026-09-02 22:38",
+    "mode_sleep": "2026-09-02 22:42",
+    "music_first": "2026-09-03 02:09"
+  },
+  "stats": {
+    "listen_seconds": 0.0,
+    "used_char_filter": false,
+    "feed_count": 0,
+    "diary_count": 0,
+    "schedule_count": 0,
+    "gather_plays": 0,
+    "gather_best": 0,
+    "typing_plays": 0,
+    "typing_best_grade": "",
+    "vocab_plays": 0,
+    "vocab_best_streak": 0,
+    "rhythm_plays": 0,
+    "rhythm_best_grade": "",
+    "rhyme_wins": 0,
+    "rhyme_jinmu_wins": 0,
+    "expose_clears": 0,
+    "modes_used": [
+      "follow",
+      "work",
+      "quiet",
+      "music"
+    ],
+    "mode_seconds": {
+      "free": 47289.916999999885,
+      "follow": 31.437,
+      "stroll": 15.846,
+      "quiet": 5.9559999999999995,
+      "work": 512.7379999999999,
+      "game": 0.0,
+      "music": 68.78699999999999
+    },
+    "work_total_seconds": 512.7379999999999,
+    "sleep_total_seconds": 5.9559999999999995,
+    "music_total_seconds": 68.767,
+    "companion_enabled": true,
+    "companion_open_count": 8,
+    "owner_named": true,
+    "gift_ready": false,
+    "pixel_gift": false,
+    "weather_peek": true,
+    "timer_use": true,
+    "memory_open": true,
+    "home_visit": true,
+    "farm_plant": false,
+    "farm_harvest": false,
+    "farm_chop": false,
+    "farm_fish": false,
+    "farm_craft": false,
+    "home_paint": false,
+    "rpg_play": false,
+    "meta_banter": {
+      "last_ms": 1788360146974,
+      "event_last": {
+        "sleep_end": 1788360146974
+      },
+      "used": {
+        "sleep_end": [
+          "结束键……比闹钟温柔一点。"
+        ]
+      }
+    },
+    "home_opened": true,
+    "work_boxes_total": 33,
+    "work_reward_boxes_granted": 1
+  }
+}
