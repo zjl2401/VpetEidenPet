@@ -44,7 +44,7 @@
       "follow": 31.437,
       "stroll": 15.846,
       "quiet": 5.9559999999999995,
-      "work": 5794.712000000003,
+      "work": 8658.973000000004,
       "game": 118.271,
       "music": 76.935
     },
@@ -97,7 +97,7 @@
       }
     },
     "home_opened": true,
-    "work_boxes_total": 468,
-    "work_reward_boxes_granted": 18
+    "work_boxes_total": 492,
+    "work_reward_boxes_granted": 19
   }
 }
