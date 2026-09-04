@@ -5,7 +5,7 @@
   "difficulty": "中",
   "rhythm_speed": "中",
   "rhythm_chart_diff": "中",
-  "rhythm_auto": false,
+  "rhythm_auto": true,
   "weather_city": "北京",
   "seen_hints": {
     "startup_warmup": true,
@@ -16,14 +16,18 @@
     "companion_bar": true,
     "first_play:nu_src:home": true,
     "music_mode": true,
-    "first_play:nu_src:rhythm_game": true
+    "first_play:nu_src:rhythm_game": true,
+    "first_play:nu_src:gather": true,
+    "game_mode": true,
+    "first_play:vocab": true,
+    "rhythm_game": true
   },
   "work_mode": {
     "show_props": true,
     "show_stack": true
   },
   "show_timers": true,
-  "voice_mode": false,
+  "voice_mode": true,
   "voice_interval_ms": 10000,
   "voice_interval_preset": "中",
   "difficulty_t": 0.5,
@@ -39,5 +43,6 @@
   "companion_morvay": true,
   "home_ui": {
     "last_edit_mode": "decorate"
-  }
+  },
+  "eiden_voice_pack_on": true
 }

@@ -1,5 +1,5 @@
 {
-  "coins": 22,
+  "coins": 65,
   "items": {
     "seed_wheat": 4,
     "seed_berry": 2,
@@ -10,7 +10,7 @@
     "wood": 1,
     "flower_cut": 0,
     "fish": 0,
-    "work_reward_box": 1
+    "work_reward_box": 2
   },
-  "last_daily_coin_ymd": "2026-09-03"
+  "last_daily_coin_ymd": "2026-09-04"
 }

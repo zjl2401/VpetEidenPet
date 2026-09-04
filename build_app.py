@@ -135,16 +135,30 @@ def _sync_vpetgame() -> None:
 
 
 def _sync_bundled_media(*, force: bool = True) -> None:
-    """打包前：桌面 VpetEiden/music → bundled/Vpetmusic；Vpetvoice 仅保留工程内预留目录。"""
+    """打包前：同步音乐 / 语音 / 音效到 bundled。"""
     from media_bundled import count_media_files, sync_bundled_audio_only
 
     BUNDLED_SRC.mkdir(parents=True, exist_ok=True)
+
+    # 伊得语音 + UI 音效（桌面 VpetEiden/voice、sound）
+    try:
+        from tools_sync_eiden_audio import sync_sound, sync_voice
+
+        sync_sound()
+        sync_voice()
+    except Exception as exc:
+        print(f"  警告：同步 Eiden sound/voice 失败：{exc}")
+
     voice_dst = BUNDLED_SRC / "Vpetvoice"
     voice_dst.mkdir(parents=True, exist_ok=True)
     for sub in ("Vpet", "Allmate", "laimu"):
         (voice_dst / sub).mkdir(parents=True, exist_ok=True)
     audio_n, video_n = count_media_files(voice_dst)
-    print(f"  bundled/Vpetvoice: 预留目录（不同步桌面），现有音频 {audio_n}，残留视频 {video_n}")
+    print(f"  bundled/Vpetvoice: 音频 {audio_n}，残留视频 {video_n}")
+    sfx_dst = BUNDLED_SRC / "Vpetsound"
+    if sfx_dst.is_dir():
+        sfx_n, _ = count_media_files(sfx_dst)
+        print(f"  bundled/Vpetsound: 音效 {sfx_n}")
 
     name, src = "Vpetmusic", LEGACY_MUSIC_SRC
     dst = BUNDLED_SRC / name
@@ -213,7 +227,7 @@ def _publish_bundled_media(staging: Path) -> None:
     removed = prune_video_files(dst)
     if removed:
         print(f"  发布包剔除残留视频 {removed} 个")
-    for name in ("Vpetvoice", "Vpetmusic"):
+    for name in ("Vpetvoice", "Vpetmusic", "Vpetsound"):
         sub = dst / name
         audio_n, video_n = count_media_files(sub)
         print(f"  发布 bundled/{name}: 音频 {audio_n}，视频 {video_n}")

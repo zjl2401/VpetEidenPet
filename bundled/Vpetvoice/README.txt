@@ -1,11 +1,14 @@
-艾登语音预留目录（旧语音已清空）
+伊得语音目录（程序会自动扫描 wav / mp3）
 
-把新的 wav / mp3 放到这里，程序会自动扫描：
-
-  Vpet\<场景>\xxx.wav     艾登
-      常用场景名：normal  call  eat  walk  work  sleep  dizzy  game  hurt  hungry  error  end
-      打招呼：Vpet\你好\
+  Vpet\<场景>\xxx.wav     伊得
+      常用场景：normal  call  eat  walk  work  sleep  dizzy  game  hurt  hungry  error  end  yuqi  hi
+      打招呼也可放：Vpet\你好\
   Allmate\xxx.wav         使魔（艾斯特 / 墨菲）
   laimu\xxx.wav           （预留）
 
-不要把文件放到桌面的 Vpetvoice（那是苍叶工程用的）。
+开发机也可把原始 mp4 放到桌面 VpetEiden\voice，然后运行：
+
+  python VpetMobile\tools\sync_eiden_voices.py
+
+会抽音转 wav，同步到本目录和手机 assets。
+不要把苍叶 / 莲的语音放进来。

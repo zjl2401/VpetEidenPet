@@ -9,7 +9,12 @@
     "memory_open": "2026-09-02 21:56",
     "mode_work": "2026-09-02 22:38",
     "mode_sleep": "2026-09-02 22:42",
-    "music_first": "2026-09-03 02:09"
+    "music_first": "2026-09-03 02:09",
+    "gather_play": "2026-09-04 00:18",
+    "diary_first": "2026-09-04 00:19",
+    "vocab_play": "2026-09-04 00:19",
+    "rhythm_play": "2026-09-04 10:29",
+    "rhythm_great": "2026-09-04 10:29"
   },
   "stats": {
     "listen_seconds": 0.0,
@@ -17,14 +22,14 @@
     "feed_count": 0,
     "diary_count": 0,
     "schedule_count": 0,
-    "gather_plays": 0,
-    "gather_best": 0,
+    "gather_plays": 2,
+    "gather_best": 196,
     "typing_plays": 0,
     "typing_best_grade": "",
-    "vocab_plays": 0,
+    "vocab_plays": 5,
     "vocab_best_streak": 0,
-    "rhythm_plays": 0,
-    "rhythm_best_grade": "",
+    "rhythm_plays": 1,
+    "rhythm_best_grade": "A",
     "rhyme_wins": 0,
     "rhyme_jinmu_wins": 0,
     "expose_clears": 0,
@@ -35,19 +40,19 @@
       "music"
     ],
     "mode_seconds": {
-      "free": 47289.916999999885,
+      "free": 57030.04599999974,
       "follow": 31.437,
       "stroll": 15.846,
       "quiet": 5.9559999999999995,
-      "work": 512.7379999999999,
-      "game": 0.0,
-      "music": 68.78699999999999
+      "work": 823.9129999999999,
+      "game": 118.271,
+      "music": 76.935
     },
-    "work_total_seconds": 512.7379999999999,
+    "work_total_seconds": 823.9129999999999,
     "sleep_total_seconds": 5.9559999999999995,
-    "music_total_seconds": 68.767,
+    "music_total_seconds": 76.874,
     "companion_enabled": true,
-    "companion_open_count": 8,
+    "companion_open_count": 25,
     "owner_named": true,
     "gift_ready": false,
     "pixel_gift": false,
@@ -63,18 +68,32 @@
     "home_paint": false,
     "rpg_play": false,
     "meta_banter": {
-      "last_ms": 1788360146974,
+      "last_ms": 1788452290663,
       "event_last": {
-        "sleep_end": 1788360146974
+        "sleep_end": 1788360146974,
+        "crossover_meet": 1788447837071,
+        "screen_edge": 1788443879236,
+        "drag_long": 1788452290663
       },
       "used": {
         "sleep_end": [
           "结束键……比闹钟温柔一点。"
+        ],
+        "crossover_meet": [
+          "跨到碧岛这边来了呢。",
+          "桌面两边各站一只……",
+          "苍叶也开机了？"
+        ],
+        "screen_edge": [
+          "这边是屏幕的尽头哦。"
+        ],
+        "drag_long": [
+          "你在挪窗口，不是在遛我……"
         ]
       }
     },
     "home_opened": true,
-    "work_boxes_total": 33,
-    "work_reward_boxes_granted": 1
+    "work_boxes_total": 54,
+    "work_reward_boxes_granted": 2
   }
 }

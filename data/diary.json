@@ -1,0 +1,59 @@
+{
+  "entries": [
+    {
+      "id": "bbf041d1-1a70-4966-9d07-44dd51e9f97f",
+      "date": "2026-09-04",
+      "time": "00:19",
+      "text": "背单词正确：毅力",
+      "mood": 100,
+      "mood_face": "happy",
+      "weather": "sunny",
+      "weather_label": "晴朗",
+      "auto": true
+    },
+    {
+      "id": "c1c15522-d4c3-4fc5-b146-6d521242613d",
+      "date": "2026-09-04",
+      "time": "00:19",
+      "text": "背单词正确：引导",
+      "mood": 100,
+      "mood_face": "happy",
+      "weather": "sunny",
+      "weather_label": "晴朗",
+      "auto": true
+    },
+    {
+      "id": "806db486-56bb-40e7-b944-477ae9daa9f3",
+      "date": "2026-09-04",
+      "time": "00:19",
+      "text": "背单词正确：判决",
+      "mood": 100,
+      "mood_face": "happy",
+      "weather": "sunny",
+      "weather_label": "晴朗",
+      "auto": true
+    },
+    {
+      "id": "1c5ce608-7bd5-478c-a4ba-f299b07c21fd",
+      "date": "2026-09-04",
+      "time": "00:19",
+      "text": "背单词正确：平静",
+      "mood": 100,
+      "mood_face": "happy",
+      "weather": "sunny",
+      "weather_label": "晴朗",
+      "auto": true
+    },
+    {
+      "id": "178986f0-78b7-480f-9f63-9557c5cba60f",
+      "date": "2026-09-04",
+      "time": "00:19",
+      "text": "背单词正确：鸦雀无声",
+      "mood": 100,
+      "mood_face": "happy",
+      "weather": "sunny",
+      "weather_label": "晴朗",
+      "auto": true
+    }
+  ]
+}
