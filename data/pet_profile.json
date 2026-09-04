@@ -161,5 +161,14 @@
   "last_pet_bday_ymd": "",
   "last_pet_bday_nudge_ymd": "",
   "wear_flower": false,
-  "outfit_decors": []
+  "outfit_decors": [
+    {
+      "id": "5494ea1806",
+      "kind": "builtin",
+      "ref": "bow",
+      "nx": 0.0,
+      "ny": -0.38,
+      "scale": 0.45
+    }
+  ]
 }
