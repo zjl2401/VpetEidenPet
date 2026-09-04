@@ -40,19 +40,19 @@
       "music"
     ],
     "mode_seconds": {
-      "free": 58659.36899999972,
+      "free": 73849.35899999969,
       "follow": 31.437,
       "stroll": 15.846,
       "quiet": 5.9559999999999995,
-      "work": 9139.221000000003,
+      "work": 823.9129999999999,
       "game": 118.271,
       "music": 76.935
     },
-    "work_total_seconds": 9080.073000000004,
+    "work_total_seconds": 823.9129999999999,
     "sleep_total_seconds": 5.9559999999999995,
     "music_total_seconds": 76.874,
     "companion_enabled": true,
-    "companion_open_count": 28,
+    "companion_open_count": 26,
     "owner_named": true,
     "gift_ready": false,
     "pixel_gift": false,
@@ -68,13 +68,13 @@
     "home_paint": false,
     "rpg_play": false,
     "meta_banter": {
-      "last_ms": 1788501132175,
+      "last_ms": 1788500506486,
       "event_last": {
         "sleep_end": 1788360146974,
         "crossover_meet": 1788447837071,
         "screen_edge": 1788443879236,
         "drag_long": 1788452290663,
-        "peer_meet": 1788501132175
+        "peer_meet": 1788500506486
       },
       "used": {
         "sleep_end": [
@@ -93,12 +93,13 @@
         ],
         "peer_meet": [
           "啊，又一个我。",
-          "屏幕里怎么站了两只……"
+          "屏幕里怎么站了两只……",
+          "双开了？那边的我也辛苦了。"
         ]
       }
     },
     "home_opened": true,
-    "work_boxes_total": 524,
-    "work_reward_boxes_granted": 20
+    "work_boxes_total": 54,
+    "work_reward_boxes_granted": 2
   }
 }
