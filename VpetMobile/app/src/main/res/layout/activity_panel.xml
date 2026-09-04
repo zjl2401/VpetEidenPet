@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 紧凑浮窗面板：默认只露状态条+折叠背包，展开后内部滚动 -->
+<!-- 伊得奶油紧凑面板：少字 + 像素食图标 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -10,36 +10,36 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="@drawable/bg_panel_card"
-        android:paddingStart="14dp"
-        android:paddingEnd="14dp"
-        android:paddingTop="12dp"
-        android:paddingBottom="12dp"
-        android:elevation="8dp">
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:elevation="6dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="6dp">
 
             <TextView
                 android:id="@+id/panelTitle"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="状态面板"
+                android:text="状态"
                 android:textColor="@color/accent_pink"
-                android:textSize="16sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/btnPanelClose"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="关闭"
-                android:textColor="#AAB8C8"
-                android:textSize="13sp"
+                android:text="×"
+                android:textColor="@color/theme_blue_deep"
+                android:textSize="18sp"
                 android:padding="6dp"
                 android:background="?attr/selectableItemBackgroundBorderless" />
         </LinearLayout>
@@ -58,7 +58,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="体力"
-            android:textColor="#AAB8C8"
+            android:textColor="@color/pixel_accent"
             android:textSize="11sp" />
 
         <ProgressBar
@@ -74,7 +74,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="心情"
-            android:textColor="#AAB8C8"
+            android:textColor="@color/pixel_accent"
             android:textSize="11sp" />
 
         <ProgressBar
@@ -82,23 +82,25 @@
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
             android:layout_height="8dp"
-            android:layout_marginBottom="10dp"
+            android:layout_marginBottom="8dp"
             android:max="100" />
 
         <Button
             android:id="@+id/btnToggleBag"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
+            android:layout_height="38dp"
             android:text="背包 ▶"
             android:textSize="13sp"
+            android:textColor="@color/text_main"
+            android:background="@color/menu_item_bg"
             android:layout_marginBottom="2dp" />
 
         <TextView
             android:id="@+id/bagHint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="点按直喂 · 长按拖到桌宠"
-            android:textColor="#88A0B8"
+            android:text="点喂 · 长按拖到桌宠"
+            android:textColor="@color/theme_blue_deep"
             android:textSize="10sp"
             android:visibility="gone"
             android:layout_marginBottom="4dp" />

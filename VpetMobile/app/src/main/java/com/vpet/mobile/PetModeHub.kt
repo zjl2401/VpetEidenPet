@@ -86,19 +86,19 @@ class PetModeHub(
     private var interactGen = 0
 
     companion object {
-        const val FREE_RANDOM_ACTION_CHANCE = 0.06f
+        const val FREE_RANDOM_ACTION_CHANCE = 0.05f
         const val MOOD_RANDOM_CHANCE = 0.09f
         const val MOOD_LOW_THRESHOLD = 40
-        const val VOICE_FREE_RANDOM_CHANCE = 0.045f
+        const val VOICE_FREE_RANDOM_CHANCE = 0.04f
         const val VOICE_WORK_RANDOM_CHANCE = VOICE_FREE_RANDOM_CHANCE
         const val WORK_MODE_BANTER_COOLDOWN_MS = 30_000L
         const val WORK_MODE_BANTER_INTERVAL_LO_MS = 30_000L
         const val WORK_MODE_BANTER_INTERVAL_HI_MS = 90_000L
         const val DRAG_MOVE_VOICE_AFTER_MS = 3000L
         const val DRAG_MOVE_VOICE_RETRY_MS = 6500L
-        const val META_BANTER_GLOBAL_COOLDOWN_MS = 110_000L
+        const val META_BANTER_GLOBAL_COOLDOWN_MS = 180_000L
         const val META_BANTER_IDLE_MS = 8 * 60_000L
-        const val META_BANTER_IDLE_CHECK_MS = 25_000L
+        const val META_BANTER_IDLE_CHECK_MS = 12_000L
     }
 
     val isWorking get() = workEngine?.active == true || workDesk?.active == true
@@ -126,6 +126,7 @@ class PetModeHub(
         "mode_follow" -> isFollowing
         "mode_stroll" -> isStrollMode
         "mode_quiet" -> isQuiet
+        "mode_work" -> isWorking
         "mode_music" -> musicMode
         "game_collect" -> isCollecting
         "work_free", "act_work" -> workDesk?.active == true ||
@@ -1012,7 +1013,7 @@ class PetModeHub(
                     if (!isPomodoro) showToast(msg)
                 }
                 override fun onFlagMovedFar() {
-                    maybeMetaBanter("work_flag", forceChance = 0.32f)
+                    maybeMetaBanter("work_flag", forceChance = 0.18f)
                 }
                 override fun onBoxDelivered() {
                     AppDataStore.addStaminaMood(context, 2, 1)
@@ -1742,7 +1743,11 @@ class PetModeHub(
         companionRoster?.raiseLayers()
         fx?.raiseLayer()
         speech?.raiseLayer()
-        raisePetOverlay?.invoke()
+        // 有模态弹窗时不抬桌宠盖住弹窗；弹窗始终最后抬
+        if (!OverlayZOrder.hasModal()) {
+            raisePetOverlay?.invoke()
+        }
+        OverlayZOrder.raiseModals()
     }
 
     fun refreshCompanionSize() {
@@ -1928,18 +1933,20 @@ class PetModeHub(
 
     private fun startActivity(cls: Class<*>) {
         val i = android.content.Intent(context, cls)
-        if (context !is android.app.Activity) {
-            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
+        i.addFlags(
+            android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT,
+        )
         context.startActivity(i)
     }
 
     fun openSystemPage(page: String) {
         val i = android.content.Intent(context, SystemHubActivity::class.java)
             .putExtra(SystemHubActivity.EXTRA_PAGE, page)
-        if (context !is android.app.Activity) {
-            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
+        i.addFlags(
+            android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT,
+        )
         context.startActivity(i)
     }
 
@@ -2063,6 +2070,24 @@ class PetModeHub(
                 )
                 banter("question")
             }
+            "expr_speechless" -> {
+                animator.playPose(
+                    listOf(SpriteAssets.STAND_SPEECHLESS),
+                    PetAnimator.DUR_SPEECHLESS,
+                    loop = false,
+                )
+                banter("speechless")
+            }
+            "expr_awkward" -> {
+                // 站立 + 右上流汗动效（对照 awkward + _show_sweat_fx）
+                animator.playPose(
+                    listOf(SpriteAssets.STAND),
+                    PetAnimator.DUR_AWKWARD,
+                    loop = false,
+                )
+                fx?.showSweat(PetAnimator.DUR_AWKWARD)
+                banter("awkward")
+            }
             "expr_bixin" -> {
                 animator.playPose(listOf(SpriteAssets.STAND), PetAnimator.DUR_BIXIN, loop = false)
                 fx?.showBixin(PetAnimator.DUR_BIXIN)
@@ -2079,6 +2104,8 @@ class PetModeHub(
             "expr_angry" -> PetAnimator.DUR_ANGRY + 10 * PetAnimator.ANGRY_FRAME_MS
             "expr_idea" -> PetAnimator.IDEA_STAND_MS + PetAnimator.DUR_IDEA
             "expr_question" -> PetAnimator.DUR_QUESTION
+            "expr_speechless" -> PetAnimator.DUR_SPEECHLESS
+            "expr_awkward" -> PetAnimator.DUR_AWKWARD
             "expr_bixin" -> PetAnimator.DUR_BIXIN
             else -> 1200L
         }
@@ -2421,7 +2448,7 @@ class PetModeHub(
         }
         if (Random.nextFloat() < FREE_RANDOM_ACTION_CHANCE) {
             // 自由随机动作不含 wink；squat 无 banter
-            val pool = listOf("hi", "squat", "like", "question")
+            val pool = listOf("hi", "squat", "like", "question", "speechless", "awkward")
             return fireIdleAction(pool.random())
         }
         return false
@@ -2463,6 +2490,14 @@ class PetModeHub(
                 playExpression("expr_question")
                 return true
             }
+            "speechless" -> {
+                playExpression("expr_speechless")
+                return true
+            }
+            "awkward" -> {
+                playExpression("expr_awkward")
+                return true
+            }
             "idea" -> {
                 playExpression("expr_idea")
                 return true
@@ -2478,18 +2513,20 @@ class PetModeHub(
     private fun maybeMetaBanter(event: String, forceChance: Float? = null): Boolean {
         val lines = InteractLines.META[event] ?: return false
         val chance = forceChance ?: when (event) {
-            "drag_long" -> 0.20f
-            "work_flag" -> 0.32f
-            "idle_long" -> 0.40f
+            "drag_long" -> 0.12f
+            "work_flag" -> 0.18f
+            "idle_long" -> 0.24f
+            "screen_edge" -> 0.12f
             else -> 0.30f
         }
         if (Random.nextFloat() >= chance) return false
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - lastMetaGlobalMs < META_BANTER_GLOBAL_COOLDOWN_MS) return false
         val evCd = when (event) {
-            "drag_long" -> 240_000L
-            "work_flag" -> 160_000L
-            "idle_long" -> 700_000L
+            "drag_long" -> 360_000L
+            "work_flag" -> 240_000L
+            "idle_long" -> 900_000L
+            "screen_edge" -> 320_000L
             else -> 180_000L
         }
         if (now - (metaEventMs[event] ?: 0L) < evCd) return false

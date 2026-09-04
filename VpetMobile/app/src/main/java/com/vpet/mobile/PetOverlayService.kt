@@ -240,13 +240,11 @@ class PetOverlayService : Service() {
                 }
             },
             raisePetOverlay = {
-                val root = binding?.root ?: return@PetModeHub
-                val lp = layoutParams ?: return@PetModeHub
-                try {
-                    windowManager?.removeView(root)
-                    windowManager?.addView(root, lp)
-                } catch (_: Exception) {
+                if (OverlayZOrder.hasModal()) {
+                    OverlayZOrder.raiseModals()
+                    return@PetModeHub
                 }
+                OverlayZOrder.raise(windowManager, binding?.root, layoutParams)
             },
         )
         hub!!.raiseToolbars = {

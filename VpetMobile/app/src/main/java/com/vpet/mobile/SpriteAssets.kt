@@ -91,10 +91,11 @@ object SpriteAssets {
     const val MOVE2 = "sprites/move2.png"
     const val MOVE3 = "sprites/move3.png"
 
-    /** 站立 + 角标（对照 stand_question / stand_angry） */
+    /** 站立 + 角标（对照 stand_question / stand_angry / speechless） */
     const val STAND_QUESTION = "sticker/question"
     const val STAND_ANGRY = "sticker/angry"
     const val STAND_LIKE = "sticker/like"
+    const val STAND_SPEECHLESS = "sticker/speechless"
 
     enum class Dir(val dx: Int, val dy: Int) {
         FRONT(0, 1),
@@ -191,8 +192,13 @@ object SpriteAssets {
         val canvas = Canvas(out)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
         val px = maxOf(3, out.width / 32).toFloat()
-        val x = out.width - px * 5
-        val y = px * 2
+        // 默认右上；无语改左上（对照 pet.py _add_sticker）
+        var x = out.width - px * 5
+        var y = px * 2
+        if (kind == "speechless") {
+            x = px * 2
+            y = px * 2
+        }
         when (kind) {
             "angry" -> {
                 paint.color = Color.parseColor("#FF3333")
@@ -209,11 +215,19 @@ object SpriteAssets {
             }
             "question" -> {
                 paint.color = Color.parseColor("#FFCC33")
-                // ? 形像素块
                 canvas.drawRect(x + px, y, x + px * 3, y + px, paint)
                 canvas.drawRect(x + px * 2, y + px, x + px * 3, y + px * 2, paint)
                 canvas.drawRect(x + px, y + px * 2, x + px * 2, y + px * 3, paint)
                 canvas.drawRect(x + px, y + px * 3, x + px * 2, y + px * 4, paint)
+                canvas.drawRect(x + px, y + px * 5, x + px * 2, y + px * 6, paint)
+            }
+            "speechless" -> {
+                paint.color = Color.parseColor("#66CCFF")
+                canvas.drawRect(x + px, y, x + px * 2, y + px, paint)
+                canvas.drawRect(x, y + px, x + px * 3, y + px * 3, paint)
+                canvas.drawRect(x + px, y + px * 3, x + px * 2, y + px * 4, paint)
+                paint.color = Color.parseColor("#FFFFFF")
+                canvas.drawRect(x + px, y + px * 2, x + px * 2, y + px * 3, paint)
             }
             "like" -> {
                 paint.color = Color.parseColor("#FF6688")

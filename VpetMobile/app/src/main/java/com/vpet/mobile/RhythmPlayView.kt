@@ -21,10 +21,10 @@ class RhythmPlayView @JvmOverloads constructor(
         0xFFFFCC66.toInt(),
         0xFFFF88CC.toInt(),
     )
-    private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF0E141C.toInt() }
+    private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFF4E6.toInt() }
     private val lanePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xE0FFFFFF.toInt()
+        color = 0xFF3A2230.toInt()
         strokeWidth = 4f
     }
     private val notePaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -32,13 +32,13 @@ class RhythmPlayView @JvmOverloads constructor(
     private val flashPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val judgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
-        color = 0xFFFFEE88.toInt()
+        color = 0xFF9C2F55.toInt()
         textSize = 42f
         isFakeBoldText = true
     }
     private val comboPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
-        color = 0xFFFFFFFF.toInt()
+        color = 0xFF3A2230.toInt()
         textSize = 28f
     }
     private val tmp = RectF()
@@ -65,7 +65,7 @@ class RhythmPlayView @JvmOverloads constructor(
 
         for (i in 0 until RhythmChart.LANES) {
             val x0 = i * laneW
-            lanePaint.color = 0x18FFFFFF
+            lanePaint.color = 0x14000000
             canvas.drawRect(x0, 0f, x0 + laneW, h, lanePaint)
             val flashing = System.currentTimeMillis() < laneFlashUntil[i] || i in keysDown
             if (flashing) {

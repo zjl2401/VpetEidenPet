@@ -24,13 +24,16 @@ KIND_BUILTIN = "builtin"
 # 公开预设：12×12 色板下标（0=透明），简易像素图案
 _BUILTIN_PALETTE: tuple[str | None, ...] = (
     None,
-    "#ff6688",
-    "#ffcc66",
-    "#66ccff",
-    "#88eeaa",
-    "#ffffff",
-    "#cc88ff",
-    "#442233",
+    "#ff6688",  # 1 爱心粉
+    "#ffcc66",  # 2 星/问号黄
+    "#66ccff",  # 3 水滴青
+    "#88eeaa",  # 4 叶绿
+    "#ffffff",  # 5 白
+    "#cc88ff",  # 6 蝴蝶结紫
+    "#442233",  # 7 深色描边
+    "#ff4444",  # 8 怒气红
+    "#8899ee",  # 9 睡觉 Z
+    "#88ddff",  # 10 流汗浅蓝
 )
 
 
@@ -77,12 +80,100 @@ def _builtin_leaf(put) -> None:
         put(x, y, 4)
 
 
+def _builtin_question(put) -> None:
+    # 疑惑问号
+    for x, y in ((4, 1), (5, 1), (6, 1), (7, 1), (7, 2), (7, 3), (6, 3), (5, 4), (5, 5), (5, 7)):
+        put(x, y, 2)
+
+
+def _builtin_droplet(put) -> None:
+    # 无语水滴
+    for x, y in ((5, 1), (4, 2), (5, 2), (6, 2), (3, 3), (4, 3), (5, 3), (6, 3), (7, 3),
+                 (3, 4), (4, 4), (5, 4), (6, 4), (7, 4), (4, 5), (5, 5), (6, 5), (5, 6)):
+        put(x, y, 3)
+
+
+def _builtin_sweat(put) -> None:
+    # 尴尬流汗
+    for x, y in ((6, 1), (5, 2), (6, 2), (7, 2), (4, 3), (5, 3), (6, 3), (5, 4), (6, 4), (6, 5), (7, 6)):
+        put(x, y, 10)
+    put(8, 3, 10)
+    put(8, 4, 10)
+
+
+def _builtin_angry_mark(put) -> None:
+    # 生气怒气符（十字+角点）
+    for x, y in ((5, 1), (5, 2), (5, 3), (5, 4), (5, 5), (3, 3), (4, 3), (6, 3), (7, 3),
+                 (2, 1), (8, 1), (2, 5), (8, 5)):
+        put(x, y, 8)
+
+
+def _builtin_sleep_z(put) -> None:
+    # 睡觉 Z
+    for x, y in ((3, 2), (4, 2), (5, 2), (6, 2), (6, 3), (5, 4), (4, 5), (3, 6), (4, 6), (5, 6), (6, 6),
+                 (7, 7), (8, 7), (9, 7), (9, 8), (8, 9), (7, 10), (8, 10), (9, 10)):
+        put(x, y, 9)
+
+
 BUILTIN_CATALOG: tuple[dict, ...] = (
     {"id": "star", "name": "星星", "cells": _paint_cells(_builtin_star)},
     {"id": "heart", "name": "爱心", "cells": _paint_cells(_builtin_heart)},
     {"id": "bow", "name": "蝴蝶结", "cells": _paint_cells(_builtin_bow)},
     {"id": "leaf", "name": "小叶", "cells": _paint_cells(_builtin_leaf)},
+    {
+        "id": "question",
+        "name": "问号",
+        "cells": _paint_cells(_builtin_question),
+        "nx": 0.36,
+        "ny": -0.42,
+        "scale": 0.22,
+    },
+    {
+        "id": "droplet",
+        "name": "无语",
+        "cells": _paint_cells(_builtin_droplet),
+        "nx": -0.36,
+        "ny": -0.42,
+        "scale": 0.22,
+    },
+    {
+        "id": "sweat",
+        "name": "流汗",
+        "cells": _paint_cells(_builtin_sweat),
+        "nx": 0.38,
+        "ny": -0.40,
+        "scale": 0.20,
+    },
+    {
+        "id": "angry_mark",
+        "name": "生气",
+        "cells": _paint_cells(_builtin_angry_mark),
+        "nx": 0.36,
+        "ny": -0.38,
+        "scale": 0.22,
+    },
+    {
+        "id": "sleep_z",
+        "name": "睡觉",
+        "cells": _paint_cells(_builtin_sleep_z),
+        "nx": 0.34,
+        "ny": -0.44,
+        "scale": 0.24,
+    },
 )
+
+
+def defaults_for(kind: str, ref: str = "") -> tuple[float, float, float]:
+    """装扮选素材时的默认位置/缩放（表情类贴到惯用角）。"""
+    if kind == KIND_BUILTIN:
+        entry = next((b for b in BUILTIN_CATALOG if b["id"] == ref), None)
+        if entry is not None:
+            return (
+                clamp_norm(entry.get("nx", OUTFIT_DEFAULT_NX)),
+                clamp_norm(entry.get("ny", OUTFIT_DEFAULT_NY)),
+                clamp_scale(entry.get("scale", OUTFIT_DEFAULT_SCALE)),
+            )
+    return OUTFIT_DEFAULT_NX, OUTFIT_DEFAULT_NY, OUTFIT_DEFAULT_SCALE
 
 
 def clamp_norm(v: float, lo: float = -0.55, hi: float = 0.55) -> float:

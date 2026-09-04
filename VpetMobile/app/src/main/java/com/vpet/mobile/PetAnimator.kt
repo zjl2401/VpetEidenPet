@@ -62,6 +62,8 @@ class PetAnimator(
         const val DUR_EAT = 5000L
         const val DUR_ANGRY = 5800L
         const val DUR_QUESTION = 4200L
+        const val DUR_SPEECHLESS = 4200L
+        const val DUR_AWKWARD = 4800L
         const val DUR_IDEA = 5200L
         const val DUR_HAPPY = 6000L
         const val DUR_KICK = 2200L

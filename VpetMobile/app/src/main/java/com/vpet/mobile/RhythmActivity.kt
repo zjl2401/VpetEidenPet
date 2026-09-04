@@ -117,7 +117,8 @@ class RhythmActivity : AppCompatActivity() {
                 releasePlayer()
             }
         }
-        val track = BundledMusic.tracks(this).randomOrNull()
+        val track = BundledMusic.defaultTrack(this)
+            ?: BundledMusic.tracks(this).randomOrNull()
         if (track != null) {
             try {
                 val afd = assets.openFd(track.assetPath)
@@ -344,6 +345,7 @@ class RhythmActivity : AppCompatActivity() {
         if (r.grade == "S" || r.grade == "A") {
             AppDataStore.unlock(this, "rhythm_great")
         }
+        AppDataStore.addAutoDiary(this, "玩了音游《$trackLabel》，评级 ${r.grade}。")
         GameClearUi.show(
             this,
             title = "音游结束！",

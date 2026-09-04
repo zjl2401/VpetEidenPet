@@ -175,12 +175,7 @@ class SpeechBubbleUi(
     fun raiseLayer() {
         val root = binding?.root ?: return
         if (overlayMode) {
-            val lp = wmLp ?: return
-            try {
-                windowManager?.removeView(root)
-                windowManager?.addView(root, lp)
-            } catch (_: Exception) {
-            }
+            OverlayZOrder.raise(windowManager, root, wmLp)
         } else {
             root.bringToFront()
         }

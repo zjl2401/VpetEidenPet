@@ -3,14 +3,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#FF0A0E14"
+    android:background="@color/bg_dark"
     android:padding="8dp">
 
     <TextView
         android:id="@+id/rhythmHud"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="#FFFFFFFF"
+        android:textColor="@color/text_main"
         android:textSize="13sp"
         android:text="音游"
         android:layout_marginBottom="6dp" />
@@ -35,7 +35,9 @@
             android:layout_margin="4dp"
             android:text="D"
             android:textSize="34sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:textColor="@color/text_main"
+            android:background="@color/menu_item_bg" />
 
         <Button
             android:id="@+id/btnF"
@@ -45,7 +47,9 @@
             android:layout_margin="4dp"
             android:text="F"
             android:textSize="34sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:textColor="@color/text_main"
+            android:background="@color/menu_item_bg" />
 
         <Button
             android:id="@+id/btnJ"
@@ -55,7 +59,9 @@
             android:layout_margin="4dp"
             android:text="J"
             android:textSize="34sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:textColor="@color/text_main"
+            android:background="@color/menu_item_bg" />
 
         <Button
             android:id="@+id/btnK"
@@ -65,6 +71,8 @@
             android:layout_margin="4dp"
             android:text="K"
             android:textSize="34sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:textColor="@color/text_main"
+            android:background="@color/menu_item_bg" />
     </LinearLayout>
 </LinearLayout>

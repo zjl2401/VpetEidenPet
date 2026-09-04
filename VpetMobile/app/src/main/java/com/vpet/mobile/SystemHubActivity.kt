@@ -56,6 +56,7 @@ class SystemHubActivity : AppCompatActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        OverlayGate.pause(this)
         binding = ActivitySystemBinding.inflate(layoutInflater)
         setContentView(binding.root)
         when (intent.getStringExtra(EXTRA_PAGE) ?: "about") {
@@ -74,10 +75,13 @@ class SystemHubActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        diaryClockTv?.removeCallbacks(diaryClockTick)
+        diaryClockTv = null
         phonographPlayer?.stop()
         phonographPlayer = null
         phonographMusic?.stop()
         phonographMusic = null
+        OverlayGate.resume(this)
         super.onDestroy()
     }
 
@@ -94,6 +98,17 @@ class SystemHubActivity : AppCompatActivity() {
         binding.sysButtons.addView(
             Button(this).apply {
                 text = label
+                typeface = UiFonts.cute(this@SystemHubActivity)
+                setTextColor(MenuDecor.MENU_FG)
+                background = MenuDecor.moduleBtnBg(false)
+                AppDataStore.applySp(this, AppDataStore.fontBodySp(this@SystemHubActivity))
+                minHeight = 0
+                minimumHeight = dp(42)
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).also { it.bottomMargin = dp(6) }
                 setOnClickListener { onClick() }
             },
         )
@@ -108,6 +123,7 @@ class SystemHubActivity : AppCompatActivity() {
         }
         val label = TextView(this).apply {
             text = title
+            typeface = UiFonts.cute(this@SystemHubActivity)
             setTextColor(getColor(R.color.text_main))
             AppDataStore.applySp(this, AppDataStore.fontBodySp(this@SystemHubActivity))
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -143,12 +159,14 @@ class SystemHubActivity : AppCompatActivity() {
         }
         val titleTv = TextView(this).apply {
             text = title
+            typeface = UiFonts.cute(this@SystemHubActivity)
             setTextColor(getColor(R.color.text_main))
             AppDataStore.applySp(this, AppDataStore.fontBodySp(this@SystemHubActivity))
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         }
         val valueTv = TextView(this).apply {
             text = format(progress.coerceIn(0, max))
+            typeface = UiFonts.cute(this@SystemHubActivity)
             setTextColor(getColor(R.color.accent_pink))
             AppDataStore.applySp(this, AppDataStore.fontCaptionSp(this@SystemHubActivity))
         }
@@ -174,37 +192,280 @@ class SystemHubActivity : AppCompatActivity() {
         binding.sysButtons.addView(box)
     }
 
+    private var diaryPageIdx = 0
+    private var diaryPickWeather = "sunny"
+    private var diaryPickMood = "stand"
+    private var diaryClockTv: TextView? = null
+    private val diaryClockTick = object : Runnable {
+        override fun run() {
+            val tv = diaryClockTv ?: return
+            val now = java.util.Calendar.getInstance()
+            val week = "一二三四五六日"[((now.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7)]
+            val d = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.CHINA).format(now.time)
+            val t = java.text.SimpleDateFormat("HH:mm", java.util.Locale.CHINA).format(now.time)
+            tv.text = "$d  周$week  $t"
+            tv.postDelayed(this, 15_000L)
+        }
+    }
+
     private fun pageDiary() {
-        binding.sysTitle.text = "日记"
+        binding.sysTitle.text = "我的日记"
+        binding.sysBody.text = "写好后点「写下这一页」· 过往可翻页"
         binding.sysInput.visibility = View.VISIBLE
-        binding.sysInput.hint = "写点今天的事…"
-        refreshDiaryBody()
+        binding.sysInput.hint = "写下这一页…"
+        binding.sysInput.setTextColor(getColor(R.color.diary_ink))
+        binding.root.setBackgroundColor(getColor(R.color.diary_paper))
+        diaryPickWeather = "sunny"
+        diaryPickMood = AppDataStore.defaultDiaryMoodFace(this)
+        diaryPageIdx = 0
         clearButtons()
-        addBtn("保存日记") {
-            if (AppDataStore.addDiary(this, binding.sysInput.text.toString())) {
-                Toast.makeText(this, "已保存", Toast.LENGTH_SHORT).show()
+        applyChromeFonts()
+
+        diaryClockTv = TextView(this).apply {
+            setTextColor(getColor(R.color.diary_ink))
+            typeface = UiFonts.cute(this@SystemHubActivity)
+            AppDataStore.applySp(this, AppDataStore.fontBodySp(this@SystemHubActivity))
+            setPadding(0, 0, 0, dp(6))
+        }
+        binding.sysButtons.addView(diaryClockTv)
+        diaryClockTv?.removeCallbacks(diaryClockTick)
+        diaryClockTick.run()
+
+        binding.sysButtons.addView(chipSection("天气", AppDataStore.DIARY_WEATHER, diaryPickWeather) {
+            diaryPickWeather = it
+        })
+        binding.sysButtons.addView(chipSection("心情", AppDataStore.DIARY_MOODS, diaryPickMood) {
+            diaryPickMood = it
+        })
+
+        addBtn("写下这一页") {
+            if (AppDataStore.addDiary(
+                    this,
+                    binding.sysInput.text.toString(),
+                    weather = diaryPickWeather,
+                    moodFace = diaryPickMood,
+                )
+            ) {
+                Toast.makeText(this, "已写下这一页", Toast.LENGTH_SHORT).show()
                 binding.sysInput.setText("")
-                refreshDiaryBody()
+                diaryPageIdx = 0
+                rebuildDiaryPager()
             } else {
                 Toast.makeText(this, "内容不能为空", Toast.LENGTH_SHORT).show()
             }
         }
+
+        binding.sysButtons.addView(
+            TextView(this).apply {
+                text = "— 过往页 —"
+                setTextColor(getColor(R.color.diary_muted))
+                typeface = UiFonts.cute(this@SystemHubActivity)
+                setPadding(0, dp(10), 0, dp(4))
+            },
+        )
+        rebuildDiaryPager()
+        addBtn("返回") {
+            diaryClockTv?.removeCallbacks(diaryClockTick)
+            finish()
+        }
+    }
+
+    private fun chipSection(
+        title: String,
+        options: List<Pair<String, String>>,
+        selected: String,
+        onPick: (String) -> Unit,
+    ): LinearLayout {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        box.addView(TextView(this).apply {
+            text = title
+            setTextColor(getColor(R.color.diary_muted))
+            typeface = UiFonts.cute(this@SystemHubActivity)
+        })
+        val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        var cur: LinearLayout? = null
+        val chips = mutableMapOf<String, TextView>()
+        val selectedRef = arrayOf(selected)
+        fun paint() {
+            for ((k, tv) in chips) {
+                val on = k == selectedRef[0]
+                tv.setBackgroundColor(if (on) 0xFFFFE8B8.toInt() else getColor(R.color.diary_card))
+                tv.setTextColor(getColor(R.color.diary_ink))
+            }
+        }
+        options.forEachIndexed { i, (id, label) ->
+            if (i % 4 == 0) {
+                cur = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    setPadding(0, dp(2), 0, dp(2))
+                }
+                grid.addView(cur)
+            }
+            val tv = TextView(this).apply {
+                text = label
+                gravity = Gravity.CENTER
+                typeface = UiFonts.cute(this@SystemHubActivity)
+                AppDataStore.applySp(this, AppDataStore.fontCaptionSp(this@SystemHubActivity))
+                setPadding(dp(8), dp(6), dp(8), dp(6))
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also {
+                    it.marginEnd = dp(4)
+                }
+                setOnClickListener {
+                    selectedRef[0] = id
+                    onPick(id)
+                    paint()
+                }
+            }
+            chips[id] = tv
+            cur!!.addView(tv)
+        }
+        val rem = options.size % 4
+        if (rem != 0 && cur != null) {
+            repeat(4 - rem) {
+                cur!!.addView(View(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(0, 1, 1f)
+                })
+            }
+        }
+        paint()
+        box.addView(grid)
+        return box
+    }
+
+    private fun rebuildDiaryPager() {
+        // remove previous pager block if tagged
+        val doomed = mutableListOf<View>()
+        for (i in 0 until binding.sysButtons.childCount) {
+            val v = binding.sysButtons.getChildAt(i)
+            if (v.tag == "diary_pager") doomed += v
+        }
+        doomed.forEach { binding.sysButtons.removeView(it) }
+        // insert before last「返回」button if present
+        val insertAt = (0 until binding.sysButtons.childCount)
+            .lastOrNull { binding.sysButtons.getChildAt(it) is Button &&
+                (binding.sysButtons.getChildAt(it) as Button).text == "返回" }
+            ?: binding.sysButtons.childCount
+
+        val arr = AppDataStore.diaries(this)
+        val pages = (0 until minOf(arr.length(), 30)).map { arr.getJSONObject(it) }
+        val host = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            tag = "diary_pager"
+            setBackgroundColor(getColor(R.color.diary_card))
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+        }
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            tag = "diary_pager"
+        }
+        val idxTv = TextView(this).apply {
+            setTextColor(getColor(R.color.diary_muted))
+            typeface = UiFonts.cute(this@SystemHubActivity)
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        fun paintPage() {
+            host.removeAllViews()
+            if (pages.isEmpty()) {
+                idxTv.text = "0 / 0"
+                host.addView(TextView(this).apply {
+                    text = "还没有写下的页。\n在上方写好后点「写下这一页」。"
+                    setTextColor(getColor(R.color.diary_muted))
+                    typeface = UiFonts.cute(this@SystemHubActivity)
+                })
+                return
+            }
+            diaryPageIdx = diaryPageIdx.coerceIn(0, pages.lastIndex)
+            idxTv.text = "${diaryPageIdx + 1} / ${pages.size}"
+            val item = pages[diaryPageIdx]
+            val top = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            top.addView(TextView(this).apply {
+                val auto = if (item.optBoolean("auto")) "  ·自动" else ""
+                text = "${item.optString("date").ifBlank { item.optString("ts") }}  ${item.optString("time")}$auto"
+                setTextColor(getColor(R.color.diary_muted))
+                typeface = UiFonts.cute(this@SystemHubActivity)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            top.addView(TextView(this).apply {
+                text = "删"
+                setTextColor(0xFFCC5555.toInt())
+                typeface = UiFonts.cute(this@SystemHubActivity)
+                setPadding(dp(8), dp(4), dp(4), dp(4))
+                setOnClickListener {
+                    val id = item.optString("id")
+                    if (AppDataStore.deleteDiary(this@SystemHubActivity, id)) {
+                        diaryPageIdx = diaryPageIdx.coerceAtMost((pages.size - 2).coerceAtLeast(0))
+                        rebuildDiaryPager()
+                    }
+                }
+            })
+            host.addView(top)
+            val meta = buildString {
+                val wl = item.optString("weather_label").ifBlank {
+                    AppDataStore.diaryWeatherLabel(item.optString("weather"))
+                }
+                val ml = item.optString("mood_label").ifBlank {
+                    AppDataStore.diaryMoodLabel(item.optString("mood_face"))
+                }
+                if (wl.isNotBlank()) append("天气 $wl")
+                if (ml.isNotBlank()) {
+                    if (isNotEmpty()) append(" · ")
+                    append("心情 $ml")
+                }
+            }
+            if (meta.isNotBlank()) {
+                host.addView(TextView(this).apply {
+                    text = meta
+                    setTextColor(getColor(R.color.diary_ink))
+                    typeface = UiFonts.cute(this@SystemHubActivity)
+                    setPadding(0, dp(4), 0, dp(4))
+                })
+            }
+            host.addView(TextView(this).apply {
+                text = item.optString("text")
+                setTextColor(getColor(R.color.diary_ink))
+                typeface = UiFonts.cute(this@SystemHubActivity)
+            })
+        }
+        nav.addView(TextView(this).apply {
+            text = "‹ 上页"
+            setTextColor(getColor(R.color.accent_pink))
+            typeface = UiFonts.cute(this@SystemHubActivity)
+            setPadding(dp(4), dp(6), dp(8), dp(6))
+            setOnClickListener {
+                if (diaryPageIdx > 0) {
+                    diaryPageIdx--
+                    paintPage()
+                }
+            }
+        })
+        nav.addView(idxTv)
+        nav.addView(TextView(this).apply {
+            text = "下页 ›"
+            setTextColor(getColor(R.color.accent_pink))
+            typeface = UiFonts.cute(this@SystemHubActivity)
+            setPadding(dp(8), dp(6), dp(4), dp(6))
+            setOnClickListener {
+                if (diaryPageIdx < pages.lastIndex) {
+                    diaryPageIdx++
+                    paintPage()
+                }
+            }
+        })
+        paintPage()
+        binding.sysButtons.addView(nav, insertAt)
+        binding.sysButtons.addView(host, insertAt + 1)
     }
 
     private fun refreshDiaryBody() {
-        val arr = AppDataStore.diaries(this)
-        binding.sysBody.text = if (arr.length() == 0) {
-            "还没有日记。"
-        } else {
-            buildString {
-                for (i in arr.length() - 1 downTo 0) {
-                    val o = arr.getJSONObject(i)
-                    appendLine("· ${o.optString("ts")}")
-                    appendLine(o.optString("text"))
-                    appendLine()
-                }
-            }
-        }
+        /* replaced by rebuildDiaryPager */
     }
 
     private fun pageAchievements() {
@@ -424,11 +685,16 @@ class SystemHubActivity : AppCompatActivity() {
     }
 
     private fun applyChromeFonts() {
+        val face = UiFonts.cute(this)
+        binding.sysTitle.typeface = UiFonts.cuteBold(this)
+        binding.sysBody.typeface = face
+        binding.sysInput.typeface = face
         AppDataStore.applySp(binding.sysTitle, AppDataStore.fontTitleSp(this))
         AppDataStore.applySp(binding.sysBody, AppDataStore.fontBodySp(this))
         AppDataStore.applySp(binding.sysInput, AppDataStore.fontBodySp(this))
         fun walk(v: View) {
             if (v is TextView) {
+                v.typeface = face
                 AppDataStore.applySp(v, AppDataStore.fontBodySp(this))
             }
             if (v is ViewGroup) {
@@ -448,7 +714,7 @@ class SystemHubActivity : AppCompatActivity() {
 
     private fun pageSettings() {
         binding.sysTitle.text = "设置"
-        binding.sysBody.text = "开关用开关；桌宠与智能伴侣大小一起连续微调；语音/音效音量用滑条。"
+        binding.sysBody.text = ""
         clearButtons()
         applyChromeFonts()
 
@@ -460,15 +726,13 @@ class SystemHubActivity : AppCompatActivity() {
             .coerceIn(0, sizeSteps)
 
         addSliderRow(
-            title = "桌宠·伴侣大小",
+            title = "大小",
             progress = sizeProgress,
             max = sizeSteps,
             format = { i ->
                 val px = PetPrefs.SIZE_MIN_PX + i * PetPrefs.SIZE_STEP_PX
                 val label = PetPrefs.nearestSizeLabel(px)
-                val pet = PetPrefs.snapSizePx(px)
-                val mate = CompanionFollower.companionSize(pet)
-                "$label · 宠${pet}px / 伴${mate}px"
+                "$label · ${PetPrefs.snapSizePx(px)}px"
             },
             onChange = { i ->
                 val px = PetPrefs.SIZE_MIN_PX + i * PetPrefs.SIZE_STEP_PX
@@ -483,13 +747,10 @@ class SystemHubActivity : AppCompatActivity() {
         )
 
         addSliderRow(
-            title = "字体大小",
+            title = "字体",
             progress = fontLabels.indexOf(AppDataStore.fontLabel(this)).coerceAtLeast(0),
             max = fontLabels.lastIndex,
-            format = { i ->
-                val label = fontLabels.getOrElse(i) { "中" }
-                "$label（${AppDataStore.FONT_PRESETS[label]?.toInt()}sp）"
-            },
+            format = { i -> fontLabels.getOrElse(i) { "中" } },
             onChange = { i ->
                 AppDataStore.setFontLabel(this, fontLabels.getOrElse(i) { "中" })
                 applyChromeFonts()
@@ -500,27 +761,25 @@ class SystemHubActivity : AppCompatActivity() {
         addSwitchRow("音效", AppDataStore.soundOn(this)) { on ->
             AppDataStore.setSoundOn(this, on)
         }
-        addSwitchRow("语音模式", AppDataStore.voiceMode(this)) { on ->
+        addSwitchRow("语音", AppDataStore.voiceMode(this)) { on ->
             AppDataStore.setVoiceMode(this, on)
         }
 
         addSwitchRow(
-            "熄屏显示桌宠",
+            "熄屏显示",
             LockScreenPetStore.enabled(this),
         ) { on ->
             LockScreenPetStore.setEnabled(this, on)
             Toast.makeText(
                 this,
-                if (on) "已开启：锁屏/点亮时显示睡觉·视频·游戏·音乐姿势（需桌宠在跑）"
-                else "已关闭熄屏显示",
-                Toast.LENGTH_LONG,
+                if (on) "熄屏姿势已开" else "熄屏姿势已关",
+                Toast.LENGTH_SHORT,
             ).show()
         }
 
         val usageOn = AppSceneClassifier.hasUsageAccess(this)
         addBtn(
-            if (usageOn) "使用情况访问 · 已授权（自动音乐/游戏/视频）"
-            else "授权使用情况访问 · 打开 App 自动切模式",
+            if (usageOn) "使用情况 · 已授权" else "授权使用情况访问",
         ) {
             AppSceneClassifier.openUsageAccessSettings(this)
             Toast.makeText(
@@ -548,7 +807,7 @@ class SystemHubActivity : AppCompatActivity() {
         )
 
         addSliderRow(
-            title = "游戏难度",
+            title = "难度",
             progress = diffLabels.indexOf(AppDataStore.difficulty(this)).coerceAtLeast(0),
             max = diffLabels.lastIndex,
             format = { diffLabels.getOrElse(it) { "中" } },
@@ -558,12 +817,12 @@ class SystemHubActivity : AppCompatActivity() {
         )
 
         addSliderRow(
-            title = "自由站立闲聊间隔",
+            title = "闲聊间隔",
             progress = AppDataStore.freeIdleBanterSec(this),
             max = AppDataStore.FREE_IDLE_SEC_MAX,
             format = {
                 val s = it.coerceAtLeast(AppDataStore.FREE_IDLE_SEC_MIN)
-                "$s 秒触发一次"
+                "${s}s"
             },
             onChange = { i ->
                 AppDataStore.setFreeIdleBanterSec(
@@ -573,12 +832,8 @@ class SystemHubActivity : AppCompatActivity() {
             },
         )
 
-        addBtn("显示层级说明") {
-            Toast.makeText(
-                this,
-                DesktopGuideCopy.DISPLAY_LAYER_HINT + "\n【手机】悬浮在系统叠加层，一般无需再调。",
-                Toast.LENGTH_LONG,
-            ).show()
+        addBtn("档案导入") {
+            startActivity(Intent(this, ToolsActivity::class.java))
         }
         addBtn("返回") { finish() }
     }

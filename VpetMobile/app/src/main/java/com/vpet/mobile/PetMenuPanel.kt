@@ -160,10 +160,7 @@ class PetMenuPanel(
         if (!isShowing) return
         try {
             if (asOverlay) {
-                val wm = windowManager ?: return
-                val lp = layoutParams ?: return
-                wm.removeView(root)
-                wm.addView(root, lp)
+                OverlayZOrder.raise(windowManager, root, layoutParams)
             } else {
                 root.bringToFront()
             }
@@ -174,7 +171,7 @@ class PetMenuPanel(
     private fun styleClose(tv: TextView) {
         tv.background = MenuDecor.menuItemBg()
         tv.setTextColor(MenuDecor.MENU_FG)
-        tv.typeface = Typeface.MONOSPACE
+        tv.typeface = UiFonts.cute(context)
         bindPressBg(tv, MenuDecor.THEME_ITEM_BG, MenuDecor.MENU_ACTIVE)
     }
 
@@ -269,7 +266,7 @@ class PetMenuPanel(
                 text = mod.title
                 setTextColor(MenuDecor.MENU_FG)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, menuSp)
-                typeface = Typeface.MONOSPACE
+                typeface = UiFonts.cute(context)
                 gravity = Gravity.CENTER
                 includeFontPadding = false
                 setPadding(MenuDecor.dp(context, 2f), 0, MenuDecor.dp(context, 2f), 0)
@@ -318,13 +315,16 @@ class PetMenuPanel(
             })
         }
         for (item in items) {
+            val checked = item.children.isEmpty() && actions.isChecked(item.id)
+            // 睡眠/工作等同款：开启后同一键显示「结束」
+            val endToggleIds = setOf("mode_quiet", "mode_work", "act_work", "mode_music", "mode_follow")
             val base = when {
+                checked && item.id in endToggleIds -> "结束"
                 item.children.isNotEmpty() -> item.title
                 item.status == DesktopMenuCatalog.Status.READY -> item.title
                 item.status == DesktopMenuCatalog.Status.STUB -> "${item.title} ·"
                 else -> "${item.title} …"
             }
-            val checked = item.children.isEmpty() && actions.isChecked(item.id)
             val label = if (checked) "✓ $base" else "　 $base"
             list.addView(makeItemBtn(label, checked = checked) {
                 when {
@@ -377,7 +377,7 @@ class PetMenuPanel(
             this.text = text
             setTextColor(if (checked) MenuDecor.THEME_PINK else MenuDecor.MENU_FG)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
-            typeface = Typeface.MONOSPACE
+            typeface = UiFonts.cute(context)
             gravity = Gravity.CENTER_VERTICAL or Gravity.START
             includeFontPadding = false
             setPadding(MenuDecor.dp(context, 8f), 0, MenuDecor.dp(context, 8f), 0)

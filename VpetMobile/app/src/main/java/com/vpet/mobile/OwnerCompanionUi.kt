@@ -3,7 +3,6 @@ package com.vpet.mobile
 import android.app.Dialog
 import android.content.Context
 import android.graphics.PixelFormat
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
@@ -67,52 +66,50 @@ object OwnerCompanionUi {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
             background = GradientDrawable().apply {
-                setColor(0xE0141824.toInt())
+                setColor(0xF2FFF4E6.toInt())
                 cornerRadius = dp(themed, 10).toFloat()
-                setStroke(dp(themed, 1), 0xFF2A4060.toInt())
+                setStroke(dp(themed, 2), 0xFF66CCFF.toInt())
             }
         }
 
         root.addView(TextView(themed).apply {
             text = "所属人"
-            setTextColor(0xFFFF88CC.toInt())
+            setTextColor(0xFFFF6B9D.toInt())
             textSize = 16f
-            typeface = Typeface.MONOSPACE
-            setTypeface(typeface, Typeface.BOLD)
+            typeface = UiFonts.cuteBold(themed)
         })
         root.addView(TextView(themed).apply {
             text = name
-            setTextColor(0xFFEEF2FF.toInt())
+            setTextColor(0xFF3A2230.toInt())
             textSize = 18f
-            typeface = Typeface.MONOSPACE
+            typeface = UiFonts.cute(themed)
             setPadding(0, dp(themed, 4), 0, 0)
         })
         root.addView(TextView(themed).apply {
             text = "登记于 ${setAtRaw.take(19).replace('T', ' ')}"
-            setTextColor(0xFF8899AA.toInt())
+            setTextColor(0xFF8A7A66.toInt())
             textSize = 11f
-            typeface = Typeface.MONOSPACE
+            typeface = UiFonts.cute(themed)
             setPadding(0, dp(themed, 2), 0, dp(themed, 8))
         })
         root.addView(TextView(themed).apply {
             text = "相伴第 $days 天"
-            setTextColor(0xFF88CCFF.toInt())
+            setTextColor(0xFF4488DD.toInt())
             textSize = 15f
-            typeface = Typeface.MONOSPACE
-            setTypeface(typeface, Typeface.BOLD)
+            typeface = UiFonts.cuteBold(themed)
         })
         root.addView(TextView(themed).apply {
             text = if (ModeTimeStore.totalSeconds(context) > 0) "相伴时长：$total" else "相伴时长：还在累积中…"
-            setTextColor(0xFFAABBCC.toInt())
+            setTextColor(0xFF3A2230.toInt())
             textSize = 12f
-            typeface = Typeface.MONOSPACE
+            typeface = UiFonts.cute(themed)
             setPadding(0, dp(themed, 2), 0, dp(themed, 10))
         })
 
         val monthTitle = TextView(themed).apply {
-            setTextColor(0xFFEEF2FF.toInt())
+            setTextColor(0xFF3A2230.toInt())
             textSize = 14f
-            typeface = Typeface.MONOSPACE
+            typeface = UiFonts.cute(themed)
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
@@ -143,9 +140,9 @@ object OwnerCompanionUi {
             for (w in listOf("日", "一", "二", "三", "四", "五", "六")) {
                 weekRow.addView(TextView(themed).apply {
                     text = w
-                    setTextColor(0xFF667788.toInt())
+                    setTextColor(0xFF8A7A66.toInt())
                     textSize = 11f
-                    typeface = Typeface.MONOSPACE
+                    typeface = UiFonts.cute(themed)
                     gravity = Gravity.CENTER
                     layoutParams = LinearLayout.LayoutParams(0, dp(themed, 22), 1f)
                 })
@@ -165,7 +162,7 @@ object OwnerCompanionUi {
                 val cell = TextView(themed).apply {
                     gravity = Gravity.CENTER
                     textSize = 12f
-                    typeface = Typeface.MONOSPACE
+                    typeface = UiFonts.cute(themed)
                     layoutParams = GridLayout.LayoutParams().apply {
                         width = 0
                         height = cellH
@@ -183,23 +180,23 @@ object OwnerCompanionUi {
                     val isStart = sameDay(dayCal, startCal)
                     when {
                         isToday -> {
-                            cell.setTextColor(0xFF141824.toInt())
-                            cell.background = pill(themed, 0xFFFF88CC.toInt())
+                            cell.setTextColor(0xFF3A2230.toInt())
+                            cell.background = pill(themed, 0xFFFF6B9D.toInt())
                             cell.alpha = 0f
                             dayCells.add(cell)
                         }
                         inRange -> {
-                            cell.setTextColor(0xFFEEF2FF.toInt())
-                            cell.background = pill(themed, if (isStart) 0xFF4488DD.toInt() else 0xFF2A5080.toInt())
+                            cell.setTextColor(0xFFFFFFFF.toInt())
+                            cell.background = pill(themed, if (isStart) 0xFF66CCFF.toInt() else 0xFF66DDAA.toInt())
                             cell.alpha = 0f
                             dayCells.add(cell)
                         }
                         dayCal.after(todayCal) -> {
-                            cell.setTextColor(0xFF445566.toInt())
+                            cell.setTextColor(0xFFC4B8A8.toInt())
                             cell.setBackgroundColor(0x00000000)
                         }
                         else -> {
-                            cell.setTextColor(0xFF556677.toInt())
+                            cell.setTextColor(0xFFB0A090.toInt())
                             cell.setBackgroundColor(0x00000000)
                         }
                     }
@@ -219,9 +216,9 @@ object OwnerCompanionUi {
             setPadding(0, 0, 0, dp(themed, 6))
             addView(TextView(themed).apply {
                 text = "‹"
-                setTextColor(0xFFFF88CC.toInt())
+                setTextColor(0xFFFF6B9D.toInt())
                 textSize = 22f
-                typeface = Typeface.MONOSPACE
+                typeface = UiFonts.cute(themed)
                 setPadding(dp(themed, 10), 0, dp(themed, 10), 0)
                 setOnClickListener {
                     viewMonth.add(Calendar.MONTH, -1)
@@ -231,9 +228,9 @@ object OwnerCompanionUi {
             addView(monthTitle)
             addView(TextView(themed).apply {
                 text = "›"
-                setTextColor(0xFFFF88CC.toInt())
+                setTextColor(0xFFFF6B9D.toInt())
                 textSize = 22f
-                typeface = Typeface.MONOSPACE
+                typeface = UiFonts.cute(themed)
                 setPadding(dp(themed, 10), 0, dp(themed, 10), 0)
                 setOnClickListener {
                     viewMonth.add(Calendar.MONTH, 1)
@@ -245,10 +242,10 @@ object OwnerCompanionUi {
         root.addView(gridHost)
 
         root.addView(TextView(themed).apply {
-            text = "蓝＝认主日 · 青格＝已相伴 · 粉＝今天"
-            setTextColor(0xFF667788.toInt())
+            text = "蓝＝认主日 · 青绿＝已相伴 · 粉＝今天"
+            setTextColor(0xFF8A7A66.toInt())
             textSize = 10f
-            typeface = Typeface.MONOSPACE
+            typeface = UiFonts.cute(themed)
             setPadding(0, dp(themed, 6), 0, dp(themed, 4))
         })
 
@@ -272,18 +269,18 @@ object OwnerCompanionUi {
             val sec = secMap[k]?.toLong() ?: 0L
             detailHost.addView(TextView(themed).apply {
                 text = "$label  ${ModeTimeStore.formatDuration(sec)}"
-                setTextColor(if (sec > 0) 0xFF88FFCC.toInt() else 0xFF556677.toInt())
+                setTextColor(if (sec > 0) 0xFF2A7A5A.toInt() else 0xFFB0A090.toInt())
                 textSize = 12f
-                typeface = Typeface.MONOSPACE
+                typeface = UiFonts.cute(themed)
                 setPadding(0, dp(themed, 2), 0, 0)
             })
         }
 
         val detailBtn = TextView(themed).apply {
             text = "查看详细 · 一起听歌/工作 ▾"
-            setTextColor(0xFFFF88CC.toInt())
+            setTextColor(0xFFFF6B9D.toInt())
             textSize = 12f
-            typeface = Typeface.MONOSPACE
+            typeface = UiFonts.cute(themed)
             setPadding(0, dp(themed, 6), 0, 0)
             setOnClickListener {
                 val open = detailHost.visibility != View.VISIBLE
@@ -335,6 +332,7 @@ object OwnerCompanionUi {
         }
         openDialog = dialog
         dialog.show()
+        OverlayZOrder.onOverlayDialogShown(dialog)
         // 整板轻弹入
         scroll.alpha = 0f
         scroll.translationY = dp(themed, 24).toFloat()

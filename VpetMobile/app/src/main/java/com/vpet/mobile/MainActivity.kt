@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.text.InputFilter
+import android.view.View
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.Toast
@@ -21,6 +22,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private var ownerDialog: AlertDialog? = null
+    private var overlayDialog: AlertDialog? = null
 
     private val notifyPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -39,23 +41,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        binding.btnOverlayPermission.setOnClickListener { openOverlaySettings() }
+        binding.btnClosePage.setOnClickListener { finishAndRemoveTask() }
         binding.btnStartOverlay.setOnClickListener { startOverlay() }
-        binding.btnStopOverlay.setOnClickListener { stopOverlay() }
-        binding.btnLeaveToPet.setOnClickListener { leaveToPetOnly() }
-        binding.btnOpenRoom.setOnClickListener {
-            if (!ensureOwnerNamed()) return@setOnClickListener
-            startActivity(Intent(this, RoomActivity::class.java))
-        }
-        binding.btnOpenTools.setOnClickListener {
-            if (!ensureOwnerNamed()) return@setOnClickListener
-            startActivity(Intent(this, ToolsActivity::class.java))
-        }
-        binding.btnSizeS.setOnClickListener { applySize("小") }
-        binding.btnSizeM.setOnClickListener { applySize("中") }
-        binding.btnSizeL.setOnClickListener { applySize("大") }
+        UiFonts.applyTree(binding.root)
         refreshStatus()
-        refreshSizeHints()
         maybePromptOwner()
         PetProfileStore.checkBirthdayToasts(this).let { msgs ->
             if (msgs.isNotEmpty()) BirthdayGiftUi.showMessages(this, msgs)
@@ -69,8 +58,8 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshStatus()
-        refreshSizeHints()
         maybePromptOwner()
+        maybePromptOverlayPermission()
     }
 
     private fun maybePromptOwner() {
@@ -81,6 +70,7 @@ class MainActivity : AppCompatActivity() {
             hint = "昵称（最多 ${PetPrefs.OWNER_NAME_MAX_LEN} 字）"
             filters = arrayOf(InputFilter.LengthFilter(PetPrefs.OWNER_NAME_MAX_LEN))
             setSingleLine()
+            typeface = UiFonts.cute(this@MainActivity)
         }
         val wrap = FrameLayout(this).apply {
             setPadding(pad, pad / 2, pad, 0)
@@ -105,6 +95,7 @@ class MainActivity : AppCompatActivity() {
                             dialog.dismiss()
                             ownerDialog = null
                             refreshStatus()
+                            maybePromptOverlayPermission()
                             startActivity(
                                 Intent(this, SystemHubActivity::class.java)
                                     .putExtra(SystemHubActivity.EXTRA_PAGE, "guide")
@@ -126,41 +117,39 @@ class MainActivity : AppCompatActivity() {
         return false
     }
 
-    private fun applySize(label: String) {
-        PetPrefs.setSizeLabel(this, label)
-        refreshSizeHints()
-        val intent = Intent(this, PetOverlayService::class.java).apply {
-            action = PetOverlayService.ACTION_RESIZE
+    /** 未开悬浮权限时弹窗引导；已开则不出现。 */
+    private fun maybePromptOverlayPermission(force: Boolean = false) {
+        if (Settings.canDrawOverlays(this)) {
+            overlayDialog?.dismiss()
+            overlayDialog = null
+            return
         }
-        startService(intent)
-        Toast.makeText(
-            this,
-            "大小：$label（${PetPrefs.sizePx(this)}px）",
-            Toast.LENGTH_SHORT,
-        ).show()
-    }
-
-    private fun refreshSizeHints() {
-        val cur = PetPrefs.sizeLabel(this)
-        binding.btnSizeS.alpha = if (cur == "小") 1f else 0.55f
-        binding.btnSizeM.alpha = if (cur == "中") 1f else 0.55f
-        binding.btnSizeL.alpha = if (cur == "大") 1f else 0.55f
+        if (!force && ownerDialog?.isShowing == true) return
+        if (overlayDialog?.isShowing == true) return
+        overlayDialog = AlertDialog.Builder(this)
+            .setTitle("需要悬浮窗权限")
+            .setMessage("桌宠要叠在其他 App 上显示，请到系统设置里允许「显示在其他应用的上层」。")
+            .setPositiveButton("去开启") { _, _ -> openOverlaySettings() }
+            .setNegativeButton("稍后", null)
+            .setOnDismissListener { overlayDialog = null }
+            .show()
     }
 
     private fun refreshStatus() {
         val ok = Settings.canDrawOverlays(this)
         val owner = PetPrefs.ownerName(this)
-        val ownerLine = if (owner.isNotEmpty()) {
-            "所属人：$owner · 相伴第 ${PetPrefs.companionDays(this)} 天"
+        if (owner.isNotEmpty()) {
+            binding.statusText.visibility = View.VISIBLE
+            binding.statusText.text = "所属人：$owner · 相伴第 ${PetPrefs.companionDays(this)} 天"
+            binding.statusText.typeface = UiFonts.cute(this)
         } else {
-            "所属人：未登记"
-        }
-        binding.statusText.text = if (ok) {
-            "$ownerLine\n悬浮权限：已开启。大小=${PetPrefs.sizeLabel(this)}。"
-        } else {
-            "$ownerLine\n${getString(R.string.need_overlay)}"
+            binding.statusText.visibility = View.GONE
         }
         binding.btnStartOverlay.isEnabled = ok && PetPrefs.hasOwner(this)
+        if (ok) {
+            overlayDialog?.dismiss()
+            overlayDialog = null
+        }
     }
 
     private fun openOverlaySettings() {
@@ -174,8 +163,7 @@ class MainActivity : AppCompatActivity() {
     private fun startOverlay() {
         if (!ensureOwnerNamed()) return
         if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, R.string.need_overlay, Toast.LENGTH_LONG).show()
-            openOverlaySettings()
+            maybePromptOverlayPermission(force = true)
             return
         }
         val intent = Intent(this, PetOverlayService::class.java).apply {
@@ -183,29 +171,6 @@ class MainActivity : AppCompatActivity() {
         }
         ContextCompat.startForegroundService(this, intent)
         Toast.makeText(this, R.string.overlay_started_hint, Toast.LENGTH_SHORT).show()
-        // Phase 0：关掉 App 页，只留悬浮桌宠（点宠操作）
-        finishAndRemoveTask()
-    }
-
-    private fun stopOverlay() {
-        val intent = Intent(this, PetOverlayService::class.java).apply {
-            action = PetOverlayService.ACTION_STOP
-        }
-        startService(intent)
-        Toast.makeText(this, "已关闭悬浮桌宠", Toast.LENGTH_SHORT).show()
-    }
-
-    /** 桌宠已在跑时，再次进启动页可一键离开，回到纯悬浮。 */
-    private fun leaveToPetOnly() {
-        if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, R.string.need_overlay, Toast.LENGTH_LONG).show()
-            return
-        }
-        // 确保服务在跑
-        val intent = Intent(this, PetOverlayService::class.java).apply {
-            action = PetOverlayService.ACTION_START
-        }
-        ContextCompat.startForegroundService(this, intent)
         finishAndRemoveTask()
     }
 }

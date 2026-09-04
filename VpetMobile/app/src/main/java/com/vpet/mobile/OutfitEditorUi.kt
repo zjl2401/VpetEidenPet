@@ -319,6 +319,13 @@ object OutfitEditorUi {
                 setOnClickListener {
                     pendingKind = ch.kind
                     pendingRef = ch.ref
+                    val (dNx, dNy, dSc) = OutfitStore.defaultsFor(ch.kind, ch.ref)
+                    pendingNx = dNx
+                    pendingNy = dNy
+                    pendingScale = dSc
+                    scaleBar.progress = ((dSc - OutfitStore.SCALE_MIN) /
+                        (OutfitStore.SCALE_MAX - OutfitStore.SCALE_MIN) * 100f)
+                        .toInt().coerceIn(0, 100)
                     val t = current()
                     if (t != null) {
                         val probe = t.copy(kind = ch.kind, ref = ch.ref)
@@ -328,6 +335,9 @@ object OutfitEditorUi {
                         }
                         t.kind = ch.kind
                         t.ref = ch.ref
+                        t.nx = dNx
+                        t.ny = dNy
+                        t.scale = dSc
                         pendingLive = false
                         rebuildList()
                         rebuildPreview()
@@ -458,6 +468,7 @@ object OutfitEditorUi {
         }
         openDialog = dialog
         dialog.show()
+        OverlayZOrder.onOverlayDialogShown(dialog)
     }
 
     private fun dp(context: Context, v: Int): Int =

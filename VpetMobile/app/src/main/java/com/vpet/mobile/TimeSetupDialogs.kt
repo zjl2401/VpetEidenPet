@@ -301,6 +301,7 @@ object TimeSetupDialogs {
             }
         }
         dialog.show()
+        OverlayZOrder.onOverlayDialogShown(dialog)
         return dialog
     }
 

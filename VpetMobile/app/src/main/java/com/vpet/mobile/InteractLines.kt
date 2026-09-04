@@ -64,6 +64,8 @@ object InteractLines {
         "work" to listOf("伏案赶工！", "键盘敲起来~"),
         "angry" to listOf("哼！", "气鼓鼓！"),
         "question" to listOf("嗯？", "这是怎么回事？"),
+        "speechless" to listOf("……", "无语了。", "哈？"),
+        "awkward" to listOf("哈哈哈…", "有点尴尬…", "呃……"),
         "sad" to listOf("呜…", "心里下雨了呢…"),
         "idea" to listOf("有了！", "灵光一闪~"),
         "happy" to listOf("耶——！", "超开心！"),

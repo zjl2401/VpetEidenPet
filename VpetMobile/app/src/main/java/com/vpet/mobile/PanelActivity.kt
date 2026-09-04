@@ -25,6 +25,7 @@ class PanelActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        OverlayGate.pause(this)
         binding = ActivityPanelBinding.inflate(layoutInflater)
         setContentView(binding.root)
         applyCompactWindow()
@@ -33,6 +34,7 @@ class PanelActivity : AppCompatActivity() {
             Toast.makeText(this, "每日登录礼：金币 +1", Toast.LENGTH_SHORT).show()
         }
         applyFonts()
+        styleChrome()
         refresh()
         binding.btnToggleBag.setOnClickListener {
             bagOpen = !bagOpen
@@ -45,6 +47,11 @@ class PanelActivity : AppCompatActivity() {
             }
         }
         binding.btnPanelClose.setOnClickListener { finish() }
+    }
+
+    override fun onDestroy() {
+        OverlayGate.resume(this)
+        super.onDestroy()
     }
 
     private fun applyCompactWindow() {
@@ -75,6 +82,16 @@ class PanelActivity : AppCompatActivity() {
 
     /** 跟随系统「字体大小」设置，各层级相对偏移（与菜单统一）。 */
     private fun applyFonts() {
+        val face = UiFonts.cute(this)
+        binding.panelTitle.typeface = UiFonts.cuteBold(this)
+        listOf(
+            binding.btnPanelClose,
+            binding.panelStats,
+            binding.labelStamina,
+            binding.labelMood,
+            binding.btnToggleBag,
+            binding.bagHint,
+        ).forEach { it.typeface = face }
         AppDataStore.applySp(binding.panelTitle, AppDataStore.fontTitleSp(this))
         AppDataStore.applySp(binding.btnPanelClose, AppDataStore.fontBodySp(this))
         AppDataStore.applySp(binding.panelStats, AppDataStore.fontBodySp(this))
@@ -82,6 +99,11 @@ class PanelActivity : AppCompatActivity() {
         AppDataStore.applySp(binding.labelMood, AppDataStore.fontCaptionSp(this))
         AppDataStore.applySp(binding.btnToggleBag, AppDataStore.fontBodySp(this))
         AppDataStore.applySp(binding.bagHint, AppDataStore.fontHintSp(this))
+    }
+
+    private fun styleChrome() {
+        binding.btnToggleBag.background = MenuDecor.menuItemBg()
+        binding.btnToggleBag.setTextColor(MenuDecor.MENU_FG)
     }
 
     override fun onResume() {
@@ -101,10 +123,8 @@ class PanelActivity : AppCompatActivity() {
         val boxes = WalletStore.itemCount(this, WalletStore.ITEM_WORK_BOX)
         val delivered = WalletStore.workBoxesTotal(this)
         binding.panelStats.text =
-            "伊得 · 难度 ${AppDataStore.difficulty(this)}\n" +
-                "体力 $s  心情 $m  ·  金币 $coins · 宝箱 $boxes\n" +
-                "生涯伏案 ${delivered} 次记录\n" +
-                MusicAffinityStore.summaryLine(this)
+            "体$s · 心$m · 币$coins · 箱$boxes\n" +
+                "难度 ${AppDataStore.difficulty(this)} · 伏案 $delivered"
         binding.barStamina.progress = s
         binding.barMood.progress = m
     }
@@ -175,6 +195,9 @@ class PanelActivity : AppCompatActivity() {
             text = label
             isEnabled = enabled
             alpha = if (enabled) 1f else 0.45f
+            typeface = UiFonts.cute(this@PanelActivity)
+            setTextColor(MenuDecor.MENU_FG)
+            background = MenuDecor.menuItemBg()
             AppDataStore.applySp(this, textSp)
             minHeight = 0
             minimumHeight = dp(40)
@@ -208,7 +231,7 @@ class PanelActivity : AppCompatActivity() {
             setPadding(dp(8), dp(6), dp(8), dp(6))
             alpha = if (enabled) 1f else 0.45f
             isEnabled = enabled
-            setBackgroundColor(0xE01A2233.toInt())
+            background = MenuDecor.menuItemBg()
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -224,8 +247,9 @@ class PanelActivity : AppCompatActivity() {
             )
             addView(
                 TextView(this@PanelActivity).apply {
-                    text = "${food.label} ×$count  体+${food.stamina} 心+${food.mood}"
-                    setTextColor(0xFFEEF2FF.toInt())
+                    text = "${food.label} ×$count"
+                    typeface = UiFonts.cute(this@PanelActivity)
+                    setTextColor(MenuDecor.MENU_FG)
                     AppDataStore.applySp(this, textSp)
                     layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                 },

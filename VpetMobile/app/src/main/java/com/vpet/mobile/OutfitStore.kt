@@ -48,6 +48,18 @@ object OutfitStore {
         Color.parseColor("#FFFFFF"),
         Color.parseColor("#CC88FF"),
         Color.parseColor("#442233"),
+        Color.parseColor("#FF4444"),
+        Color.parseColor("#8899EE"),
+        Color.parseColor("#88DDFF"),
+    )
+
+    data class BuiltinEntry(
+        val id: String,
+        val name: String,
+        val cells: IntArray,
+        val nx: Float = DEFAULT_NX,
+        val ny: Float = DEFAULT_NY,
+        val scale: Float = DEFAULT_SCALE,
     )
 
     private fun cellsOf(draw: (put: (Int, Int, Int) -> Unit) -> Unit): IntArray {
@@ -58,8 +70,8 @@ object OutfitStore {
         return cells
     }
 
-    private val builtinCatalog: List<Triple<String, String, IntArray>> = listOf(
-        Triple(
+    private val builtinCatalog: List<BuiltinEntry> = listOf(
+        BuiltinEntry(
             "star", "星星",
             cellsOf { put ->
                 listOf(
@@ -68,7 +80,7 @@ object OutfitStore {
                 ).forEach { (x, y) -> put(x, y, 2) }
             },
         ),
-        Triple(
+        BuiltinEntry(
             "heart", "爱心",
             cellsOf { put ->
                 listOf(
@@ -80,7 +92,7 @@ object OutfitStore {
                 ).forEach { (x, y) -> put(x, y, 1) }
             },
         ),
-        Triple(
+        BuiltinEntry(
             "bow", "蝴蝶结",
             cellsOf { put ->
                 listOf(
@@ -91,7 +103,7 @@ object OutfitStore {
                 put(5, 5, 5)
             },
         ),
-        Triple(
+        BuiltinEntry(
             "leaf", "小叶",
             cellsOf { put ->
                 listOf(
@@ -100,7 +112,64 @@ object OutfitStore {
                 ).forEach { (x, y) -> put(x, y, 4) }
             },
         ),
+        BuiltinEntry(
+            "question", "问号",
+            cellsOf { put ->
+                listOf(4 to 1, 5 to 1, 6 to 1, 7 to 1, 7 to 2, 7 to 3, 6 to 3, 5 to 4, 5 to 5, 5 to 7)
+                    .forEach { (x, y) -> put(x, y, 2) }
+            },
+            nx = 0.36f, ny = -0.42f, scale = 0.22f,
+        ),
+        BuiltinEntry(
+            "droplet", "无语",
+            cellsOf { put ->
+                listOf(
+                    5 to 1, 4 to 2, 5 to 2, 6 to 2, 3 to 3, 4 to 3, 5 to 3, 6 to 3, 7 to 3,
+                    3 to 4, 4 to 4, 5 to 4, 6 to 4, 7 to 4, 4 to 5, 5 to 5, 6 to 5, 5 to 6,
+                ).forEach { (x, y) -> put(x, y, 3) }
+            },
+            nx = -0.36f, ny = -0.42f, scale = 0.22f,
+        ),
+        BuiltinEntry(
+            "sweat", "流汗",
+            cellsOf { put ->
+                listOf(
+                    6 to 1, 5 to 2, 6 to 2, 7 to 2, 4 to 3, 5 to 3, 6 to 3, 5 to 4, 6 to 4, 6 to 5, 7 to 6,
+                ).forEach { (x, y) -> put(x, y, 10) }
+                put(8, 3, 10)
+                put(8, 4, 10)
+            },
+            nx = 0.38f, ny = -0.40f, scale = 0.20f,
+        ),
+        BuiltinEntry(
+            "angry_mark", "生气",
+            cellsOf { put ->
+                listOf(
+                    5 to 1, 5 to 2, 5 to 3, 5 to 4, 5 to 5, 3 to 3, 4 to 3, 6 to 3, 7 to 3,
+                    2 to 1, 8 to 1, 2 to 5, 8 to 5,
+                ).forEach { (x, y) -> put(x, y, 8) }
+            },
+            nx = 0.36f, ny = -0.38f, scale = 0.22f,
+        ),
+        BuiltinEntry(
+            "sleep_z", "睡觉",
+            cellsOf { put ->
+                listOf(
+                    3 to 2, 4 to 2, 5 to 2, 6 to 2, 6 to 3, 5 to 4, 4 to 5, 3 to 6, 4 to 6, 5 to 6, 6 to 6,
+                    7 to 7, 8 to 7, 9 to 7, 9 to 8, 8 to 9, 7 to 10, 8 to 10, 9 to 10,
+                ).forEach { (x, y) -> put(x, y, 9) }
+            },
+            nx = 0.34f, ny = -0.44f, scale = 0.24f,
+        ),
     )
+
+    fun defaultsFor(kind: String, ref: String): Triple<Float, Float, Float> {
+        if (kind == KIND_BUILTIN) {
+            val e = builtinCatalog.firstOrNull { it.id == ref }
+            if (e != null) return Triple(clampNorm(e.nx), clampNorm(e.ny), clampScale(e.scale))
+        }
+        return Triple(DEFAULT_NX, DEFAULT_NY, DEFAULT_SCALE)
+    }
 
     fun clampNorm(v: Float): Float = v.coerceIn(-0.55f, 0.55f)
     fun clampScale(v: Float): Float = v.coerceIn(SCALE_MIN, SCALE_MAX)
@@ -150,8 +219,8 @@ object OutfitStore {
 
     fun choices(ctx: Context): List<Choice> {
         val list = mutableListOf<Choice>()
-        for ((id, name, _) in builtinCatalog) {
-            list += Choice(KIND_BUILTIN, id, "公开·$name", "公开")
+        for (e in builtinCatalog) {
+            list += Choice(KIND_BUILTIN, e.id, "公开·${e.name}", "公开")
         }
         if (assetExists(ctx, "home/user_paint.png")) {
             list += Choice(KIND_USER_PAINT, "", "自创画", "我的")
@@ -214,7 +283,7 @@ object OutfitStore {
     }
 
     private fun builtinBitmap(ref: String, sizePx: Int): Bitmap? {
-        val cells = builtinCatalog.firstOrNull { it.first == ref }?.third ?: return null
+        val cells = builtinCatalog.firstOrNull { it.id == ref }?.cells ?: return null
         val scale = 4
         val base = 12 * scale
         val bmp = Bitmap.createBitmap(base, base, Bitmap.Config.ARGB_8888)

@@ -1,16 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg_dark">#FF1A2030</color>
-    <!-- 自适应图标背景：透明，避免黑底；外圈由前景抠图承担 -->
+    <!-- 伊得奶油浅色 + 桌面彩虹主色 -->
+    <color name="bg_dark">#FFFFF4E6</color>
     <color name="launcher_bg">#00000000</color>
-    <color name="accent_pink">#FFFF88CC</color>
+    <color name="accent_pink">#FFFF6B9D</color>
+    <color name="theme_orange">#FFFFB347</color>
+    <color name="theme_yellow">#FFFFE066</color>
+    <color name="theme_green">#FF66DDAA</color>
     <color name="theme_blue">#FF66CCFF</color>
-    <color name="theme_blue_deep">#FF4488DD</color>
-    <color name="text_main">#FFEEF2FF</color>
-    <!-- 面板深色底 ~88% 不透明，与桌面 PANEL_WINDOW_ALPHA 对齐 -->
-    <color name="menu_bg">#E0141824</color>
-    <color name="menu_fg">#FFEEF2FF</color>
-    <color name="menu_item_bg">#E0181F34</color>
-    <color name="btn_bg">#FF2A4060</color>
-    <color name="room_wall">#FF243044</color>
+    <color name="theme_blue_deep">#FFCC88FF</color>
+    <color name="text_main">#FF3A2230</color>
+    <color name="menu_bg">#FFFFF4E6</color>
+    <color name="menu_fg">#FF3A2230</color>
+    <color name="menu_item_bg">#FFF6E4D0</color>
+    <color name="btn_bg">#FFF3DCC4</color>
+    <color name="room_wall">#FFFFE8D4</color>
+    <color name="pixel_accent">#FF9C2F55</color>
+    <color name="diary_paper">#FFF3E9D5</color>
+    <color name="diary_card">#FFFFF8EC</color>
+    <color name="diary_ink">#FF3A3228</color>
+    <color name="diary_muted">#FF8A7A66</color>
 </resources>

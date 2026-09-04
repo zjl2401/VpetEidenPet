@@ -5,12 +5,11 @@ import android.graphics.Color
 import kotlin.math.roundToInt
 
 /**
- * 内置曲库（assets/music）。精简包默认仅 RADICAL MAT。
- * 元数据对照桌面 MUSIC_CHAR_DEFS / MUSIC_FOLDER_BASE_COLORS。
+ * 内置曲库（assets/music）。对照桌面 VpetEiden/music：BGM / 主题曲 / 其他。
  */
 object BundledMusic {
-    const val DEFAULT_TRACK_ID = "radical_mat"
-    const val DEFAULT_FILE = "RADICAL MAT.wav"
+    const val DEFAULT_TRACK_ID = "pluviasilvae_bgm001"
+    const val DEFAULT_FILE = "pluviasilvae - BGM001.mp3"
     const val DEFAULT_FOLDER = "BGM"
 
     data class CharDef(
@@ -56,6 +55,7 @@ object BundledMusic {
     )
 
     private val TITLE_TO_ID = mapOf(
+        "pluviasilvae - BGM001" to "pluviasilvae_bgm001",
         "RADICAL MAT" to "radical_mat",
         "AI CATCH" to "ai_catch",
         "Crystalline" to "crystalline",

@@ -105,6 +105,7 @@ object GameClearUi {
             )
         }
         dialog.show()
+        OverlayZOrder.onOverlayDialogShown(dialog)
         particleView.start()
         Handler(Looper.getMainLooper()).postDelayed({
             particleView.stop()

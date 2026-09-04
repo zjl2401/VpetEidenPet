@@ -40,6 +40,7 @@ class PetFxUi(
         const val WINK_MS = 100L
         const val BIXIN_MS = 48L
         const val KICK_MS = 80L
+        const val SWEAT_MS = 70L
         const val BULB_MS = 160L
         const val HAPPY_HOLD_MS = 6000L
         const val LIKE_HOLD_MS = 3800L
@@ -51,6 +52,7 @@ class PetFxUi(
         const val KICK_HOLD_MS = 2200L
         const val DIZZY_HOLD_MS = 3000L
         const val FOOD_HOLD_MS = 2200L
+        const val AWKWARD_HOLD_MS = 4800L
         val MUSIC_COLORS = intArrayOf(Color.parseColor("#9EC8E8"), Color.parseColor("#D0E8F5"))
         /** 对照桌面 MUSIC_FOLDER_BASE_COLORS */
         private val MUSIC_WAVE_PALETTE = intArrayOf(
@@ -77,7 +79,7 @@ class PetFxUi(
     }
 
     enum class Burst {
-        NONE, HAPPY, RAIN, BULB, LIKE, WINK, SHY, BIXIN, KICK, ANGRY, DIZZY, FOOD
+        NONE, HAPPY, RAIN, BULB, LIKE, WINK, SHY, BIXIN, KICK, ANGRY, DIZZY, FOOD, SWEAT
     }
 
     private val overlayMode = windowManager != null && roomHost == null
@@ -176,6 +178,8 @@ class PetFxUi(
     fun showBulb(holdMs: Long = IDEA_HOLD_MS) = startBurst(Burst.BULB, holdMs)
 
     fun showAngry(holdMs: Long = 4600L) = startBurst(Burst.ANGRY, holdMs)
+
+    fun showSweat(holdMs: Long = AWKWARD_HOLD_MS) = startBurst(Burst.SWEAT, holdMs)
 
     fun showLike() = startBurst(Burst.LIKE, LIKE_HOLD_MS) {
         starPts.clear()
@@ -501,6 +505,7 @@ class PetFxUi(
                 val delay = when {
                     burst == Burst.BIXIN -> BIXIN_MS
                     burst == Burst.RAIN -> RAIN_MS
+                    burst == Burst.SWEAT -> SWEAT_MS
                     burst == Burst.WINK || burst == Burst.KICK || burst == Burst.ANGRY ->
                         if (burst == Burst.WINK) WINK_MS else KICK_MS
                     burst == Burst.BULB -> BULB_MS
@@ -546,6 +551,7 @@ class PetFxUi(
                 Burst.ANGRY -> drawAngry(canvas, size)
                 Burst.DIZZY -> drawDizzy(canvas, size)
                 Burst.FOOD -> drawFood(canvas, size)
+                Burst.SWEAT -> drawSweat(canvas, size)
                 Burst.NONE -> Unit
             }
         }
@@ -711,6 +717,56 @@ class PetFxUi(
             val cy = size * 0.22f
             rect(c, cx - p * 2, cy - p / 2f, p * 4f, p.toFloat(), Color.parseColor("#FF3333"))
             rect(c, cx - p / 2f, cy - p * 2, p.toFloat(), p * 4f, Color.parseColor("#FF3333"))
+        }
+
+        /** 对照 pet.py `_draw_pixel_sweat_drop` + `_animate_sweat_fx`。 */
+        private fun drawSweatDrop(
+            c: Canvas,
+            x: Float,
+            y: Float,
+            p: Float,
+            stretch: Int,
+            body: Int,
+            tip: Int = Color.parseColor("#FFFFFF"),
+        ) {
+            val st = stretch.coerceAtLeast(0)
+            rect(c, x + p, y, p * 2f, p, tip)
+            rect(c, x, y + p, p * 4f, p * 2f, tip)
+            rect(c, x + p, y + p * 2, p * 2f, p * (2 + st).toFloat(), body)
+            rect(c, x + p * 2, y + p * (4 + st), p, p, body)
+        }
+
+        private fun drawSweat(c: Canvas, size: Int) {
+            val p = max(2, size / 36).toFloat()
+            val cycle = 14
+            val t = phase % cycle
+            val baseX = size * 0.72f
+            val baseY = size * 0.14f
+            val drip = t * max(1f, p / 2f)
+            val stretch = minOf(5, t / 2)
+            val wobble = (if ((t / 2) % 2 == 0) 1 else -1) * (p / 2f)
+            if (t < cycle - 2) {
+                drawSweatDrop(
+                    c,
+                    baseX + wobble,
+                    baseY + drip,
+                    p,
+                    stretch,
+                    Color.parseColor("#88DDFF"),
+                )
+            }
+            val t2 = (phase + 7) % cycle
+            if (t2 < cycle - 3) {
+                val p2 = max(2f, p - 1f)
+                drawSweatDrop(
+                    c,
+                    size * 0.80f,
+                    size * 0.10f + t2 * max(1f, p2 / 2f),
+                    p2,
+                    minOf(4, t2 / 2),
+                    Color.parseColor("#AADDFF"),
+                )
+            }
         }
 
         private fun drawDizzy(c: Canvas, size: Int) {

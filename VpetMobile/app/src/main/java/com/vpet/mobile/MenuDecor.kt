@@ -20,20 +20,29 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * 对照桌面 panel_decor：菜单 chrome、像素小图标、点击粒子散开。
+ * 对照桌面 panel_decor：彩虹描边 + 奶油内芯 + 像素小图标。
  */
 object MenuDecor {
+    /** THEME_RAINBOW */
+    val THEME_PINK = Color.parseColor("#FF6B9D")
+    val THEME_ORANGE = Color.parseColor("#FFB347")
+    val THEME_YELLOW = Color.parseColor("#FFE066")
+    val THEME_GREEN = Color.parseColor("#66DDAA")
     val THEME_BLUE = Color.parseColor("#66CCFF")
-    val THEME_PINK = Color.parseColor("#FF88CC")
-    val THEME_BLUE_DEEP = Color.parseColor("#4488DD")
-    val THEME_WHITE = Color.parseColor("#F4F8FF")
-    val THEME_BLACK = Color.parseColor("#0A0C12")
-    val MENU_BG = Color.parseColor("#E0141824")
-    val MENU_FG = Color.parseColor("#EEF2FF")
-    val MENU_ACTIVE = Color.parseColor("#E02A3558")
-    val THEME_ITEM_BG = Color.parseColor("#E0181F34")
+    val THEME_BLUE_DEEP = Color.parseColor("#CC88FF") // 彩虹紫（桌面 BLUE_DEEP 别名）
+    val THEME_WHITE = Color.parseColor("#FFFFFF")
+    val THEME_BLACK = Color.parseColor("#3A2230")
+    val MENU_BG = Color.parseColor("#FFF4E6")
+    val MENU_FG = Color.parseColor("#3A2230")
+    val MENU_ACTIVE = Color.parseColor("#F3DCC4")
+    val THEME_ITEM_BG = Color.parseColor("#F6E4D0")
+    val PIXEL_ACCENT = Color.parseColor("#9C2F55")
 
-    private val glyphColors = intArrayOf(THEME_BLUE_DEEP, THEME_BLUE, THEME_PINK, THEME_BLACK, THEME_WHITE)
+    val THEME_RAINBOW = intArrayOf(
+        THEME_PINK, THEME_ORANGE, THEME_YELLOW, THEME_GREEN, THEME_BLUE, THEME_BLUE_DEEP,
+    )
+
+    private val glyphColors = THEME_RAINBOW
     private val glyphCache = HashMap<Pair<String, Int>, Bitmap>()
 
     fun dp(ctx: Context, v: Float): Int =
@@ -43,15 +52,29 @@ object MenuDecor {
         setColor(THEME_BLUE)
     }
 
-    fun menuItemBg(pressed: Boolean = false): GradientDrawable = GradientDrawable().apply {
-        setColor(if (pressed) MENU_ACTIVE else THEME_ITEM_BG)
-        cornerRadius = 2f
+    fun moduleBtnBg(selected: Boolean): GradientDrawable = GradientDrawable().apply {
+        setColor(if (selected) MENU_ACTIVE else THEME_ITEM_BG)
+        setStroke(2, if (selected) THEME_PINK else THEME_BLUE)
+        cornerRadius = 10f
     }
 
-    fun moduleBtnBg(selected: Boolean): GradientDrawable = GradientDrawable().apply {
-        setColor(if (selected) MENU_ACTIVE else MENU_BG)
-        setStroke(1, if (selected) THEME_PINK else THEME_BLUE_DEEP)
-        cornerRadius = 2f
+    fun menuItemBg(pressed: Boolean = false): GradientDrawable = GradientDrawable().apply {
+        setColor(if (pressed) MENU_ACTIVE else THEME_ITEM_BG)
+        cornerRadius = 10f
+    }
+
+    fun panelCardBg(): GradientDrawable = GradientDrawable().apply {
+        setColor(MENU_BG)
+        setStroke(2, THEME_BLUE)
+        cornerRadius = 12f
+    }
+
+    fun rainbowStroke(thicknessPx: Int = 3): GradientDrawable = GradientDrawable(
+        GradientDrawable.Orientation.LEFT_RIGHT,
+        THEME_RAINBOW,
+    ).apply {
+        cornerRadius = 4f
+        setSize(thicknessPx * 40, thicknessPx)
     }
 
     fun glyphDrawable(ctx: Context, label: String, sizeDp: Float = 14f): BitmapDrawable {
@@ -86,7 +109,7 @@ object MenuDecor {
                 val nx = x + dx
                 val ny = y + dy
                 if (nx in 0 until 8 && ny in 0 until 8 && Color.alpha(base.getPixel(nx, ny)) == 0) {
-                    out.setPixel(nx, ny, Color.argb(220, 10, 12, 18))
+                    out.setPixel(nx, ny, Color.argb(180, 156, 47, 85))
                 }
             }
             out.setPixel(x, y, p)
@@ -160,18 +183,38 @@ object MenuDecor {
         return pts
     }
 
-    /** 粉蓝像素分隔条（对照 draw_pixel_divider）。 */
+    /** 彩虹像素分隔条（对照 draw_pixel_divider / rainbow）。 */
     fun drawPixelDivider(canvas: Canvas, width: Int, height: Int = 5) {
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
         val w = width.coerceAtLeast(40)
-        for (i in 0 until w step 8) {
-            p.color = THEME_PINK
-            canvas.drawRect(i.toFloat(), 0f, (i + 4).toFloat(), (height - 1).toFloat(), p)
-            p.color = THEME_BLUE
-            canvas.drawRect((i + 4).toFloat(), 1f, (i + 8).toFloat(), height.toFloat(), p)
+        val colors = THEME_RAINBOW
+        val step = 6
+        for (i in 0 until w step step) {
+            p.color = colors[(i / step) % colors.size]
+            canvas.drawRect(i.toFloat(), 0f, (i + step).toFloat(), height.toFloat(), p)
         }
         p.color = THEME_WHITE
         canvas.drawRect(0f, (height - 1).toFloat(), w.toFloat(), height.toFloat(), p)
+    }
+
+    fun drawRainbowBand(canvas: Canvas, width: Int, height: Int, reverse: Boolean = false) {
+        val p = Paint(Paint.ANTI_ALIAS_FLAG)
+        val colors = if (reverse) THEME_RAINBOW.reversedArray() else THEME_RAINBOW
+        if (width >= height) {
+            val seg = (width.coerceAtLeast(1).toFloat() / colors.size).coerceAtLeast(1f)
+            for (i in colors.indices) {
+                p.color = colors[i]
+                val x0 = i * seg
+                canvas.drawRect(x0, 0f, x0 + seg + 1f, height.toFloat(), p)
+            }
+        } else {
+            val seg = (height.coerceAtLeast(1).toFloat() / colors.size).coerceAtLeast(1f)
+            for (i in colors.indices) {
+                p.color = colors[i]
+                val y0 = i * seg
+                canvas.drawRect(0f, y0, width.toFloat(), y0 + seg + 1f, p)
+            }
+        }
     }
 }
 
@@ -318,7 +361,7 @@ class PixelClickBurst(
     }
 }
 
-/** 粉蓝像素分隔条 View。 */
+/** 彩虹像素分隔条 View。 */
 class PixelDividerView @JvmOverloads constructor(
     context: Context,
     attrs: android.util.AttributeSet? = null,
@@ -332,5 +375,27 @@ class PixelDividerView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         MenuDecor.drawPixelDivider(canvas, width, height)
+    }
+}
+
+/** 菜单彩虹外框色带（对照 pack_rainbow_band）。 */
+class RainbowBandView @JvmOverloads constructor(
+    context: Context,
+    attrs: android.util.AttributeSet? = null,
+) : View(context, attrs) {
+    var reverse: Boolean = false
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    override fun onFinishInflate() {
+        super.onFinishInflate()
+        val tag = tag?.toString().orEmpty()
+        reverse = tag == "right" || tag == "bottom"
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        MenuDecor.drawRainbowBand(canvas, width, height, reverse)
     }
 }

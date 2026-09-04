@@ -133,6 +133,7 @@ object FeedFoodPicker {
         }
         try {
             dialog.show()
+            OverlayZOrder.onOverlayDialogShown(dialog)
         } catch (e: Exception) {
             Toast.makeText(context, "无法打开吃东西菜单", Toast.LENGTH_SHORT).show()
         }

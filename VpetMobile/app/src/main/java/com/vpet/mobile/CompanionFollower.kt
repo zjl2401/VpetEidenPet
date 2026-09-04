@@ -49,19 +49,17 @@ class CompanionFollower(
         const val PAIR_OVERLAP_RATIO = 0.12f
         const val FLY_BOB_PX = 5
         const val FLY_FRAME_MS = 320L
-        /** 对照桌面 MINI_PET_SIZE / DEFAULT_SIZE：伴侣随主宠同比例缩放。 */
+        /** 对照桌面 MINI_PET_SIZE / DEFAULT_SIZE：画布随主宠同比例，立绘共用 stand 参考缩放。 */
         const val MINI_PET_SIZE = 120
         const val DEFAULT_PET_SIZE = 128
+        /** 桌面 `_mini_pet_size_for` 上下限。 */
+        const val MINI_SIZE_MIN = 72
+        const val MINI_SIZE_MAX = 220
 
         fun companionSize(petPx: Int): Int {
             val px = petPx.coerceAtLeast(24)
             val scaled = (px.toFloat() * MINI_PET_SIZE / DEFAULT_PET_SIZE).roundToInt()
-            // 与主宠同上下限比例，避免一边到顶另一边不动
-            val lo = (PetPrefs.SIZE_MIN_PX.toFloat() * MINI_PET_SIZE / DEFAULT_PET_SIZE).roundToInt()
-                .coerceAtLeast(72)
-            val hi = (PetPrefs.SIZE_MAX_PX.toFloat() * MINI_PET_SIZE / DEFAULT_PET_SIZE).roundToInt()
-                .coerceAtMost(PetPrefs.SIZE_MAX_PX)
-            return scaled.coerceIn(lo, hi)
+            return scaled.coerceIn(MINI_SIZE_MIN, MINI_SIZE_MAX)
         }
     }
 
@@ -254,10 +252,10 @@ class CompanionFollower(
     private fun loadSprites(size: Int) {
         recycleBitmaps()
         loadedCanvasSize = size
-        refScale = 0f
-        // 先算 petstand 参考缩放，再加载各向（对照桌面 mini pet 共用 ref）
+        // 对照桌面：_reference_scale(size) 用主宠 stand 内容盒，使魔不铺满画布
+        refScale = mainPetReferenceScale(size)
         val stem = kind.spriteStem
-        bmpStand = loadMiniCanvas("sprites/${stem}1.png", size, isRef = true)
+        bmpStand = loadMiniCanvas("sprites/${stem}1.png", size)
         bmpFront1 = loadMiniCanvas("sprites/${stem}1.png", size)
         bmpFront2 = loadMiniCanvas("sprites/${stem}2.png", size)
         bmpBack1 = loadMiniCanvas("sprites/${stem}3.png", size)
@@ -268,11 +266,24 @@ class CompanionFollower(
         bmpRight2 = bmpLeft2?.let { flipH(it) }
     }
 
+    /** 对照桌面 `_reference_scale`：min(side/standW, side/standH)。 */
+    private fun mainPetReferenceScale(canvasSize: Int): Float {
+        val stand = decodeAsset(SpriteAssets.STAND) ?: return 1f
+        val box = opaqueBounds(stand) ?: Rect(0, 0, stand.width, stand.height)
+        val cw = box.width().coerceAtLeast(1).toFloat()
+        val ch = box.height().coerceAtLeast(1).toFloat()
+        try {
+            stand.recycle()
+        } catch (_: Exception) {
+        }
+        return minOf(canvasSize / cw, canvasSize / ch)
+    }
+
     /**
-     * 抠内容盒后按 petstand 的 reference_scale 缩放，底对齐贴入画布。
-     * 对照桌面 `_to_fixed_canvas`：共用 ref、溢出只裁切，不再二次压扁（避免侧面变矮）。
+     * 抠内容盒后按主宠 stand 的 reference_scale 缩放，底对齐贴入画布。
+     * 对照桌面 `_to_fixed_canvas`：共用主宠 ref，使魔自然更小（不按自身高度铺满）。
      */
-    private fun loadMiniCanvas(path: String, canvasSize: Int, isRef: Boolean = false): Bitmap? {
+    private fun loadMiniCanvas(path: String, canvasSize: Int): Bitmap? {
         val raw = decodeAsset(path) ?: return null
         val box = opaqueBounds(raw) ?: Rect(0, 0, raw.width, raw.height)
         val cropped = if (box.left == 0 && box.top == 0 && box.width() == raw.width && box.height() == raw.height) {
@@ -284,11 +295,10 @@ class CompanionFollower(
         }
         val cw = cropped.width.coerceAtLeast(1)
         val ch = cropped.height.coerceAtLeast(1)
-        if (isRef || refScale <= 0f) {
-            // 以高度铺满为主，正面与站立同高；更宽的侧面横向裁切
-            refScale = canvasSize.toFloat() / ch
+        val scale = if (refScale > 0f) refScale else {
+            // 兜底：不应走到这里
+            minOf(canvasSize.toFloat() / cw, canvasSize.toFloat() / ch)
         }
-        val scale = refScale
         val newW = max(1, (cw * scale).roundToInt())
         val newH = max(1, (ch * scale).roundToInt())
         val scaled = if (newW == cropped.width && newH == cropped.height) {
@@ -299,7 +309,6 @@ class CompanionFollower(
             }
         }
         val out = Bitmap.createBitmap(canvasSize, canvasSize, Bitmap.Config.ARGB_8888)
-        // 底对齐；超宽/超高由 Canvas 裁切（对齐桌面 paste）
         Canvas(out).drawBitmap(scaled, (canvasSize - newW) / 2f, (canvasSize - newH).toFloat(), null)
         if (scaled != out) scaled.recycle()
         return out

@@ -40,20 +40,20 @@ STROLL_CHAT_INTERVAL_MS = 2600
 
 PAIR_KEY = "aoba_eiden"
 
-PHASE_SILENT = "silent"
+PHASE_SILENT = "silent"  # 兼容旧引用；meet_phase 不再返回此阶段
 PHASE_FAMILIAR = "familiar"
 PHASE_INTRO = "intro"
 PHASE_FREE = "free"
 
 
 def meet_phase(meet_count: int) -> str:
-    """相遇阶段：1 静默 · 2–3 眼熟 · 4 自我介绍 · 5+ 自由问候。"""
+    """相遇阶段：1–10 眼熟 · 11 自我介绍 · 12+ 自由（已去掉静默期）。"""
     n = max(0, int(meet_count))
-    if n <= 1:
-        return PHASE_SILENT
-    if n <= 3:
+    if n <= 0:
         return PHASE_FAMILIAR
-    if n == 4:
+    if n <= 10:
+        return PHASE_FAMILIAR
+    if n == 11:
         return PHASE_INTRO
     return PHASE_FREE
 
@@ -61,7 +61,7 @@ def meet_phase(meet_count: int) -> str:
 def meet_phase_label(meet_count: int) -> str:
     phase = meet_phase(meet_count)
     return {
-        PHASE_SILENT: "初次擦肩",
+        PHASE_SILENT: "有点眼熟",
         PHASE_FAMILIAR: "有点眼熟",
         PHASE_INTRO: "正式相识",
         PHASE_FREE: "老朋友",
@@ -70,10 +70,8 @@ def meet_phase_label(meet_count: int) -> str:
 
 def points_gain_for_meet(meet_count_after: int) -> float:
     n = max(1, int(meet_count_after))
-    if n <= 1:
-        return 0.0
-    if n <= 3:
-        return 0.5
+    if n <= 10:
+        return 0.4
     return 1.0
 
 
@@ -269,7 +267,13 @@ def dialogues_path(presence_dir: Path, data_dir: Path | None = None) -> Path | N
     return None
 
 
-def load_custom_dialogues(presence_dir: Path, data_dir: Path | None = None) -> dict[str, list[str]]:
+def load_custom_dialogues(presence_dir: Path, data_dir: Path | None = None) -> dict[str, list[dict]]:
+    """自定义相遇台词。支持纯字符串，或 {text, keyword, bubble, cells}。
+
+    bubble: \"text\" | \"pixels\" —— 气泡里是文字还是像素画；
+    keyword: 可选，可作为 AI 对话围绕展开的关键词；
+    cells: 可选，12×12 色板下标（0=透明），bubble=pixels 时绘制。
+    """
     path = dialogues_path(presence_dir, data_dir)
     if not path:
         return {}
@@ -277,35 +281,86 @@ def load_custom_dialogues(presence_dir: Path, data_dir: Path | None = None) -> d
         raw = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
             return {}
-        out: dict[str, list[str]] = {}
+        out: dict[str, list[dict]] = {}
         for key, val in raw.items():
             kind = str(key or "").strip().lower()
             if not kind:
                 continue
-            if isinstance(val, list):
-                lines = [str(x).strip() for x in val if str(x).strip()]
-            elif isinstance(val, str) and val.strip():
-                lines = [val.strip()]
-            else:
-                continue
-            if lines:
-                out[kind] = lines
+            items = val if isinstance(val, list) else ([val] if val else [])
+            entries: list[dict] = []
+            for item in items:
+                entry = normalize_dialogue_entry(item)
+                if entry is not None:
+                    entries.append(entry)
+            if entries:
+                out[kind] = entries
         return out
     except Exception:
         return {}
 
 
-def build_custom_talk(
-    self_kind: str,
-    other_kind: str,
-    dialogues: dict[str, list[str]] | None,
-    *,
-    owner_name: str = "",
-) -> str | None:
+def normalize_dialogue_entry(raw) -> dict | None:
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return None
+        return {"text": text, "keyword": "", "bubble": "text", "cells": []}
+    if not isinstance(raw, dict):
+        return None
+    text = str(raw.get("text") or raw.get("line") or "").strip()
+    if not text:
+        return None
+    bubble = str(raw.get("bubble") or "text").strip().lower()
+    if bubble not in ("text", "pixels"):
+        bubble = "text"
+    keyword = str(raw.get("keyword") or raw.get("topic") or "").strip()
+    cells_raw = raw.get("cells")
+    cells: list[int] = []
+    if isinstance(cells_raw, list):
+        for v in cells_raw[:144]:
+            try:
+                cells.append(max(0, min(15, int(v or 0))))
+            except Exception:
+                cells.append(0)
+        while len(cells) < 144:
+            cells.append(0)
+    return {"text": text, "keyword": keyword, "bubble": bubble, "cells": cells}
+
+
+def pick_custom_entry(self_kind: str, dialogues: dict[str, list[dict]] | None) -> dict | None:
     pool = (dialogues or {}).get(self_kind) or []
     if not pool:
         return None
-    line = random.choice(pool)
+    return dict(random.choice(pool))
+
+
+def build_custom_talk(
+    self_kind: str,
+    other_kind: str,
+    dialogues: dict[str, list[dict]] | None,
+    *,
+    owner_name: str = "",
+) -> str | None:
+    entry = pick_custom_entry(self_kind, dialogues)
+    if entry is None:
+        return None
+    line = str(entry.get("text") or "")
+    other = PET_DISPLAY.get(other_kind, other_kind)
+    owner = str(owner_name or "").strip()
+    try:
+        return line.format(other=other, owner=owner, self=PET_DISPLAY.get(self_kind, self_kind))
+    except Exception:
+        return line
+
+
+def build_custom_entry_talk(
+    entry: dict,
+    self_kind: str,
+    other_kind: str,
+    *,
+    owner_name: str = "",
+) -> str:
+    line = str(entry.get("text") or "")
     other = PET_DISPLAY.get(other_kind, other_kind)
     owner = str(owner_name or "").strip()
     try:
@@ -315,7 +370,8 @@ def build_custom_talk(
 
 
 def actions_available(level: int, meet_count: int) -> bool:
-    return int(meet_count) >= 4 and int(level) >= 1
+    # 加长 P0 后：自我介绍完成（≥11）且 Lv≥1 才解锁并肩
+    return int(meet_count) >= 11 and int(level) >= 1
 
 
 def next_unlock_hint(level: int) -> str | None:
@@ -374,19 +430,20 @@ def minipet_line(self_kind: str, self_companions: list[str], other_companions: l
 
 
 def familiar_lines(self_kind: str, other_kind: str) -> tuple[str, ...]:
+    """眼熟阶段：极短（≤12 字），见面 UI 轻量化。"""
     other = PET_DISPLAY.get(other_kind, other_kind)
     if self_kind == KIND_EIDEN:
         return (
-            f"……嗯？那边好像是{other}？",
-            f"有点眼熟……是{other}吗？",
-            "好像在哪里见过一面……",
-            f"诶，是{other}？我们之前碰过面吗？",
+            f"……是{other}？",
+            "有点眼熟……",
+            "好像见过……",
+            f"诶，{other}？",
         )
     return (
-        f"……是{other}？我们见过吗？",
-        f"有点印象……{other}？",
-        "诶，是不是之前擦肩过？",
-        f"嗯……{other}，好像不是第一次见了。",
+        f"……{other}？",
+        "有点印象……",
+        "擦肩过？",
+        f"嗯……{other}？",
     )
 
 

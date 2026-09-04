@@ -93,6 +93,7 @@ class ToolsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        OverlayGate.pause(this)
         binding = ActivityToolsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -202,5 +203,10 @@ class ToolsActivity : AppCompatActivity() {
             if (idx >= 0 && c.moveToFirst()) return c.getString(idx)
         }
         return null
+    }
+
+    override fun onDestroy() {
+        OverlayGate.resume(this)
+        super.onDestroy()
     }
 }

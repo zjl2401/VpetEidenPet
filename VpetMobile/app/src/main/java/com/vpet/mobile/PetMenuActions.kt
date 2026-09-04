@@ -32,6 +32,10 @@ class PetMenuActions(
                     if (hub.isQuiet) hub.endQuiet(fromMenu = true)
                     else hub.startQuiet()
                 }
+                "mode_work" -> {
+                    if (hub.isWorking) hub.endWork(fromMenu = true)
+                    else hub.startWorkFree()
+                }
                 "act_sleep" -> hub.startSleepInteract()
                 "mode_music" -> hub.startMusic()
                 "act_stand" -> hub.playAction("act_stand")
@@ -43,9 +47,13 @@ class PetMenuActions(
                 "panel_invite" -> toast("尚未开发完全")
                 "panel_persona" -> hub.togglePersona()
                 "expr_happy", "expr_sad", "expr_shy", "expr_wink", "expr_like",
-                "expr_angry", "expr_idea", "expr_question", "expr_bixin",
+                "expr_angry", "expr_idea", "expr_question", "expr_speechless", "expr_awkward", "expr_bixin",
                 -> hub.playExpression(id)
-                "work_free", "act_work" -> {
+                "act_work" -> {
+                    if (hub.isWorking) hub.endWork(fromMenu = true)
+                    else hub.startWorkFree()
+                }
+                "work_free" -> {
                     if (hub.isWorking && hub.isMenuChecked("work_free")) hub.endWork(fromMenu = true)
                     else hub.startWorkFree()
                 }
@@ -76,7 +84,7 @@ class PetMenuActions(
                 "sys_achievements" -> hub.openSystemPage("achievements")
                 "sys_gallery" -> hub.openSystemPage("gallery")
                 "sys_phonograph" -> hub.openSystemPage("phonograph")
-                "sys_settings_page" -> hub.openSystemPage("settings")
+                "sys_settings", "sys_settings_page" -> hub.openSystemPage("settings")
                 "sys_about" -> hub.openSystemPage("about")
                 "sys_feedback" -> hub.openSystemPage("feedback")
                 "sys_submit" -> hub.openSystemPage("submit")

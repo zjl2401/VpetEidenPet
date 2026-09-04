@@ -207,6 +207,7 @@ object ScheduleBirthdayDialogs {
             }
         }
         dialog.show()
+        OverlayZOrder.onOverlayDialogShown(dialog)
         return dialog
     }
 

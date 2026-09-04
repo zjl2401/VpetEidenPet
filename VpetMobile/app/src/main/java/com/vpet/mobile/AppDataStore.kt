@@ -212,19 +212,110 @@ object AppDataStore {
         }
     }
 
-    fun addDiary(ctx: Context, text: String): Boolean {
+    /** 日记天气选项（对照桌面 DIARY_WEATHER_OPTIONS）。 */
+    val DIARY_WEATHER: List<Pair<String, String>> = listOf(
+        "sunny" to "晴朗",
+        "partly" to "多云",
+        "cloudy" to "阴天",
+        "fog" to "有雾",
+        "drizzle" to "毛毛雨",
+        "rain" to "降雨",
+        "snow" to "降雪",
+        "storm" to "雷暴",
+    )
+
+    /** 日记心情（对照桌面 DIARY_MOOD_FACES 标签）。 */
+    val DIARY_MOODS: List<Pair<String, String>> = listOf(
+        "stand" to "平常",
+        "happy" to "开心",
+        "wink" to "Wink",
+        "like" to "点赞",
+        "shy" to "害羞",
+        "sad" to "伤心",
+        "angry" to "生气",
+        "question" to "疑惑",
+        "speechless" to "无语",
+        "awkward" to "尴尬",
+        "zzz" to "睡觉Z",
+        "sleep" to "困倦",
+    )
+
+    fun diaryWeatherLabel(kind: String): String =
+        DIARY_WEATHER.firstOrNull { it.first == kind }?.second.orEmpty()
+
+    fun diaryMoodLabel(face: String): String =
+        DIARY_MOODS.firstOrNull { it.first == face }?.second.orEmpty()
+
+    fun defaultDiaryMoodFace(ctx: Context): String {
+        val v = mood(ctx)
+        return when {
+            v >= 85 -> "happy"
+            v >= 65 -> "wink"
+            v >= 45 -> "stand"
+            v >= 25 -> "sad"
+            else -> "sleep"
+        }
+    }
+
+    fun addDiary(
+        ctx: Context,
+        text: String,
+        weather: String = "sunny",
+        moodFace: String = "stand",
+        auto: Boolean = false,
+    ): Boolean {
         val t = text.trim()
         if (t.isEmpty()) return false
         val arr = diaries(ctx)
-        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA)
-        arr.put(
-            JSONObject()
-                .put("id", UUID.randomUUID().toString())
-                .put("ts", fmt.format(Date()))
-                .put("text", t.take(200)),
-        )
-        prefs(ctx).edit().putString(KEY_DIARY, arr.toString()).apply()
+        val now = Date()
+        val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA)
+        val timeFmt = SimpleDateFormat("HH:mm", Locale.CHINA)
+        val tsFmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA)
+        val w = weather.ifBlank { "sunny" }
+        val face = moodFace.ifBlank { defaultDiaryMoodFace(ctx) }
+        // 新页插到最前（对照桌面翻页 0=最新）
+        val obj = JSONObject()
+            .put("id", UUID.randomUUID().toString())
+            .put("ts", tsFmt.format(now))
+            .put("date", dateFmt.format(now))
+            .put("time", timeFmt.format(now))
+            .put("text", t.take(400))
+            .put("weather", w)
+            .put("weather_label", diaryWeatherLabel(w))
+            .put("mood_face", face)
+            .put("mood_label", diaryMoodLabel(face))
+            .put("auto", auto)
+        val next = JSONArray()
+        next.put(obj)
+        for (i in 0 until arr.length()) {
+            if (next.length() >= 200) break
+            next.put(arr.getJSONObject(i))
+        }
+        prefs(ctx).edit().putString(KEY_DIARY, next.toString()).apply()
         unlock(ctx, "diary_first")
+        if (next.length() >= 5) unlock(ctx, "diary_count")
+        return true
+    }
+
+    fun addAutoDiary(ctx: Context, text: String) {
+        addDiary(ctx, text, weather = "sunny", moodFace = defaultDiaryMoodFace(ctx), auto = true)
+    }
+
+    fun deleteDiary(ctx: Context, id: String): Boolean {
+        if (id.isBlank()) return false
+        val arr = diaries(ctx)
+        val next = JSONArray()
+        var removed = false
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            if (o.optString("id") == id) {
+                removed = true
+                continue
+            }
+            next.put(o)
+        }
+        if (!removed) return false
+        prefs(ctx).edit().putString(KEY_DIARY, next.toString()).apply()
         return true
     }
 

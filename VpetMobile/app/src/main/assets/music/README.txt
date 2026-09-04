@@ -1,1 +1,2 @@
-﻿精简包仅内置默认曲 RADICAL MAT（aoba-blue）。完整曲库见仓库 _heavy_assets/music（约 450MB，不打进 APK）。
+伊得曲库精简包（对照桌面 VpetEiden/music）。
+BGM / 主题曲 / 其他；完整曲库过大不打进 APK。
