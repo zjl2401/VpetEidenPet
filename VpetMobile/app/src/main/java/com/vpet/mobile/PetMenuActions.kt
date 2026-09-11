@@ -65,7 +65,7 @@ class PetMenuActions(
                 "tool_timer", "tool_timer_custom" -> hub.openTimerSetup()
                 "tool_pomo_custom" -> hub.openPomodoroSetup()
                 "tool_pomo_end" -> hub.endPomodoro(silent = false)
-                "tool_schedule" -> hub.openScheduleSetup()
+                "tool_weather" -> WeatherForecastUi.show(context)
                 "tool_bday_set" -> hub.openBirthdaySetup()
                 "tool_archive", "sys_sync" -> hub.openTools()
                 "panel_open" -> hub.openPanel()

@@ -280,17 +280,25 @@ object PetProfileStore {
         prefs(ctx).edit().putString(KEY_SCHEDULES, arr.toString()).apply()
     }
 
-    fun addSchedule(ctx: Context, timeHm: String, text: String): Boolean {
+    fun addSchedule(
+        ctx: Context,
+        timeHm: String,
+        text: String,
+        weekdays: List<Int>? = null,
+    ): Boolean {
         val t = normalizeTime(timeHm) ?: return false
         val txt = text.trim()
         if (txt.isEmpty()) return false
         val arr = schedules(ctx)
-        arr.put(
-            JSONObject()
-                .put("id", UUID.randomUUID().toString())
-                .put("time", t)
-                .put("text", txt.take(60)),
-        )
+        val o = JSONObject()
+            .put("id", UUID.randomUUID().toString())
+            .put("time", t)
+            .put("text", txt.take(60))
+        val days = weekdays?.filter { it in 0..6 }?.distinct()?.sorted()
+        if (days != null && days.isNotEmpty() && days.size < 7) {
+            o.put("weekdays", JSONArray(days))
+        }
+        arr.put(o)
         saveSchedules(ctx, arr)
         return true
     }
@@ -318,12 +326,35 @@ object PetProfileStore {
         return "%02d:%02d".format(h, m)
     }
 
+    /** 对照桌面 `_format_schedule_weekdays`。null/空/满7天 = 每天。 */
+    fun formatWeekdays(item: JSONObject): String {
+        val raw = item.optJSONArray("weekdays") ?: return "每天"
+        if (raw.length() == 0 || raw.length() >= 7) return "每天"
+        val labels = arrayOf("一", "二", "三", "四", "五", "六", "日")
+        val parts = ArrayList<String>()
+        for (i in 0 until raw.length()) {
+            val d = raw.optInt(i, -1)
+            if (d in 0..6) parts += labels[d]
+        }
+        return if (parts.isEmpty()) "每天" else "周${parts.joinToString("")}"
+    }
+
+    fun matchesToday(item: JSONObject, weekdayMon0: Int): Boolean {
+        val raw = item.optJSONArray("weekdays") ?: return true
+        if (raw.length() == 0 || raw.length() >= 7) return true
+        for (i in 0 until raw.length()) {
+            if (raw.optInt(i, -1) == weekdayMon0) return true
+        }
+        return false
+    }
+
     fun dueScheduleTexts(ctx: Context, nowHm: String): List<String> {
         val arr = schedules(ctx)
+        val weekday = (java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7
         val out = mutableListOf<String>()
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
-            if (o.optString("time") == nowHm) {
+            if (o.optString("time") == nowHm && matchesToday(o, weekday)) {
                 out += o.optString("text")
             }
         }

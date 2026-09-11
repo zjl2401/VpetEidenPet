@@ -21,11 +21,11 @@ class HomeSceneView @JvmOverloads constructor(
 ) : View(context, attrs) {
 
     companion object {
-        val FLOOR_A = Color.parseColor("#6A7080")
-        val FLOOR_B = Color.parseColor("#5A6070")
-        val FURN = Color.parseColor("#6AA8D8")
+        val FLOOR_A = Color.parseColor("#D8C0A0")
+        val FLOOR_B = Color.parseColor("#C8AE88")
+        val FURN = Color.parseColor("#F2C8D4")
         /** 对照桌面 OUTDOOR_BASE_COLOR */
-        val OUTDOOR_BASE = Color.parseColor("#000000")
+        val OUTDOOR_BASE = Color.parseColor("#78A878")
     }
 
     enum class Zone { INDOOR, OUTDOOR }

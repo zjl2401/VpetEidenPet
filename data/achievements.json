@@ -1,20 +1,17 @@
 {
   "unlocked": {
-    "owner_named": "2026-09-02 20:42",
-    "mode_follow": "2026-09-02 21:47",
-    "companion_on": "2026-09-02 21:48",
-    "home_visit": "2026-09-02 21:52",
-    "timer_use": "2026-09-02 21:53",
-    "weather_peek": "2026-09-02 21:54",
-    "memory_open": "2026-09-02 21:56",
-    "mode_work": "2026-09-02 22:38",
-    "mode_sleep": "2026-09-02 22:42",
-    "music_first": "2026-09-03 02:09",
-    "gather_play": "2026-09-04 00:18",
-    "diary_first": "2026-09-04 00:19",
-    "vocab_play": "2026-09-04 00:19",
-    "rhythm_play": "2026-09-04 10:29",
-    "rhythm_great": "2026-09-04 10:29"
+    "owner_named": "2026-09-11 14:48",
+    "typing_play": "2026-09-11 15:27",
+    "vocab_play": "2026-09-11 15:30",
+    "diary_first": "2026-09-11 15:30",
+    "rhythm_play": "2026-09-11 15:34",
+    "rhythm_great": "2026-09-11 15:34",
+    "home_visit": "2026-09-11 15:34",
+    "memory_open": "2026-09-11 15:42",
+    "timer_use": "2026-09-11 15:44",
+    "mode_work": "2026-09-11 15:44",
+    "companion_on": "2026-09-11 15:54",
+    "music_first": "2026-09-11 15:54"
   },
   "stats": {
     "listen_seconds": 0.0,
@@ -22,41 +19,39 @@
     "feed_count": 0,
     "diary_count": 0,
     "schedule_count": 0,
-    "gather_plays": 2,
-    "gather_best": 196,
-    "typing_plays": 0,
-    "typing_best_grade": "",
-    "vocab_plays": 5,
+    "gather_plays": 0,
+    "gather_best": 0,
+    "typing_plays": 1,
+    "typing_best_grade": "C",
+    "vocab_plays": 9,
     "vocab_best_streak": 0,
     "rhythm_plays": 1,
-    "rhythm_best_grade": "A",
+    "rhythm_best_grade": "S",
     "rhyme_wins": 0,
     "rhyme_jinmu_wins": 0,
     "expose_clears": 0,
+    "expose_perfect_clears": 0,
     "modes_used": [
-      "follow",
-      "work",
-      "quiet",
-      "music"
+      "work"
     ],
     "mode_seconds": {
-      "free": 79579.17299999969,
-      "follow": 31.437,
-      "stroll": 15.846,
-      "quiet": 5.9559999999999995,
-      "work": 823.9129999999999,
-      "game": 118.271,
-      "music": 76.935
+      "free": 3330.4740000000006,
+      "follow": 0.0,
+      "stroll": 0.0,
+      "quiet": 0.0,
+      "work": 28.378,
+      "game": 0.0,
+      "music": 2794.6279999999992
     },
-    "work_total_seconds": 823.9129999999999,
-    "sleep_total_seconds": 5.9559999999999995,
-    "music_total_seconds": 76.874,
+    "work_total_seconds": 28.378,
+    "sleep_total_seconds": 0.0,
+    "music_total_seconds": 2794.6129999999994,
     "companion_enabled": true,
-    "companion_open_count": 34,
+    "companion_open_count": 2,
     "owner_named": true,
     "gift_ready": false,
     "pixel_gift": false,
-    "weather_peek": true,
+    "weather_peek": false,
     "timer_use": true,
     "memory_open": true,
     "home_visit": true,
@@ -68,38 +63,16 @@
     "home_paint": false,
     "rpg_play": false,
     "meta_banter": {
-      "last_ms": 1788500506486,
+      "last_ms": 1789111015978,
       "event_last": {
-        "sleep_end": 1788360146974,
-        "crossover_meet": 1788447837071,
-        "screen_edge": 1788443879236,
-        "drag_long": 1788452290663,
-        "peer_meet": 1788500506486
+        "peer_meet": 1789111015978
       },
       "used": {
-        "sleep_end": [
-          "结束键……比闹钟温柔一点。"
-        ],
-        "crossover_meet": [
-          "跨到碧岛这边来了呢。",
-          "桌面两边各站一只……",
-          "苍叶也开机了？"
-        ],
-        "screen_edge": [
-          "这边是屏幕的尽头哦。"
-        ],
-        "drag_long": [
-          "你在挪窗口，不是在遛我……"
-        ],
         "peer_meet": [
-          "啊，又一个我。",
-          "屏幕里怎么站了两只……",
-          "双开了？那边的我也辛苦了。"
+          "啊，又一个我。"
         ]
       }
     },
-    "home_opened": true,
-    "work_boxes_total": 54,
-    "work_reward_boxes_granted": 2
+    "home_opened": true
   }
 }

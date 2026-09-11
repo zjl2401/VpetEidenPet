@@ -134,14 +134,30 @@ def load_walker_frames(
         prefix = "walk"
 
     def _open(name: str) -> Image.Image:
-        if load_raw is not None:
-            raw = load_raw(name).convert("RGBA")
-        else:
-            raw = Image.open(sprites_dir / name).convert("RGBA")
-        # 先缩到时钟尺寸再抠绿：整图 flood-fill 会在首次开音乐/工作时钟卡十几秒
-        work = raw.copy()
-        work.thumbnail((max(size * 2, 48), max(size * 2, 48)), Image.Resampling.NEAREST)
-        return _remove_outer_green(work)
+        candidates = [name]
+        stem = Path(name).stem
+        if name.lower().endswith(".jpg"):
+            candidates.append(f"{stem}.png")
+        elif name.lower().endswith(".png"):
+            candidates.append(f"{stem}.jpg")
+        last_err: Exception | None = None
+        for cand in candidates:
+            try:
+                if load_raw is not None:
+                    raw = load_raw(cand).convert("RGBA")
+                else:
+                    path = sprites_dir / cand
+                    if not path.is_file():
+                        continue
+                    raw = Image.open(path).convert("RGBA")
+                # 先缩到时钟尺寸再抠绿：整图 flood-fill 会在首次开音乐/工作时钟卡十几秒
+                work = raw.copy()
+                work.thumbnail((max(size * 2, 48), max(size * 2, 48)), Image.Resampling.NEAREST)
+                return _remove_outer_green(work)
+            except Exception as exc:
+                last_err = exc
+                continue
+        raise FileNotFoundError(name) from last_err
 
     def scale(im: Image.Image) -> ImageTk.PhotoImage:
         im = im.copy()
@@ -188,13 +204,29 @@ def load_sleep_frames(
     size = max(12, int(size))
 
     def _open(name: str) -> Image.Image:
-        if load_raw is not None:
-            raw = load_raw(name).convert("RGBA")
-        else:
-            raw = Image.open(sprites_dir / name).convert("RGBA")
-        work = raw.copy()
-        work.thumbnail((max(size * 2, 48), max(size * 2, 48)), Image.Resampling.NEAREST)
-        return _remove_outer_green(work)
+        candidates = [name]
+        stem = Path(name).stem
+        if name.lower().endswith(".jpg"):
+            candidates.append(f"{stem}.png")
+        elif name.lower().endswith(".png"):
+            candidates.append(f"{stem}.jpg")
+        last_err: Exception | None = None
+        for cand in candidates:
+            try:
+                if load_raw is not None:
+                    raw = load_raw(cand).convert("RGBA")
+                else:
+                    path = sprites_dir / cand
+                    if not path.is_file():
+                        continue
+                    raw = Image.open(path).convert("RGBA")
+                work = raw.copy()
+                work.thumbnail((max(size * 2, 48), max(size * 2, 48)), Image.Resampling.NEAREST)
+                return _remove_outer_green(work)
+            except Exception as exc:
+                last_err = exc
+                continue
+        raise FileNotFoundError(name) from last_err
 
     def scale(im: Image.Image) -> ImageTk.PhotoImage:
         im = im.copy()
@@ -275,9 +307,9 @@ def make_panel_gradient(
     transparency: float = 0.18,
     key_rgb: tuple[int, int, int] = (255, 0, 255),
 ) -> Image.Image:
-    """粉→蓝水平渐变底板（供秒表/计时器数字框）。
+    """青→蓝半透明水平渐变底板（供秒表/计时器数字框）。
 
-    transparency: 透明度 0~1（默认 0.18，与面板轻微玻璃感接近）。色键窗无法真·半透明，
+    transparency: 透明度 0~1（越大越透）。色键窗无法真·半透明，
     用品红键色像素抖动挖空，视觉上约等于该透明度。
     """
     w = max(1, int(width))

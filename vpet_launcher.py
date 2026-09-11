@@ -11,7 +11,7 @@ import threading
 import time
 from pathlib import Path
 
-LAUNCHER_PORT = 52847
+LAUNCHER_PORT = 52848  # 伊得专用；苍叶为 52847，双开互不抢端口
 APP_ROOT = Path(__file__).resolve().parent
 STARTUP_LNK_NAME = "Vpet Eiden.lnk"
 
@@ -188,7 +188,7 @@ def set_launch_at_login(enabled: bool) -> None:
 
 
 def sync_desktop_shortcut(*, force: bool = True) -> bool:
-    """刷新桌面「Vpet Eiden.lnk」，指向当前工程的启动脚本（默认源码）。"""
+    """桌面「Vpet Eiden.lnk」：若已是统一包 --pet --kind eiden，则勿覆盖（可多开、不关旧宠）。"""
     if sys.platform != "win32":
         return False
     desktop = Path.home() / "Desktop"
@@ -197,22 +197,74 @@ def sync_desktop_shortcut(*, force: bool = True) -> bool:
     if not desktop.is_dir():
         return False
     lnk = desktop / STARTUP_LNK_NAME
+    # 已指向统一包多开参数：保留，避免每次启动把快捷方式改回旧 bat
+    if lnk.is_file():
+        try:
+            import win32com.client  # type: ignore
+
+            shell = win32com.client.Dispatch("WScript.Shell")
+            cur = shell.CreateShortcut(str(lnk))
+            cur_target = str(getattr(cur, "TargetPath", "") or "").lower().replace("/", "\\")
+            cur_args = str(getattr(cur, "Arguments", "") or "").lower()
+            if cur_target.endswith("vpet.exe") and "--pet" in cur_args and "eiden" in cur_args:
+                return True
+        except Exception:
+            try:
+                # 无 pywin32 时用 PowerShell 读一次
+                ps = (
+                    "$s=(New-Object -ComObject WScript.Shell).CreateShortcut("
+                    f"'{str(lnk).replace(chr(39), chr(39)+chr(39))}'); "
+                    "$t=($s.TargetPath+' '+$s.Arguments).ToLower(); "
+                    "if($t -like '*vpet.exe*' -and $t -like '*--pet*' -and $t -like '*eiden*'){'KEEP'}else{'REWRITE'}"
+                )
+                r = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", ps],
+                    capture_output=True,
+                    text=True,
+                    timeout=8,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+                )
+                if "KEEP" in (r.stdout or ""):
+                    return True
+            except Exception:
+                pass
     bat = APP_ROOT / "启动 Vpet.bat"
     if getattr(sys, "frozen", False):
         target = str(Path(sys.executable).resolve())
         workdir = str(Path(sys.executable).resolve().parent)
         args = ""
         icon = Path(sys.executable).resolve().parent / "app_icon.ico"
+        # 若误装进苍叶统一目录，仍尽量用旁路伊得图标
+        alt = Path(sys.executable).resolve().parent / "app_icon_eiden.ico"
+        if alt.is_file():
+            icon = alt
     else:
         if not bat.is_file():
             return False
-        # 直接指向 bat：bat 内优先 python 源码，改代码无需重打快捷方式
         target = str(bat.resolve())
         workdir = str(APP_ROOT)
         args = ""
         icon = APP_ROOT / "app_icon.ico"
     try:
         if not force and lnk.is_file():
+            # 已存在但误指苍叶统一包时强制纠正
+            try:
+                import win32com.client  # type: ignore
+
+                shell = win32com.client.Dispatch("WScript.Shell")
+                cur = shell.CreateShortcut(str(lnk))
+                cur_target = str(getattr(cur, "TargetPath", "") or "")
+                if "VpetEidenPet" not in cur_target.replace("/", "\\") and (
+                    cur_target.lower().endswith("vpet.exe")
+                    or "start_eiden.bat" in cur_target.lower()
+                    or "\\vpet\\" in cur_target.lower().replace("/", "\\")
+                ):
+                    force = True
+                else:
+                    return True
+            except Exception:
+                return True
+        if not force:
             return True
         lnk.parent.mkdir(parents=True, exist_ok=True)
         icon_ps = (
@@ -227,7 +279,7 @@ def sync_desktop_shortcut(*, force: bool = True) -> bool:
             f"$s.WorkingDirectory = '{workdir.replace(chr(39), chr(39)+chr(39))}'; "
             f"$s.Arguments = '{args.replace(chr(39), chr(39)+chr(39))}'; "
             "$s.WindowStyle = 1; "
-            "$s.Description = 'Vpet Eiden 桌宠'; "
+            "$s.Description = 'Vpet Eiden 伊得桌宠（源码工程）· Ctrl+Alt'; "
             f"{icon_ps}"
             "$s.Save()"
         )
@@ -277,8 +329,8 @@ def _my_exe() -> str:
 
 def _pet_spawn_command() -> list[str]:
     if getattr(sys, "frozen", False):
-        return [sys.executable, "--pet"]
-    return [sys.executable, str(APP_ROOT / "vpet_app.py"), "--pet"]
+        return [sys.executable, "--pet", "--kind", "eiden"]
+    return [sys.executable, str(APP_ROOT / "vpet_app.py"), "--pet", "--kind", "eiden"]
 
 
 def _pet_log_path() -> Path:
@@ -382,14 +434,8 @@ def _launcher_exchange(payload: str, *, timeout: float = 0.5) -> str | None:
 
 
 def _stop_other_vpet_processes() -> None:
-    if sys.platform != "win32":
-        return
-    my_pid = os.getpid()
-    subprocess.run(
-        ["taskkill", "/F", "/IM", "Vpet.exe", "/FI", f"PID ne {my_pid}"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    """已废弃：开新宠/新启动器时不得强杀其它 Vpet.exe（自身多开与跨作品共存）。"""
+    return
 
 
 def _hold_launcher_lock() -> socket.socket:
@@ -551,12 +597,13 @@ def main() -> None:
     exe = _my_exe()
     reply = _launcher_exchange(f"hello:{exe}")
     if reply == "same":
+        # 同一伊得启动器已在：只加一只宠，不另开托盘
         _launcher_exchange("spawn")
         return
     if reply == "stale":
-        _launcher_exchange("quit")
-        _stop_other_vpet_processes()
-        time.sleep(0.8)
+        # 端口上已有其它路径的启动器：不关闭对方、不杀进程，请它再生成一只
+        _launcher_exchange("spawn")
+        return
     run_tray(spawn_on_start=spawn_on_launcher_start())
 
 

@@ -7,26 +7,84 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageTk
 
-# 装饰主色：彩虹（粉橙黄绿青紫），兼容旧粉蓝常量名
+# 装饰主色：马卡龙浅彩（粉橙黄绿青紫），背景近白 —— 仅作色块/装饰填充
 THEME_RAINBOW: tuple[str, ...] = (
-    "#ff6b9d",
-    "#ffb347",
-    "#ffe066",
-    "#66ddaa",
-    "#66ccff",
-    "#cc88ff",
+    "#ffc2d4",  # 浅粉
+    "#ffd4a8",  # 浅杏
+    "#fff0a8",  # 浅柠
+    "#b8ecd4",  # 薄荷绿
+    "#b3e5fc",  # 天空蓝
+    "#e0c4f5",  # 淡紫
 )
-THEME_BLUE = THEME_RAINBOW[4]
-THEME_PINK = THEME_RAINBOW[0]
-THEME_BLUE_DEEP = THEME_RAINBOW[5]
-THEME_ORANGE = THEME_RAINBOW[1]
-THEME_YELLOW = THEME_RAINBOW[2]
-THEME_GREEN = THEME_RAINBOW[3]
+# 文字/链接用更深一档，避免白底上看不清
+THEME_BLUE = "#3a6f9c"
+THEME_PINK = "#b05078"
+THEME_BLUE_DEEP = "#5a4a88"
+THEME_ORANGE = "#c88858"
+THEME_YELLOW = "#b89840"
+THEME_GREEN = "#4a9a78"
 THEME_WHITE = "#ffffff"
-THEME_BLACK = "#3a2230"
-THEME_BG_INNER_RGBA = (255, 244, 230, 242)
-THEME_PANEL_INNER = "#fff4e6"
-THEME_ITEM_BG = "#f6e4d0"
+THEME_BLACK = "#2a1824"
+# 近白底（略带一丝暖感，避免米黄）
+THEME_BG_INNER_RGBA = (255, 252, 250, 248)
+THEME_PANEL_INNER = "#fffcfa"
+THEME_ITEM_BG = "#ffffff"
+
+
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    h = hex_color.lstrip("#")
+    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+    r, g, b = rgb
+    return f"#{int(r):02x}{int(g):02x}{int(b):02x}"
+
+
+def _lerp_channel(a: int, b: int, t: float) -> int:
+    return int(round(a + (b - a) * t))
+
+
+def _lerp_rgb(c0: tuple[int, int, int], c1: tuple[int, int, int], t: float) -> tuple[int, int, int]:
+    t = 0.0 if t < 0 else 1.0 if t > 1 else t
+    return (
+        _lerp_channel(c0[0], c1[0], t),
+        _lerp_channel(c0[1], c1[1], t),
+        _lerp_channel(c0[2], c1[2], t),
+    )
+
+
+def rainbow_rgb_at(t: float, *, reverse: bool = False, loop: bool = False) -> tuple[int, int, int]:
+    """沿彩虹带取色：t∈[0,1] 在相邻马卡龙色之间平滑插值。"""
+    stops = tuple(_hex_to_rgb(c) for c in THEME_RAINBOW)
+    if reverse:
+        stops = tuple(reversed(stops))
+    n = len(stops)
+    if n <= 1:
+        return stops[0] if stops else (255, 255, 255)
+    t = 0.0 if t < 0 else 1.0 if t > 1 else float(t)
+    if loop:
+        u = t * n
+        i0 = int(u) % n
+        i1 = (i0 + 1) % n
+        frac = u - int(u)
+        return _lerp_rgb(stops[i0], stops[i1], frac)
+    # 端到端：粉→…→紫，两端不硬跳
+    u = t * (n - 1)
+    i0 = min(n - 2, int(u))
+    frac = u - i0
+    return _lerp_rgb(stops[i0], stops[i0 + 1], frac)
+
+
+def rainbow_hex_at(t: float, *, reverse: bool = False, loop: bool = False) -> str:
+    return _rgb_to_hex(rainbow_rgb_at(t, reverse=reverse, loop=loop))
+
+
+def _rainbow_gradient_hexes(steps: int = 36, *, reverse: bool = False) -> tuple[str, ...]:
+    """生成细段色带，过渡比 6 块硬色自然。"""
+    n = max(8, int(steps))
+    return tuple(rainbow_hex_at(i / max(1, n - 1), reverse=reverse) for i in range(n))
+
 
 _VPETSIGN_DESKTOP = Path.home() / "Desktop" / "Vpetsign"
 _SIGN_IMG_CACHE: dict[tuple[str, int, int], Image.Image] = {}
@@ -593,6 +651,62 @@ def menu_glyph_photo(label: str, size: int = 14) -> ImageTk.PhotoImage:
         return cached
     photo = ImageTk.PhotoImage(make_menu_glyph_image(hash(label) & 0xFFFF, size))
     _GLYPH_PHOTO_CACHE[key] = photo
+    return photo
+
+
+# 相遇热区：像素图案（非汉字）—— 对照苍叶样式，伊得粉调
+_CROSSOVER_HOTSPOT_CACHE: dict[tuple[str, int], ImageTk.PhotoImage] = {}
+
+
+def make_crossover_hotspot_image(kind: str, size: int = 36) -> Image.Image:
+    """遇/话/动：16×16 像素图案再放大（对照 VpetAOBA `_make_crossover_hotspot_pixel`）。
+
+    伊得以粉色系为主；「动」补脚印+行进箭头。
+    """
+    m = str(kind or "meet").strip().lower()
+    if m.startswith("do:"):
+        m = "act"
+    if m not in ("meet", "talk", "act"):
+        m = "meet"
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    # 粉系：亮粉描边 / 玫粉填充 / 浅青点缀「动」箭头 / 深紫身
+    ink, mid, deep, body, ring = "#ffe8f4", "#ff88cc", "#7ad4e8", "#c05088", "#f0b8d0"
+    if m == "meet":
+        # 两颗心/两人相对 + 中间连接
+        d.ellipse([1, 4, 7, 11], outline=ink, fill=body)
+        d.ellipse([8, 4, 14, 11], outline=ink, fill=body)
+        d.rectangle([6, 7, 9, 8], fill=mid)
+        d.point((4, 7), fill=ink)
+        d.point((11, 7), fill=ink)
+    elif m == "talk":
+        # 对话气泡 + 三点
+        d.rounded_rectangle([2, 2, 13, 10], radius=3, outline=ink, fill=body)
+        d.polygon([(5, 10), (3, 14), (8, 10)], fill=body, outline=ink)
+        for x in (5, 8, 11):
+            d.rectangle([x, 5, x + 1, 6], fill=ink)
+    else:
+        # 动：脚印 + 行进箭头（此前星芒不够直观）
+        d.ellipse([2, 8, 6, 13], outline=ink, fill=body)
+        d.ellipse([9, 3, 13, 8], outline=ink, fill=body)
+        d.polygon([(7, 2), (14, 7), (7, 12), (9, 7)], fill=deep, outline=ink)
+    d.rectangle([0, 0, 15, 15], outline=ring)
+    side = max(24, int(size))
+    return img.resize((side, side), Image.NEAREST)
+
+
+def crossover_hotspot_photo(kind: str, size: int = 36) -> ImageTk.PhotoImage:
+    m = str(kind or "meet").strip().lower()
+    if m.startswith("do:"):
+        m = "act"
+    if m not in ("meet", "talk", "act"):
+        m = "meet"
+    key = (m, int(size))
+    cached = _CROSSOVER_HOTSPOT_CACHE.get(key)
+    if cached is not None:
+        return cached
+    photo = ImageTk.PhotoImage(make_crossover_hotspot_image(m, key[1]))
+    _CROSSOVER_HOTSPOT_CACHE[key] = photo
     return photo
 
 

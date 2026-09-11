@@ -12,9 +12,13 @@ ROOT = Path(__file__).resolve().parent
 
 
 def stand_sources() -> list[Path]:
+    """优先伊得 cutout/正式立绘；勿用 gallery（曾混入苍叶 stand）。"""
     return [
+        ROOT / "assets" / "cutout" / "sprites" / "stand.png",
+        ROOT / "assets" / "raw_green" / "sprites" / "stand.jpg",
         ROOT / "assets" / "sprites" / "stand.jpg",
         ROOT / "assets" / "sprites" / "stand.png",
+        ROOT / "app_icon.png",  # 已生成的伊得图标，优于错误 gallery
         ROOT / "gallery" / "stand.png",
         ROOT / "gallery" / "stand.jpg",
     ]
@@ -139,7 +143,7 @@ def main() -> None:
 
 
 def create_desktop_shortcut() -> None:
-    """桌面生成「Vpet Eiden」快捷方式（不覆盖苍叶的 Vpet.lnk）。"""
+    """桌面生成「Vpet Eiden」快捷方式（始终指向本工程伊得，勿误用苍叶统一包）。"""
     import subprocess
     import sys
 
@@ -168,7 +172,7 @@ def create_desktop_shortcut() -> None:
         f"$Shortcut = $WshShell.CreateShortcut('{q(lnk)}')\n"
         f"$Shortcut.TargetPath = '{q(target)}'\n"
         f"$Shortcut.WorkingDirectory = '{q(ROOT)}'\n"
-        "$Shortcut.Description = 'Vpet Eiden 桌宠'\n"
+        "$Shortcut.Description = 'Vpet Eiden 伊得桌宠（源码工程）· Ctrl+Alt'\n"
         f"{icon_line}"
         "$Shortcut.Save()\n"
     )
@@ -177,6 +181,7 @@ def create_desktop_shortcut() -> None:
         check=True,
     )
     print("wrote", lnk)
+    print("target", target)
 
 
 if __name__ == "__main__":

@@ -19,11 +19,17 @@ object AppDataStore {
     private const val KEY_FONT = "font_label"
     private const val KEY_SOUND = "sound_on"
     private const val KEY_VOICE_MODE = "voice_mode"
+    private const val KEY_SHOW_SPEECH = "show_speech"
+    private const val KEY_SHOW_TIMERS = "show_timers"
+    private const val KEY_SPRITE_PACK = "sprite_pack"
+    private const val KEY_MUSIC_VOL = "music_volume"
     private const val KEY_VOICE_VOL = "voice_volume"
     private const val KEY_SFX_VOL = "sfx_volume"
     private const val KEY_AUDIO_BALANCE = "audio_balance_v2"
+    private const val KEY_SFX_LOUDER_V1 = "sfx_louder_v1"
     private const val KEY_DIFF = "difficulty"
     private const val KEY_FREE_IDLE_SEC = "free_idle_banter_sec"
+    private const val KEY_WEATHER_CITY = "weather_city"
 
     /** 与桌面 FONT_SIZE_PRESETS 对齐：小/中/大/特大（档差拉开，便于肉眼分辨）。 */
     val FONT_PRESETS = linkedMapOf("小" to 12f, "中" to 14f, "大" to 17f, "特大" to 21f)
@@ -39,7 +45,7 @@ object AppDataStore {
     /** 自由站立闲聊间隔（秒）· 自定义范围。 */
     const val FREE_IDLE_SEC_MIN = 5
     const val FREE_IDLE_SEC_MAX = 120
-    const val FREE_IDLE_SEC_DEFAULT = 20
+    const val FREE_IDLE_SEC_DEFAULT = 30
     @Deprecated("改用连续秒数")
     val FREE_IDLE_SEC_PRESETS = listOf(10, 20, 30)
 
@@ -58,6 +64,13 @@ object AppDataStore {
     fun fontBodySp(ctx: Context): Float = fontSp(ctx)
     fun fontCaptionSp(ctx: Context): Float = (fontSp(ctx) - 1f).coerceAtLeast(9f)
     fun fontHintSp(ctx: Context): Float = (fontSp(ctx) - 2f).coerceAtLeast(8f)
+
+    fun weatherCity(ctx: Context): String =
+        prefs(ctx).getString(KEY_WEATHER_CITY, "北京")?.trim()?.ifBlank { "北京" } ?: "北京"
+
+    fun setWeatherCity(ctx: Context, city: String) {
+        prefs(ctx).edit().putString(KEY_WEATHER_CITY, city.trim().ifBlank { "北京" }).apply()
+    }
     fun fontMenuSp(ctx: Context): Float = fontSp(ctx)
     fun fontClockTitleSp(ctx: Context): Float = fontCaptionSp(ctx)
     fun fontClockTimeSp(ctx: Context): Float = (fontSp(ctx) + 6f).coerceAtLeast(16f)
@@ -82,6 +95,45 @@ object AppDataStore {
         prefs(ctx).edit().putBoolean(KEY_VOICE_MODE, on).apply()
     }
 
+    /** 文本框（对话/语音字幕）；对照桌面 show_speech。默认开。 */
+    fun showSpeech(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_SHOW_SPEECH, true)
+
+    fun setShowSpeech(ctx: Context, on: Boolean) {
+        prefs(ctx).edit().putBoolean(KEY_SHOW_SPEECH, on).apply()
+    }
+
+    /** 时间显示：模式旁自动秒表；对照桌面 show_timers。默认开。 */
+    fun showTimers(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_SHOW_TIMERS, true)
+
+    fun setShowTimers(ctx: Context, on: Boolean) {
+        prefs(ctx).edit().putBoolean(KEY_SHOW_TIMERS, on).apply()
+    }
+
+    /** 立绘图组：normal / black；对照桌面 sprite_pack。 */
+    const val SPRITE_PACK_NORMAL = "normal"
+    const val SPRITE_PACK_BLACK = "black"
+
+    fun spritePack(ctx: Context): String {
+        val v = prefs(ctx).getString(KEY_SPRITE_PACK, SPRITE_PACK_NORMAL) ?: SPRITE_PACK_NORMAL
+        return if (v == SPRITE_PACK_BLACK) SPRITE_PACK_BLACK else SPRITE_PACK_NORMAL
+    }
+
+    fun setSpritePack(ctx: Context, pack: String) {
+        val p = if (pack == SPRITE_PACK_BLACK) SPRITE_PACK_BLACK else SPRITE_PACK_NORMAL
+        prefs(ctx).edit().putString(KEY_SPRITE_PACK, p).apply()
+    }
+
+    fun spritePackIsBlack(ctx: Context): Boolean = spritePack(ctx) == SPRITE_PACK_BLACK
+
+    /** 音乐音量 0–100；对照桌面 music_volume。 */
+    fun musicVolume(ctx: Context): Int = prefs(ctx).getInt(KEY_MUSIC_VOL, 70).coerceIn(0, 100)
+
+    fun setMusicVolume(ctx: Context, v: Int) {
+        prefs(ctx).edit().putInt(KEY_MUSIC_VOL, v.coerceIn(0, 100)).apply()
+    }
+
+    fun musicVolumeF(ctx: Context): Float = (musicVolume(ctx) / 100f).coerceIn(0f, 1f)
+
     /** 语音音量 0–100；默认偏大（手机喇叭上原先偏小）。 */
     fun voiceVolume(ctx: Context): Int = prefs(ctx).getInt(KEY_VOICE_VOL, 100).coerceIn(0, 100)
 
@@ -91,25 +143,48 @@ object AppDataStore {
 
     /** 播放增益：滑条到顶也能更响一点（MediaPlayer 上限 1）。 */
     fun voiceVolumeF(ctx: Context): Float =
-        (voiceVolume(ctx) / 100f * 1.2f).coerceIn(0f, 1f)
+        (voiceVolume(ctx) / 100f * 1.35f).coerceIn(0f, 1f)
 
-    /** 音效相对音量 0–100；默认压低（打字音等原先偏响）。 */
-    fun sfxVolume(ctx: Context): Int = prefs(ctx).getInt(KEY_SFX_VOL, 28).coerceIn(0, 100)
+    /** 音效相对音量 0–100；默认抬高，打字等更易听清。 */
+    fun sfxVolume(ctx: Context): Int = prefs(ctx).getInt(KEY_SFX_VOL, 80).coerceIn(0, 100)
 
     fun setSfxVolume(ctx: Context, v: Int) {
         prefs(ctx).edit().putInt(KEY_SFX_VOL, v.coerceIn(0, 100)).apply()
     }
 
-    fun sfxVolumeF(ctx: Context): Float = (sfxVolume(ctx) / 100f).coerceIn(0f, 1f)
+    fun sfxVolumeF(ctx: Context): Float = (sfxVolume(ctx) / 100f * 1.25f).coerceIn(0f, 1f)
 
-    /** 一次性：抬高默认语音、压低音效（旧装默认语音 80 偏小）。 */
+    /** 一次性：抬高默认语音/音效。 */
     fun ensureAudioBalance(ctx: Context) {
         val p = prefs(ctx)
-        if (p.getBoolean(KEY_AUDIO_BALANCE, false)) return
+        if (p.getBoolean(KEY_AUDIO_BALANCE, false)) {
+            if (!p.getBoolean(KEY_SFX_LOUDER_V1, false)) {
+                val ed = p.edit().putBoolean(KEY_SFX_LOUDER_V1, true)
+                val curSfx = p.getInt(KEY_SFX_VOL, 80)
+                if (curSfx in 1..60) ed.putInt(KEY_SFX_VOL, 80)
+                ed.apply()
+            }
+            // v3：旧默认音效 55 → 80；语音仍偏小则拉满
+            if (!p.getBoolean("sfx_louder_v3", false)) {
+                val ed = p.edit().putBoolean("sfx_louder_v3", true)
+                val curSfx = p.getInt(KEY_SFX_VOL, 80)
+                if (curSfx in 1..60) ed.putInt(KEY_SFX_VOL, 80)
+                val curVoice = p.getInt(KEY_VOICE_VOL, 100)
+                if (curVoice in 1..90) ed.putInt(KEY_VOICE_VOL, 100)
+                ed.apply()
+            }
+            return
+        }
         val ed = p.edit().putBoolean(KEY_AUDIO_BALANCE, true)
-        if (!p.contains(KEY_SFX_VOL)) ed.putInt(KEY_SFX_VOL, 28)
+            .putBoolean(KEY_SFX_LOUDER_V1, true)
+            .putBoolean("sfx_louder_v3", true)
+        if (!p.contains(KEY_SFX_VOL)) ed.putInt(KEY_SFX_VOL, 80)
+        else {
+            val curSfx = p.getInt(KEY_SFX_VOL, 80)
+            if (curSfx in 1..60) ed.putInt(KEY_SFX_VOL, 80)
+        }
         val curVoice = p.getInt(KEY_VOICE_VOL, 100)
-        if (curVoice in 1..85) ed.putInt(KEY_VOICE_VOL, 100)
+        if (curVoice in 1..90) ed.putInt(KEY_VOICE_VOL, 100)
         ed.apply()
     }
 
@@ -123,7 +198,7 @@ object AppDataStore {
         prefs(ctx).edit().putString(KEY_DIFF, k).apply()
     }
 
-    /** 自由模式站立时语音/动作触发间隔（秒），默认 20，可自定义。 */
+    /** 自由模式站立时语音/动作触发间隔（秒），默认 12，可自定义。 */
     fun freeIdleBanterSec(ctx: Context): Int =
         prefs(ctx).getInt(KEY_FREE_IDLE_SEC, FREE_IDLE_SEC_DEFAULT)
             .coerceIn(FREE_IDLE_SEC_MIN, FREE_IDLE_SEC_MAX)

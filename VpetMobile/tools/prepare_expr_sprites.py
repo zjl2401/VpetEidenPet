@@ -11,7 +11,7 @@ shared.mkdir(parents=True, exist_ok=True)
 
 files = [
     "sad1.jpg", "sad2.jpg",
-    "shy1.jpg", "shy2.jpg",
+    "shy1.jpg", "shy2.jpg", "shy3.jpg",
     "wink.jpg", "like.jpg",
     "squat.jpg", "kick.jpg",
     "yes.jpg", "no.jpg",

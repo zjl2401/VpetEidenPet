@@ -54,16 +54,15 @@ class PetFxUi(
         const val FOOD_HOLD_MS = 2200L
         const val AWKWARD_HOLD_MS = 4800L
         val MUSIC_COLORS = intArrayOf(Color.parseColor("#9EC8E8"), Color.parseColor("#D0E8F5"))
-        /** 对照桌面 MUSIC_FOLDER_BASE_COLORS */
+        /** 对照桌面家园装饰色预设 */
         private val MUSIC_WAVE_PALETTE = intArrayOf(
-            Color.parseColor("#9EC8E8"),
-            Color.parseColor("#8AA4C8"),
-            Color.parseColor("#E8D6A0"),
-            Color.parseColor("#E0A0AC"),
-            Color.parseColor("#D0909C"),
-            Color.parseColor("#E8B8D0"),
-            Color.parseColor("#A8D4B4"),
-            Color.parseColor("#B0BCC4"),
+            Color.parseColor("#E89AB0"),
+            Color.parseColor("#8A6AB0"),
+            Color.parseColor("#F4EAD8"),
+            Color.parseColor("#8B5A2B"),
+            Color.parseColor("#6AA8D8"),
+            Color.parseColor("#6ABA98"),
+            Color.parseColor("#5A6068"),
         )
 
         fun randomMusicWaveColors(): IntArray {
@@ -800,14 +799,14 @@ class PetFxUi(
             val half = size / 2
             val p = max(4, size / 18)
             val maxR = max(8, half - p - 1)
-            val base = musicWaveColors.getOrElse(0) { MUSIC_COLORS[0] }
-            val light = musicWaveColors.getOrElse(1) { MUSIC_COLORS[1] }
+            val palette = if (musicWaveColors.size >= 2) musicWaveColors else MUSIC_COLORS
+            val n = palette.size
             for (ring in 0 until 4) {
                 val wave = 0.5f + 0.5f * sin(phase * 0.22f + ring * 0.85f).toFloat()
                 val frac = 0.48f + ring * 0.16f
                 val pulse = 0.50f + 0.50f * wave
                 val r = (maxR * frac * pulse).toInt().coerceIn(4, maxR)
-                drawPixelRing(c, cx, cy, r, p, if (ring % 2 == 0) base else light)
+                drawPixelRing(c, cx, cy, r, p, palette[ring % n])
             }
             val bars = 7
             val barW = max(p, size / (bars * 3))
@@ -821,7 +820,7 @@ class PetFxUi(
                 rect(
                     c, x.toFloat(), (size - h - 2).toFloat(),
                     barW.toFloat(), h.toFloat(),
-                    if (i % 2 == 0) base else light,
+                    palette[i % n],
                 )
             }
         }

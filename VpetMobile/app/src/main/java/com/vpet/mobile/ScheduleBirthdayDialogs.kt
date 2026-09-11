@@ -8,7 +8,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -16,40 +16,44 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.view.ContextThemeWrapper
 
-/** 日程 / 生日：悬浮小窗编辑（不跳回 ToolsActivity）。 */
+/** 日程 / 生日：奶油纸质浮窗，对齐桌面 schedule/birthday 面板。 */
 object ScheduleBirthdayDialogs {
+
+    private val WEEK_LABELS = arrayOf("一", "二", "三", "四", "五", "六", "日")
 
     fun showSchedule(context: Context) {
         val themed = ContextThemeWrapper(context, R.style.Theme_VpetMobile)
-        val pad = dp(context, 12)
+        val pad = MenuDecor.dp(context, 12f)
         val box = LinearLayout(themed).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
-            setBackgroundColor(0xE0141824.toInt())
         }
-        box.addView(header(themed, "日程提醒"))
-        box.addView(hint(themed, "到点会 Toast 提示；点条目可删除"))
+        PanelTheme.applyCreamRoot(box)
+        PanelTheme.attachSignStrip(box)
+        box.addView(PanelTheme.title(themed, "日程提醒"))
+        box.addView(PanelTheme.clockBanner(themed))
+        box.addView(PanelTheme.hint(themed, "到点 Toast；点条目删除。可选每天/工作日/周末。"))
 
-        val listHost = LinearLayout(themed).apply {
-            orientation = LinearLayout.VERTICAL
-        }
+        val listHost = LinearLayout(themed).apply { orientation = LinearLayout.VERTICAL }
         fun refreshList() {
             listHost.removeAllViews()
             val arr = PetProfileStore.schedules(context)
             if (arr.length() == 0) {
-                listHost.addView(hint(themed, "暂无日程"))
+                listHost.addView(PanelTheme.hint(themed, "暂无日程"))
                 return
             }
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 val id = o.optString("id")
-                val line = "${o.optString("time")}  ${o.optString("text")}"
+                val line = "${o.optString("time")} [${PetProfileStore.formatWeekdays(o)}]  ${o.optString("text")}"
                 listHost.addView(
                     TextView(themed).apply {
                         text = line
-                        setTextColor(0xFFEEF2FF.toInt())
-                        textSize = 13f
-                        setPadding(0, dp(context, 6), 0, dp(context, 6))
+                        setTextColor(MenuDecor.MENU_FG)
+                        textSize = AppDataStore.fontBodySp(context)
+                        typeface = UiFonts.cute(context)
+                        setPadding(0, MenuDecor.dp(context, 6f), 0, MenuDecor.dp(context, 6f))
+                        background = MenuDecor.menuItemBg()
                         setOnClickListener {
                             PetProfileStore.removeSchedule(context, id)
                             Toast.makeText(context, "已删除", Toast.LENGTH_SHORT).show()
@@ -64,50 +68,78 @@ object ScheduleBirthdayDialogs {
             ScrollView(themed).apply {
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    (context.resources.displayMetrics.heightPixels * 0.22f).toInt(),
+                    (context.resources.displayMetrics.heightPixels * 0.18f).toInt(),
                 )
                 addView(listHost)
             },
         )
 
+        val dayChecks = Array(7) { i ->
+            CheckBox(themed).apply {
+                text = WEEK_LABELS[i]
+                isChecked = true
+                setTextColor(MenuDecor.MENU_FG)
+                typeface = UiFonts.cute(context)
+            }
+        }
+        box.addView(
+            LinearLayout(themed).apply {
+                orientation = LinearLayout.HORIZONTAL
+                dayChecks.forEach { addView(it) }
+            },
+        )
+        box.addView(
+            LinearLayout(themed).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.START
+                fun setDays(indices: Set<Int>) {
+                    dayChecks.forEachIndexed { i, cb -> cb.isChecked = i in indices }
+                }
+                addView(PanelTheme.primaryBtn(themed, "每天") { setDays((0..6).toSet()) })
+                addView(PanelTheme.primaryBtn(themed, "工作日") { setDays((0..4).toSet()) }.also {
+                    (it.layoutParams as LinearLayout.LayoutParams).marginStart = MenuDecor.dp(context, 6f)
+                })
+                addView(PanelTheme.primaryBtn(themed, "周末") { setDays(setOf(5, 6)) }.also {
+                    (it.layoutParams as LinearLayout.LayoutParams).marginStart = MenuDecor.dp(context, 6f)
+                })
+            },
+        )
+
         val time = textField(themed, "08:30", InputType.TYPE_CLASS_DATETIME or InputType.TYPE_DATETIME_VARIATION_TIME)
-        val content = textField(themed, "提醒内容", InputType.TYPE_CLASS_TEXT)
-        content.hint = "提醒内容"
-        content.setText("")
-        box.addView(labeledField(themed, "时间 HH:MM", time))
-        box.addView(labeledField(themed, "内容", content))
+        val content = textField(themed, "", InputType.TYPE_CLASS_TEXT).also { it.hint = "提醒内容" }
+        box.addView(labeled(themed, "时间 HH:MM", time))
+        box.addView(labeled(themed, "内容", content))
 
         val holder = arrayOfNulls<Dialog>(1)
         box.addView(
             LinearLayout(themed).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.END
-                setPadding(0, dp(context, 12), 0, 0)
-                addView(Button(themed).apply {
-                    text = "关闭"
-                    setOnClickListener { holder[0]?.dismiss() }
-                })
+                setPadding(0, MenuDecor.dp(context, 12f), 0, 0)
+                addView(PanelTheme.primaryBtn(themed, "关闭") { holder[0]?.dismiss() })
                 addView(
-                    Button(themed).apply {
-                        text = "添加"
-                        setOnClickListener {
-                            val ok = PetProfileStore.addSchedule(
-                                context,
-                                time.text.toString(),
-                                content.text.toString(),
-                            )
-                            if (!ok) {
-                                Toast.makeText(context, "时间用 HH:MM，内容不能空", Toast.LENGTH_SHORT).show()
-                                return@setOnClickListener
-                            }
-                            content.setText("")
-                            Toast.makeText(context, "已添加", Toast.LENGTH_SHORT).show()
-                            refreshList()
+                    PanelTheme.primaryBtn(themed, "添加") {
+                        val selected = dayChecks.mapIndexedNotNull { i, cb -> if (cb.isChecked) i else null }
+                        if (selected.isEmpty()) {
+                            Toast.makeText(context, "至少选一天", Toast.LENGTH_SHORT).show()
+                            return@primaryBtn
                         }
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                        ).also { it.marginStart = dp(context, 8) }
+                        val days = if (selected.size >= 7) null else selected
+                        val ok = PetProfileStore.addSchedule(
+                            context,
+                            time.text.toString(),
+                            content.text.toString(),
+                            days,
+                        )
+                        if (!ok) {
+                            Toast.makeText(context, "时间用 HH:MM，内容不能空", Toast.LENGTH_SHORT).show()
+                            return@primaryBtn
+                        }
+                        content.setText("")
+                        Toast.makeText(context, "已添加", Toast.LENGTH_SHORT).show()
+                        refreshList()
+                    }.also {
+                        (it.layoutParams as LinearLayout.LayoutParams).marginStart = MenuDecor.dp(context, 8f)
                     },
                 )
             },
@@ -117,68 +149,59 @@ object ScheduleBirthdayDialogs {
 
     fun showBirthday(context: Context) {
         val themed = ContextThemeWrapper(context, R.style.Theme_VpetMobile)
-        val pad = dp(context, 12)
+        val pad = MenuDecor.dp(context, 12f)
         val box = LinearLayout(themed).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
-            setBackgroundColor(0xE0141824.toInt())
         }
-        box.addView(header(themed, "生日祝福"))
-        box.addView(hint(themed, "所属人生日 + 伊得 6/17 礼物文案"))
+        PanelTheme.applyCreamRoot(box)
+        PanelTheme.attachSignStrip(box)
+        box.addView(PanelTheme.title(themed, "生日祝福"))
+        box.addView(PanelTheme.cakeBanner(themed))
+        box.addView(PanelTheme.hint(themed, "所属人生日 + 伊得 6/17 礼物文案"))
 
         val p = PetProfileStore.profile(context)
         val month = numField(themed, p.optInt("bless_month").takeIf { it > 0 }?.toString() ?: "1")
         val day = numField(themed, p.optInt("bless_day").takeIf { it > 0 }?.toString() ?: "1")
-        val msg = textField(themed, "祝福语", InputType.TYPE_CLASS_TEXT)
-        msg.setText(p.optString("bless_message"))
-        val gift = textField(themed, "礼物名", InputType.TYPE_CLASS_TEXT)
-        gift.setText(p.optString("gift_text"))
+        val msg = textField(themed, p.optString("bless_message"), InputType.TYPE_CLASS_TEXT)
+        val gift = textField(themed, p.optString("gift_text"), InputType.TYPE_CLASS_TEXT)
 
         box.addView(
             LinearLayout(themed).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, dp(context, 8), 0, 0)
-                addView(label(themed, "月"))
+                addView(PanelTheme.label(themed, "月"))
                 addView(month)
-                addView(label(themed, "日").also { v ->
-                    (v.layoutParams as LinearLayout.LayoutParams).marginStart = dp(context, 12)
+                addView(PanelTheme.label(themed, "日").also { v ->
+                    (v.layoutParams as LinearLayout.LayoutParams).marginStart = MenuDecor.dp(context, 12f)
                 })
                 addView(day)
             },
         )
-        box.addView(labeledField(themed, "祝福语", msg))
-        box.addView(labeledField(themed, "礼物（伊得）", gift))
+        box.addView(labeled(themed, "祝福语", msg))
+        box.addView(labeled(themed, "礼物（伊得）", gift))
 
         val holder = arrayOfNulls<Dialog>(1)
         box.addView(
             LinearLayout(themed).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.END
-                setPadding(0, dp(context, 12), 0, 0)
-                addView(Button(themed).apply {
-                    text = "取消"
-                    setOnClickListener { holder[0]?.dismiss() }
-                })
+                setPadding(0, MenuDecor.dp(context, 12f), 0, 0)
+                addView(PanelTheme.primaryBtn(themed, "取消") { holder[0]?.dismiss() })
                 addView(
-                    Button(themed).apply {
-                        text = "保存"
-                        setOnClickListener {
-                            val m = month.text.toString().trim().toIntOrNull() ?: 0
-                            val d = day.text.toString().trim().toIntOrNull() ?: 0
-                            if (m !in 1..12 || d !in 1..31) {
-                                Toast.makeText(context, "请填写有效月/日", Toast.LENGTH_SHORT).show()
-                                return@setOnClickListener
-                            }
-                            PetProfileStore.setBless(context, m, d, msg.text.toString())
-                            PetProfileStore.setGiftText(context, gift.text.toString())
-                            Toast.makeText(context, "已保存生日与礼物", Toast.LENGTH_SHORT).show()
-                            holder[0]?.dismiss()
+                    PanelTheme.primaryBtn(themed, "保存") {
+                        val m = month.text.toString().trim().toIntOrNull() ?: 0
+                        val d = day.text.toString().trim().toIntOrNull() ?: 0
+                        if (m !in 1..12 || d !in 1..31) {
+                            Toast.makeText(context, "请填写有效月/日", Toast.LENGTH_SHORT).show()
+                            return@primaryBtn
                         }
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                        ).also { it.marginStart = dp(context, 8) }
+                        PetProfileStore.setBless(context, m, d, msg.text.toString())
+                        PetProfileStore.setGiftText(context, gift.text.toString())
+                        Toast.makeText(context, "已保存生日与礼物", Toast.LENGTH_SHORT).show()
+                        holder[0]?.dismiss()
+                    }.also {
+                        (it.layoutParams as LinearLayout.LayoutParams).marginStart = MenuDecor.dp(context, 8f)
                     },
                 )
             },
@@ -193,97 +216,50 @@ object ScheduleBirthdayDialogs {
         dialog.window?.apply {
             setBackgroundDrawableResource(android.R.color.transparent)
             setLayout(
-                (context.resources.displayMetrics.widthPixels * 0.86f).toInt(),
+                (context.resources.displayMetrics.widthPixels * 0.90f).toInt(),
                 WindowManager.LayoutParams.WRAP_CONTENT,
             )
             try {
                 setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
             } catch (_: Exception) {
             }
-            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            attributes = attributes?.also {
-                it.dimAmount = 0.4f
-                it.format = PixelFormat.TRANSLUCENT
+            try {
+                setFormat(PixelFormat.TRANSLUCENT)
+            } catch (_: Exception) {
             }
         }
+        OverlayZOrder.prepareOverlayWindow(dialog.window)
+        dialog.setOnDismissListener { }
         dialog.show()
         OverlayZOrder.onOverlayDialogShown(dialog)
         return dialog
     }
 
-    private fun header(context: Context, text: String) =
-        TextView(context).apply {
-            this.text = text
-            setTextColor(0xFFFF88CC.toInt())
-            textSize = 16f
-        }
-
-    private fun hint(context: Context, text: String) =
-        TextView(context).apply {
-            this.text = text
-            setTextColor(0xFF8899AA.toInt())
-            textSize = 12f
-            setPadding(0, dp(context, 4), 0, dp(context, 8))
-        }
-
-    private fun label(context: Context, text: String): TextView =
-        TextView(context).apply {
-            this.text = text
-            setTextColor(0xFFEEF2FF.toInt())
-            textSize = 14f
-            setPadding(0, 0, dp(context, 4), 0)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            )
-        }
-
-    private fun labeledField(context: Context, title: String, field: EditText): LinearLayout =
-        LinearLayout(context).apply {
+    private fun labeled(ctx: Context, title: String, field: EditText): LinearLayout =
+        LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(context, 6), 0, 0)
-            addView(
-                TextView(context).apply {
-                    text = title
-                    setTextColor(0xFFEEF2FF.toInt())
-                    textSize = 13f
-                    setPadding(0, 0, 0, dp(context, 4))
-                },
-            )
+            setPadding(0, MenuDecor.dp(ctx, 6f), 0, 0)
+            addView(PanelTheme.label(ctx, title))
             addView(field)
         }
 
-    private fun numField(context: Context, default: String): EditText =
-        EditText(context).apply {
-            setText(default)
-            inputType = InputType.TYPE_CLASS_NUMBER
-            setSelection(text.length)
-            styleField(this, context)
-            layoutParams = LinearLayout.LayoutParams(dp(context, 64), LinearLayout.LayoutParams.WRAP_CONTENT)
+    private fun textField(ctx: Context, value: String, inputType: Int): EditText =
+        EditText(ctx).apply {
+            setText(value)
+            this.inputType = inputType
+            setTextColor(MenuDecor.MENU_FG)
+            setHintTextColor(0x88442233.toInt())
+            textSize = AppDataStore.fontBodySp(ctx)
+            typeface = UiFonts.cute(ctx)
+            setBackgroundColor(MenuDecor.THEME_ITEM_BG)
+            setPadding(MenuDecor.dp(ctx, 8f), MenuDecor.dp(ctx, 6f), MenuDecor.dp(ctx, 8f), MenuDecor.dp(ctx, 6f))
         }
 
-    private fun textField(context: Context, hintOrDefault: String, type: Int): EditText =
-        EditText(context).apply {
-            hint = hintOrDefault
-            inputType = type
-            styleField(this, context)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
+    private fun numField(ctx: Context, value: String): EditText =
+        textField(ctx, value, InputType.TYPE_CLASS_NUMBER).also {
+            it.layoutParams = LinearLayout.LayoutParams(
+                MenuDecor.dp(ctx, 56f),
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             )
         }
-
-    private fun styleField(field: EditText, context: Context) {
-        field.setTextColor(0xFFEEF2FF.toInt())
-        field.setHintTextColor(0xFF667788.toInt())
-        field.setBackgroundColor(0xFF1A2838.toInt())
-        field.setPadding(dp(context, 10), dp(context, 8), dp(context, 10), dp(context, 8))
-    }
-
-    private fun dp(context: Context, v: Int): Int =
-        TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP,
-            v.toFloat(),
-            context.resources.displayMetrics,
-        ).toInt()
 }

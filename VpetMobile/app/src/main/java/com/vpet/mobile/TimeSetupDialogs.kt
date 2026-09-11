@@ -24,7 +24,7 @@ object TimeSetupDialogs {
         val box = LinearLayout(themed).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
-            setBackgroundColor(0xE0141824.toInt())
+            background = PanelTheme.creamPanelBg(themed)
         }
         val title = if (voice) "语音音量" else "音效音量"
         box.addView(header(themed, title))
@@ -36,9 +36,9 @@ object TimeSetupDialogs {
         )
         val valueTv = TextView(themed).apply {
             text = "${if (voice) AppDataStore.voiceVolume(context) else AppDataStore.sfxVolume(context)}%"
-            setTextColor(0xFFFF88CC.toInt())
+            setTextColor(MenuDecor.THEME_PINK)
             textSize = AppDataStore.fontBodySp(context)
-            typeface = android.graphics.Typeface.MONOSPACE
+            typeface = UiFonts.cute(context)
         }
         box.addView(valueTv)
         val seek = SeekBar(themed).apply {
@@ -80,7 +80,7 @@ object TimeSetupDialogs {
         val box = LinearLayout(themed).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
-            setBackgroundColor(0xE0141824.toInt())
+            background = PanelTheme.creamPanelBg(themed)
         }
         box.addView(header(themed, "计时器"))
         box.addView(hint(themed, "自由填分/秒，到点提示"))
@@ -121,7 +121,7 @@ object TimeSetupDialogs {
         val box = LinearLayout(themed).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
-            setBackgroundColor(0xE0141824.toInt())
+            background = PanelTheme.creamPanelBg(themed)
         }
         box.addView(header(themed, "番茄钟"))
         box.addView(hint(themed, "工作=伏案赶工 · 休息=睡眠；自由设分钟"))
@@ -154,7 +154,7 @@ object TimeSetupDialogs {
         val box = LinearLayout(themed).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
-            setBackgroundColor(0xE0141824.toInt())
+            background = PanelTheme.creamPanelBg(themed)
         }
         box.addView(header(themed, "自定义运送"))
         box.addView(hint(themed, "箱数或时间二选一；到量或到点后自动结束（1–30 箱）"))
@@ -162,9 +162,9 @@ object TimeSetupDialogs {
         var byBoxes = true
         val modeHint = TextView(themed).apply {
             text = "当前：按箱数"
-            setTextColor(0xFF88CCFF.toInt())
+            setTextColor(MenuDecor.THEME_BLUE)
             textSize = AppDataStore.fontHintSp(context)
-            typeface = android.graphics.Typeface.MONOSPACE
+            typeface = UiFonts.cute(context)
             setPadding(0, 0, 0, dp(context, 8))
         }
         box.addView(modeHint)
@@ -308,17 +308,17 @@ object TimeSetupDialogs {
     private fun header(context: Context, text: String) =
         TextView(context).apply {
             this.text = text
-            setTextColor(0xFFFF88CC.toInt())
+            setTextColor(MenuDecor.THEME_PINK)
             textSize = AppDataStore.fontTitleSp(context)
-            typeface = android.graphics.Typeface.MONOSPACE
+            typeface = UiFonts.cute(context)
         }
 
     private fun hint(context: Context, text: String) =
         TextView(context).apply {
             this.text = text
-            setTextColor(0xFF8899AA.toInt())
+            setTextColor(MenuDecor.MENU_FG); alpha = 0.7f
             textSize = AppDataStore.fontHintSp(context)
-            typeface = android.graphics.Typeface.MONOSPACE
+            typeface = UiFonts.cute(context)
             setPadding(0, dp(context, 4), 0, dp(context, 8))
         }
 
@@ -330,9 +330,9 @@ object TimeSetupDialogs {
             addView(
                 TextView(context).apply {
                     text = title
-                    setTextColor(0xFFEEF2FF.toInt())
+                    setTextColor(MenuDecor.MENU_FG)
                     textSize = AppDataStore.fontBodySp(context)
-                    typeface = android.graphics.Typeface.MONOSPACE
+                    typeface = UiFonts.cute(context)
                     layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                 },
             )
@@ -342,9 +342,9 @@ object TimeSetupDialogs {
     private fun label(context: Context, text: String): TextView =
         TextView(context).apply {
             this.text = text
-            setTextColor(0xFFEEF2FF.toInt())
+            setTextColor(MenuDecor.MENU_FG)
             textSize = AppDataStore.fontBodySp(context)
-            typeface = android.graphics.Typeface.MONOSPACE
+            typeface = UiFonts.cute(context)
             setPadding(0, 0, dp(context, 4), 0)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -357,9 +357,9 @@ object TimeSetupDialogs {
             setText(default)
             inputType = InputType.TYPE_CLASS_NUMBER
             setSelection(text.length)
-            setTextColor(0xFFEEF2FF.toInt())
-            setHintTextColor(0xFF667788.toInt())
-            setBackgroundColor(0xFF1A2838.toInt())
+            setTextColor(MenuDecor.MENU_FG)
+            setHintTextColor(0x88442233.toInt())
+            setBackgroundColor(MenuDecor.THEME_ITEM_BG)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, AppDataStore.fontBodySp(context))
             setPadding(dp(context, 10), dp(context, 8), dp(context, 10), dp(context, 8))
             layoutParams = LinearLayout.LayoutParams(dp(context, 72), LinearLayout.LayoutParams.WRAP_CONTENT)

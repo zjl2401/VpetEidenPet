@@ -36,39 +36,41 @@ object OutfitEditorUi {
         var pendingNx = OutfitStore.DEFAULT_NX
         var pendingNy = OutfitStore.DEFAULT_NY
         var pendingScale = OutfitStore.DEFAULT_SCALE
+        var pendingRot = OutfitStore.DEFAULT_ROT
         var pendingLive = false
         var selectedId: String? = draft.firstOrNull()?.id
 
         val root = LinearLayout(themed).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
-            setBackgroundColor(0xE0141824.toInt())
+            background = PanelTheme.creamPanelBg(themed)
         }
+        PanelTheme.attachSignStrip(root)
         root.addView(TextView(themed).apply {
             text = "装扮"
-            setTextColor(0xFFFF88CC.toInt())
+            setTextColor(MenuDecor.THEME_PINK)
             textSize = AppDataStore.fontTitleSp(context)
-            typeface = Typeface.MONOSPACE
+            typeface = UiFonts.cute(context)
             setTypeface(typeface, Typeface.BOLD)
         })
         root.addView(TextView(themed).apply {
             text = "初始无装饰；保存后下次打开仍保留\n列表点选 · 拖预览移动 · 点素材替换 · 可叠多件"
-            setTextColor(0xFF8899AA.toInt())
+            setTextColor(MenuDecor.MENU_FG); alpha = 0.7f
             textSize = AppDataStore.fontHintSp(context)
-            typeface = Typeface.MONOSPACE
+            typeface = UiFonts.cute(context)
             setPadding(0, dp(themed, 4), 0, dp(themed, 8))
         })
 
         val preview = ImageView(themed).apply {
             layoutParams = LinearLayout.LayoutParams(dp(themed, 200), dp(themed, 200))
             scaleType = ImageView.ScaleType.FIT_CENTER
-            setBackgroundColor(0xFF0E1420.toInt())
+            setBackgroundColor(MenuDecor.THEME_ITEM_BG)
         }
         root.addView(preview)
         val tip = TextView(themed).apply {
-            setTextColor(0xFF88CCFF.toInt())
+            setTextColor(MenuDecor.THEME_BLUE)
             textSize = AppDataStore.fontHintSp(context)
-            typeface = Typeface.MONOSPACE
+            typeface = UiFonts.cute(context)
             setPadding(0, dp(themed, 4), 0, dp(themed, 4))
         }
         root.addView(tip)
@@ -90,11 +92,25 @@ object OutfitEditorUi {
         }
         root.addView(TextView(themed).apply {
             text = "大小"
-            setTextColor(0xFFEEF2FF.toInt())
+            setTextColor(MenuDecor.MENU_FG)
             textSize = AppDataStore.fontBodySp(context)
-            typeface = Typeface.MONOSPACE
+            typeface = UiFonts.cute(context)
         })
         root.addView(scaleBar)
+
+        val rotBar = SeekBar(themed).apply {
+            max = 100
+            val initRot = draft.firstOrNull()?.rot ?: pendingRot
+            progress = (((initRot - OutfitStore.ROT_MIN) /
+                (OutfitStore.ROT_MAX - OutfitStore.ROT_MIN)) * 100).toInt().coerceIn(0, 100)
+        }
+        root.addView(TextView(themed).apply {
+            text = "旋转"
+            setTextColor(MenuDecor.MENU_FG)
+            textSize = AppDataStore.fontBodySp(context)
+            typeface = UiFonts.cute(context)
+        })
+        root.addView(rotBar)
 
         lateinit var addBtn: Button
         val assetButtons = mutableMapOf<String, Button>()
@@ -104,6 +120,19 @@ object OutfitEditorUi {
             return OutfitStore.clampScale(
                 OutfitStore.SCALE_MIN + t * (OutfitStore.SCALE_MAX - OutfitStore.SCALE_MIN),
             )
+        }
+
+        fun rotFromBar(): Float {
+            val t = rotBar.progress / 100f
+            return OutfitStore.clampRot(
+                OutfitStore.ROT_MIN + t * (OutfitStore.ROT_MAX - OutfitStore.ROT_MIN),
+            )
+        }
+
+        fun syncRotBar(rot: Float) {
+            val t = ((rot - OutfitStore.ROT_MIN) / (OutfitStore.ROT_MAX - OutfitStore.ROT_MIN))
+                .coerceIn(0f, 1f)
+            rotBar.progress = (t * 100f).toInt().coerceIn(0, 100)
         }
 
         fun current(): OutfitStore.Decor? = draft.firstOrNull { it.id == selectedId }
@@ -125,7 +154,7 @@ object OutfitEditorUi {
             val size = 200
             val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
             val c = Canvas(bmp)
-            c.drawColor(0xFF0E1420.toInt())
+            c.drawColor(MenuDecor.MENU_BG)
             fun drawFit(src: Bitmap, maxSide: Int) {
                 val sw = src.width.coerceAtLeast(1)
                 val sh = src.height.coerceAtLeast(1)
@@ -152,16 +181,20 @@ object OutfitEditorUi {
             val view = draft.toMutableList()
             val tgt = current()
             if (tgt == null && pendingLive && pendingKind.isNotBlank()) {
-                view += OutfitStore.newDecor(pendingKind, pendingRef, pendingNx, pendingNy, scaleFromBar())
+                view += OutfitStore.newDecor(
+                    pendingKind, pendingRef, pendingNx, pendingNy, scaleFromBar(), rotFromBar(),
+                )
             }
             OutfitStore.drawOnPet(c, context, 0f, 0f, size.toFloat(), view)
             preview.setImageBitmap(bmp)
             val t = current()
             tip.text = when {
                 t != null ->
-                    "编辑中 · (${"%.2f".format(t.nx)}, ${"%.2f".format(t.ny)})  缩放 ${"%.2f".format(t.scale)}\n拖预览移动 · 点素材可换成别的"
+                    "编辑中 · (${"%.2f".format(t.nx)}, ${"%.2f".format(t.ny)})  " +
+                        "缩放 ${"%.2f".format(t.scale)}  旋转 ${"%.0f".format(t.rot)}°\n拖预览 · 点素材可换"
                 pendingLive ->
-                    "待添加 · (${"%.2f".format(pendingNx)}, ${"%.2f".format(pendingNy)})  缩放 ${"%.2f".format(scaleFromBar())}\n拖预览移动 · 点「添加」写入列表"
+                    "待添加 · (${"%.2f".format(pendingNx)}, ${"%.2f".format(pendingNy)})  " +
+                        "缩放 ${"%.2f".format(scaleFromBar())}  旋转 ${"%.0f".format(rotFromBar())}°\n拖预览 · 点「添加」"
                 else -> "当前无待添加件 · 点素材开始选，或点列表编辑已有件"
             }
             addBtn.text = if (t != null) "再添一件" else "添加所选"
@@ -182,7 +215,7 @@ object OutfitEditorUi {
                     text = "（还没有装饰）"
                     setTextColor(0xFF667788.toInt())
                     textSize = AppDataStore.fontCaptionSp(context)
-                    typeface = Typeface.MONOSPACE
+                    typeface = UiFonts.cute(context)
                 })
                 return
             }
@@ -190,7 +223,7 @@ object OutfitEditorUi {
                 val label = when (d.kind) {
                     OutfitStore.KIND_USER_PAINT -> "自创画"
                     OutfitStore.KIND_GIFT_ART -> "礼物画"
-                    else -> "公开·${d.ref}"
+                    else -> OutfitBuiltinData.catalog.firstOrNull { it.id == d.ref }?.name ?: d.ref
                 }
                 val row = LinearLayout(themed).apply {
                     orientation = LinearLayout.HORIZONTAL
@@ -202,12 +235,14 @@ object OutfitEditorUi {
                         selectedId = d.id
                         pendingLive = false
                         pendingScale = d.scale
+                        pendingRot = d.rot
                         pendingKind = d.kind
                         pendingRef = d.ref
                         pendingNx = d.nx
                         pendingNy = d.ny
                         scaleBar.progress = (((d.scale - OutfitStore.SCALE_MIN) /
                             (OutfitStore.SCALE_MAX - OutfitStore.SCALE_MIN)) * 100).toInt()
+                        syncRotBar(d.rot)
                         rebuildList()
                         rebuildPreview()
                         Toast.makeText(context, "已选中该配饰", Toast.LENGTH_SHORT).show()
@@ -223,6 +258,7 @@ object OutfitEditorUi {
                             draft.firstOrNull()?.let {
                                 scaleBar.progress = (((it.scale - OutfitStore.SCALE_MIN) /
                                     (OutfitStore.SCALE_MAX - OutfitStore.SCALE_MIN)) * 100).toInt()
+                                syncRotBar(it.rot)
                             }
                         }
                         rebuildList()
@@ -241,9 +277,9 @@ object OutfitEditorUi {
 
         nudgeRow.addView(TextView(themed).apply {
             text = "微调"
-            setTextColor(0xFFEEF2FF.toInt())
+            setTextColor(MenuDecor.MENU_FG)
             textSize = AppDataStore.fontBodySp(context)
-            typeface = Typeface.MONOSPACE
+            typeface = UiFonts.cute(context)
             setPadding(0, 0, dp(themed, 6), 0)
         })
         for ((label, dx, dy) in listOf(
@@ -293,16 +329,37 @@ object OutfitEditorUi {
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
+        rotBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                val r = rotFromBar()
+                current()?.rot = r
+                pendingRot = r
+                if (fromUser) rebuildPreview()
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
 
         root.addView(TextView(themed).apply {
-            text = "素材（有选中=替换；无选中=待添加）"
-            setTextColor(0xFF88CCFF.toInt())
+            text = "素材（按分类；有选中=替换；无选中=待添加）"
+            setTextColor(MenuDecor.THEME_BLUE)
             textSize = AppDataStore.fontBodySp(context)
-            typeface = Typeface.MONOSPACE
+            typeface = UiFonts.cute(context)
             setPadding(0, dp(themed, 8), 0, dp(themed, 4))
         })
-        val assetRow = LinearLayout(themed).apply { orientation = LinearLayout.HORIZONTAL }
+        val assetHost = LinearLayout(themed).apply { orientation = LinearLayout.VERTICAL }
+        var lastGroup = ""
         for (ch in OutfitStore.choices(context)) {
+            if (ch.group != lastGroup) {
+                lastGroup = ch.group
+                assetHost.addView(TextView(themed).apply {
+                    text = ch.group
+                    setTextColor(MenuDecor.THEME_PINK)
+                    textSize = AppDataStore.fontCaptionSp(context)
+                    typeface = UiFonts.cute(context)
+                    setPadding(0, dp(themed, 6), 0, dp(themed, 2))
+                })
+            }
             val thumb = OutfitStore.thumbFor(context, ch, 36)
             val key = "${ch.kind}|${ch.ref}"
             val btn = Button(themed).apply {
@@ -315,17 +372,19 @@ object OutfitEditorUi {
                         null,
                     )
                 }
-                setBackgroundColor(0xFF1A2838.toInt())
+                setBackgroundColor(MenuDecor.THEME_ITEM_BG)
                 setOnClickListener {
                     pendingKind = ch.kind
                     pendingRef = ch.ref
-                    val (dNx, dNy, dSc) = OutfitStore.defaultsFor(ch.kind, ch.ref)
-                    pendingNx = dNx
-                    pendingNy = dNy
-                    pendingScale = dSc
-                    scaleBar.progress = ((dSc - OutfitStore.SCALE_MIN) /
+                    val defs = OutfitStore.defaultsFor(ch.kind, ch.ref)
+                    pendingNx = defs[0]
+                    pendingNy = defs[1]
+                    pendingScale = defs[2]
+                    pendingRot = defs[3]
+                    scaleBar.progress = ((pendingScale - OutfitStore.SCALE_MIN) /
                         (OutfitStore.SCALE_MAX - OutfitStore.SCALE_MIN) * 100f)
                         .toInt().coerceIn(0, 100)
+                    syncRotBar(pendingRot)
                     val t = current()
                     if (t != null) {
                         val probe = t.copy(kind = ch.kind, ref = ch.ref)
@@ -335,9 +394,6 @@ object OutfitEditorUi {
                         }
                         t.kind = ch.kind
                         t.ref = ch.ref
-                        t.nx = dNx
-                        t.ny = dNy
-                        t.scale = dSc
                         pendingLive = false
                         rebuildList()
                         rebuildPreview()
@@ -353,9 +409,25 @@ object OutfitEditorUi {
                 ).also { it.marginEnd = dp(themed, 4) }
             }
             assetButtons[key] = btn
-            assetRow.addView(btn)
+            // 同一分组横排：若刚开新组则新开一行
+            val rowTag = "row_$lastGroup"
+            var row = assetHost.findViewWithTag<LinearLayout>(rowTag)
+            if (row == null) {
+                row = LinearLayout(themed).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    tag = rowTag
+                }
+                assetHost.addView(HorizontalScrollView(themed).apply { addView(row) })
+            }
+            row.addView(btn)
         }
-        root.addView(HorizontalScrollView(themed).apply { addView(assetRow) })
+        root.addView(ScrollView(themed).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(themed, 160),
+            )
+            addView(assetHost)
+        })
 
         val holder = arrayOfNulls<Dialog>(1)
         val actions = LinearLayout(themed).apply {
@@ -376,7 +448,7 @@ object OutfitEditorUi {
                     pendingLive = true
                 }
                 if (current() != null) selectedId = null
-                val d = OutfitStore.newDecor(pendingKind, pendingRef, pendingNx, pendingNy, scaleFromBar())
+                val d = OutfitStore.newDecor(pendingKind, pendingRef, pendingNx, pendingNy, scaleFromBar(), rotFromBar())
                 if (OutfitStore.bitmapFor(context, d, 32) == null) {
                     Toast.makeText(context, "素材读不到", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
@@ -401,8 +473,10 @@ object OutfitEditorUi {
                 pendingNx = OutfitStore.DEFAULT_NX
                 pendingNy = OutfitStore.DEFAULT_NY
                 pendingScale = OutfitStore.DEFAULT_SCALE
+                pendingRot = OutfitStore.DEFAULT_ROT
                 scaleBar.progress = (((pendingScale - OutfitStore.SCALE_MIN) /
                     (OutfitStore.SCALE_MAX - OutfitStore.SCALE_MIN)) * 100).toInt()
+                syncRotBar(pendingRot)
                 rebuildList()
                 rebuildPreview()
                 Toast.makeText(context, "已进入新建：点素材再添加", Toast.LENGTH_SHORT).show()

@@ -2,7 +2,6 @@ package com.vpet.mobile
 
 import android.content.Context
 import android.graphics.Color
-import kotlin.math.roundToInt
 
 /**
  * 内置曲库（assets/music）。对照桌面 VpetEiden/music：BGM / 主题曲 / 其他。
@@ -43,15 +42,25 @@ object BundledMusic {
         "ren-deep blue" to "other",
     )
 
-    private val FOLDER_BASE: Map<String, String> = mapOf(
-        "blue" to "#9EC8E8",
-        "deep blue" to "#8AA4C8",
-        "yellow" to "#E8D6A0",
-        "red" to "#E0A0AC",
-        "deep red" to "#D0909C",
-        "pink" to "#E8B8D0",
-        "green" to "#A8D4B4",
-        "grey" to "#B0BCC4",
+    /** 对照桌面家园 FURN_COLOR_PRESETS：光圈随机取其一（不跟分类文件夹）。 */
+    private val DECOR_WAVE_PALETTE: IntArray = intArrayOf(
+        Color.parseColor("#E89AB0"), // 樱粉
+        Color.parseColor("#8A6AB0"), // 葡萄
+        Color.parseColor("#F4EAD8"), // 象牙
+        Color.parseColor("#8B5A2B"), // 原木
+        Color.parseColor("#6AA8D8"), // 天蓝
+        Color.parseColor("#6ABA98"), // 薄荷
+        Color.parseColor("#5A6068"), // 炭灰
+    )
+
+    /** 对照桌面 THEME_RAINBOW：主题曲光圈整圈彩色 */
+    private val THEME_WAVE_COLORS: IntArray = intArrayOf(
+        Color.parseColor("#FFC2D4"),
+        Color.parseColor("#FFD4A8"),
+        Color.parseColor("#FFF0A8"),
+        Color.parseColor("#B8ECD4"),
+        Color.parseColor("#B3E5FC"),
+        Color.parseColor("#E0C4F5"),
     )
 
     private val TITLE_TO_ID = mapOf(
@@ -98,26 +107,42 @@ object BundledMusic {
     }
 
     fun waveColorsForFolder(folder: String): IntArray {
-        val key = colorKeyOfFolder(folder)
-        val baseHex = FOLDER_BASE[key] ?: FOLDER_BASE.getValue("blue")
-        val lightHex = lighten(baseHex, 0.48f)
-        return intArrayOf(Color.parseColor(baseHex), Color.parseColor(lightHex))
+        if (isThemeFolder(folder)) return THEME_WAVE_COLORS.copyOf()
+        return randomDecorWaveColors(folder.hashCode())
     }
 
-    fun waveColorsForTrack(track: Track?): IntArray =
-        waveColorsForFolder(track?.folder ?: DEFAULT_FOLDER)
+    fun waveColorsForTrack(track: Track?): IntArray {
+        val folder = track?.folder ?: DEFAULT_FOLDER
+        if (isThemeFolder(folder)) return THEME_WAVE_COLORS.copyOf()
+        val seed = (track?.id ?: folder).hashCode()
+        return randomDecorWaveColors(seed)
+    }
 
     /**
-     * 跟随外部音乐 App 切歌换色：按签名稳定映射到角色色板。
-     * 签名变化（切歌）→ 背景/声波颜色变化。
+     * 跟随外部音乐 App 切歌换色：按签名稳定映射到装饰色（不跟分类）。
      */
     fun waveColorsForSignature(signature: String): IntArray {
-        val folders = CHAR_DEFS.map { it.folder }
-        if (folders.isEmpty() || signature.isBlank()) {
-            return waveColorsForFolder(DEFAULT_FOLDER)
+        if (signature.isBlank()) {
+            return randomDecorWaveColors(0)
         }
-        val idx = (signature.hashCode().toLong() and 0x7fffffffL).toInt() % folders.size
-        return waveColorsForFolder(folders[idx])
+        return randomDecorWaveColors(signature.hashCode())
+    }
+
+    private fun isThemeFolder(folder: String): Boolean {
+        val name = folder.trim()
+        return name == "主题曲" || name.contains("主题") || name.contains("theme", ignoreCase = true)
+    }
+
+    private fun randomDecorWaveColors(seed: Int): IntArray {
+        val idx = (seed.toLong() and 0x7fffffffL).toInt() % DECOR_WAVE_PALETTE.size
+        val base = DECOR_WAVE_PALETTE[idx]
+        val light = Color.argb(
+            255,
+            (Color.red(base) + 255) / 2,
+            (Color.green(base) + 255) / 2,
+            (Color.blue(base) + 255) / 2,
+        )
+        return intArrayOf(base, light)
     }
 
     fun charIdForFolder(folder: String): String =
@@ -131,38 +156,6 @@ object BundledMusic {
 
     fun charLabel(charId: String): String =
         CHAR_DEFS.firstOrNull { it.id == charId }?.label ?: charId
-
-    private fun colorKeyOfFolder(folderName: String): String {
-        val name = folderName.trim().lowercase().replace('_', ' ')
-        val keys = listOf(
-            "deep red", "deep blue", "yellow", "green", "pink", "blue", "red", "grey", "gray",
-        )
-        val compact = name.replace(Regex("""[\s\-]+"""), " ").trim()
-        for (key in keys) {
-            if (compact.endsWith(key) || compact.endsWith(key.replace(' ', '-'))) {
-                return if (key == "gray") "grey" else key
-            }
-        }
-        val tail = compact.substringAfterLast(' ')
-        return when {
-            tail in FOLDER_BASE -> tail
-            tail == "gray" -> "grey"
-            else -> "blue"
-        }
-    }
-
-    private fun lighten(hex: String, amount: Float): String {
-        val t = hex.trim().removePrefix("#")
-        if (t.length != 6) return "#D0E8F5"
-        val r0 = t.substring(0, 2).toIntOrNull(16) ?: return "#D0E8F5"
-        val g0 = t.substring(2, 4).toIntOrNull(16) ?: return "#D0E8F5"
-        val b0 = t.substring(4, 6).toIntOrNull(16) ?: return "#D0E8F5"
-        val a = amount.coerceIn(0f, 1f)
-        val r = (r0 + (255 - r0) * a).roundToInt().coerceIn(0, 255)
-        val g = (g0 + (255 - g0) * a).roundToInt().coerceIn(0, 255)
-        val b = (b0 + (255 - b0) * a).roundToInt().coerceIn(0, 255)
-        return "#%02X%02X%02X".format(r, g, b)
-    }
 
     private fun idFromFileName(fileName: String): String {
         val stem = fileName.substringBeforeLast('.')

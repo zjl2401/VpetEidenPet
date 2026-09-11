@@ -38,6 +38,8 @@ class MusicPlayer(private val context: Context) {
                 }
                 prepare()
                 isLooping = true
+                val vol = AppDataStore.musicVolumeF(context)
+                setVolume(vol, vol)
                 start()
             }
             player = mp
@@ -71,6 +73,8 @@ class MusicPlayer(private val context: Context) {
                 }
                 prepare()
                 isLooping = loop
+                val vol = AppDataStore.musicVolumeF(context)
+                setVolume(vol, vol)
                 start()
             }
             try {
@@ -96,6 +100,15 @@ class MusicPlayer(private val context: Context) {
         }
         player = null
         playing = false
+    }
+
+    fun applyVolumeFromPrefs() {
+        val mp = player ?: return
+        val vol = AppDataStore.musicVolumeF(context)
+        try {
+            mp.setVolume(vol, vol)
+        } catch (_: Exception) {
+        }
     }
 }
 

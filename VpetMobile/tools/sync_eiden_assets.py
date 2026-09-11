@@ -15,7 +15,9 @@ DESK_MUSIC = Path(r"C:\Users\36255\Desktop\VpetEiden\music")
 
 def convert_work() -> None:
     SPRITES.mkdir(parents=True, exist_ok=True)
-    for name in ("1work", "2work", "3work"):
+    # 主立绘 work_0~5；细节 1/2/3work
+    names = [f"work_{i}" for i in range(6)] + ["1work", "2work", "3work"]
+    for name in names:
         src = DESK_BLACK / f"{name}.jpg"
         if not src.is_file():
             print("missing", src)

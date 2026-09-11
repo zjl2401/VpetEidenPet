@@ -412,17 +412,25 @@ $Shortcut.Description = 'Vpet Eiden 桌宠 - 点击托盘图标生成桌宠'
 
 
 def _copy_release_to_desktop(release_dir: Path) -> Path:
-    """把完整发布包（含 bundled 素材）拷到桌面 Vpet，方便用户找到。"""
-    desktop_dst = DESKTOP / "Vpet"
+    """发布包拷到桌面 VpetEidenApp（勿用 Desktop\\Vpet=苍叶，勿用 VpetEiden=素材目录）。"""
+    desktop_dst = DESKTOP / "VpetEidenApp"
     print(f"拷贝完整包到桌面：{release_dir} → {desktop_dst}")
     try:
-        _deploy_tree(release_dir, desktop_dst)
+        try:
+            _deploy_tree(release_dir, desktop_dst)
+        except TypeError:
+            if desktop_dst.exists():
+                shutil.rmtree(desktop_dst, ignore_errors=True)
+            shutil.copytree(release_dir, desktop_dst)
     except OSError as exc:
-        # 桌面旧包被占用时改放到带时间戳的新文件夹
-        alt = DESKTOP / f"Vpet_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        print(f"警告：无法覆盖桌面 Vpet（{exc}），改为 {alt.name}")
+        alt = DESKTOP / f"VpetEidenApp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        print(f"警告：无法覆盖桌面 {desktop_dst.name}（{exc}），改为 {alt.name}")
         shutil.copytree(release_dir, alt)
         desktop_dst = alt
+    try:
+        (desktop_dst / "KIND.txt").write_text("eiden\n", encoding="utf-8")
+    except Exception:
+        pass
     bat = desktop_dst / "启动.bat"
     bat.write_text(
         "@echo off\nchcp 65001 >nul\n"
@@ -432,11 +440,11 @@ def _copy_release_to_desktop(release_dir: Path) -> Path:
     )
     readme = desktop_dst / "请从这里打开.txt"
     readme.write_text(
-        "Vpet 完整包已放在本文件夹。\n\n"
+        "Vpet Eiden（伊得）完整包。\n\n"
         "打开方式：\n"
         "1. 双击「启动.bat」或 Vpet.exe\n"
         "2. 托盘出现图标后，左键点击即可生成桌宠\n\n"
-        "语音 / 音乐 / RPG 等素材在 bundled 子目录中。\n",
+        "请勿与桌面「Vpet」（苍叶）文件夹混用。\n",
         encoding="utf-8",
     )
     return desktop_dst

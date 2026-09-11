@@ -17,11 +17,11 @@ import kotlin.math.sqrt
  * （RPG 素材 + 室内家具像素块）。
  */
 object HomeTileAssets {
-    private const val FURN = "#6AA8D8"
+    private const val FURN = "#F2C8D4"
 
     private val petal = arrayOf(
-        "#FF7799", "#FFCC66", "#FF88CC", "#88DDFF", "#FFAA55", "#EE88FF",
-        "#FF6666", "#66EECC", "#FFDD44", "#C080FF", "#FF90A8", "#70D0FF",
+        "#FF99B8", "#FFE088", "#FFB0D8", "#A8E8FF", "#FFC078", "#E8B0FF",
+        "#FF8888", "#88F0D8", "#FFE868", "#D0A8FF", "#FFB0C0", "#90E0FF",
     )
 
     private data class Key(val kind: String, val tile: Int, val filled: Boolean)
@@ -264,8 +264,8 @@ object HomeTileAssets {
             }
             "plant" -> {
                 box(tile / 2 - 5, th - 10, tile / 2 + 5, th - 2, wood)
-                box(tile / 2 - 8, 4, tile / 2 + 8, th - 10, "#44AA66", "#228844")
-                box(tile / 2 - 3, 2, tile / 2 + 3, 8, "#66CC88")
+                box(tile / 2 - 8, 4, tile / 2 + 8, th - 10, "#78C888", "#58A868")
+                box(tile / 2 - 3, 2, tile / 2 + 3, 8, "#98D8A0")
             }
             "carpet" -> {
                 val c1 = blend(wood, "#AA5566", 0.7f)
@@ -276,15 +276,15 @@ object HomeTileAssets {
                 box(3, 2, tw - 3, th - 2, wood, woodD)
                 box(5, th / 3, tw - 5, th / 3 + 3, blend(wood, "#FFFFFF", 0.15f))
                 box(5, 2 * th / 3, tw - 5, 2 * th / 3 + 3, blend(wood, "#FFFFFF", 0.15f))
-                box(7, 6, 14, 14, "#88CCFF")
-                box(tw - 16, th / 2, tw - 7, th / 2 + 10, "#FFCC66")
+                box(7, 6, 14, 14, "#A8D8F0")
+                box(tw - 16, th / 2, tw - 7, th / 2 + 10, "#FFE088")
             }
             "lamp" -> {
-                box(tile / 2 - 3, th / 2, tile / 2 + 3, th - 2, "#555566")
-                box(tile / 2 - 8, 4, tile / 2 + 8, th / 2, "#FFEE88", "#CCAA44")
+                box(tile / 2 - 3, th / 2, tile / 2 + 3, th - 2, "#9898A8")
+                box(tile / 2 - 8, 4, tile / 2 + 8, th / 2, "#FFF0B0", "#CCAA44")
             }
             "window" -> {
-                box(2, 4, tw - 2, th - 4, "#88CCEE", "#446688")
+                box(2, 4, tw - 2, th - 4, "#A8D8F0", "#446688")
                 val mid = tw / 2
                 box(mid - 1, 4, mid + 1, th - 4, "#446688")
                 box(2, th / 2 - 1, tw - 2, th / 2 + 1, "#446688")
@@ -293,27 +293,27 @@ object HomeTileAssets {
             "door" -> {
                 box(2, 1, tw - 2, th - 1, woodD, shade(woodD, 0.7f))
                 box(5, 3, tw - 5, th - 2, wood, woodD)
-                box(tw - 10, th / 2 - 1, tw - 7, th / 2 + 3, blend(wood, "#FFEE88", 0.35f))
+                box(tw - 10, th / 2 - 1, tw - 7, th / 2 + 3, blend(wood, "#FFF0B0", 0.35f))
                 box(4, 2, tw - 4, 5, shade(wood, 0.55f))
             }
             "vase" -> {
-                val body = "#B8C4CC"
-                val rim = "#8A98A4"
+                val body = "#E0E8F0"
+                val rim = "#A8B4C0"
                 box(tile / 2 - 6, th / 2 + 2, tile / 2 + 6, th - 2, body, rim)
-                box(tile / 2 - 8, th / 2 - 2, tile / 2 + 8, th / 2 + 4, "#D0D8E0", rim)
-                box(tile / 2 - 4, th / 2 + 4, tile / 2 + 4, th - 4, "#A8B4BC")
+                box(tile / 2 - 8, th / 2 - 2, tile / 2 + 8, th / 2 + 4, "#E0E8F0", rim)
+                box(tile / 2 - 4, th / 2 + 4, tile / 2 + 4, th - 4, "#C0C8D0")
                 if (vaseFilled) {
                     for ((ox, oy, col) in listOf(
-                        Triple(-4, -6, "#FF7799"), Triple(4, -6, "#FFCC66"),
-                        Triple(0, -10, "#FF88CC"), Triple(0, -4, "#88DDFF"),
+                        Triple(-4, -6, "#FF99B8"), Triple(4, -6, "#FFE088"),
+                        Triple(0, -10, "#FFB0D8"), Triple(0, -4, "#A8E8FF"),
                     )) {
                         box(tile / 2 + ox - 2, th / 2 + oy - 2, tile / 2 + ox + 2, th / 2 + oy + 2, col)
                     }
-                    box(tile / 2 - 1, th / 2 - 8, tile / 2 + 1, th / 2 + 2, "#44AA55")
+                    box(tile / 2 - 1, th / 2 - 8, tile / 2 + 1, th / 2 + 2, "#78C888")
                 }
             }
             "flower" -> {
-                box(tile / 2 - 2, th / 2, tile / 2 + 2, th - 2, "#44AA55")
+                box(tile / 2 - 2, th / 2, tile / 2 + 2, th - 2, "#78C888")
                 val cols = listOf(petal[0], petal[1], petal[2], petal[3])
                 for ((ox, oy, col) in listOf(
                     Triple(-5, -2, cols[0]), Triple(5, -2, cols[1]),
@@ -328,8 +328,8 @@ object HomeTileAssets {
                 box(tw - 8, 4, tw - 4, th - 2, woodD)
             }
             "bush" -> {
-                box(3, th / 3, tw - 3, th - 2, "#3A8844", "#226633")
-                box(6, 4, tw - 6, th / 2, "#55AA66")
+                box(3, th / 3, tw - 3, th - 2, "#78B888", "#58A068")
+                box(6, 4, tw - 6, th / 2, "#98D0A0")
             }
             else -> {
                 box(4, 4, tw - 4, th - 4, wood)

@@ -5,9 +5,8 @@ import android.content.SharedPreferences
 import kotlin.math.roundToInt
 
 /**
- * 大小档仍用独立 pref；所属人等走 [PetProfileStore]（与桌面 pet_profile.json 对齐）。
- * 首次读取时迁移旧版 SharedPreferences 所属人。
- * 初始档位对齐苍叶手机版：小 96 / 中 128 / 大 176。
+ * 大小档仍用独立 pref；所属人等走 [PetProfileStore]。
+ * 伊得手机初始大小与苍叶手机一致：小 96 / 中 128 / 大 176。
  */
 object PetPrefs {
     private const val PREF = "vpet_mobile"
@@ -16,11 +15,12 @@ object PetPrefs {
     private const val KEY_OWNER_LEGACY = "owner_name"
     private const val KEY_OWNER_AT_LEGACY = "owner_set_at_ms"
     private const val KEY_MIGRATED = "profile_migrated_v1"
-    private const val KEY_SIZE_ALIGNED_AOBA = "size_aligned_aoba_v1"
+    /** 对齐苍叶默认档位的一次性迁移标记。 */
+    private const val KEY_SIZE_ALIGN_AOBA = "size_align_aoba_v1"
 
     const val OWNER_NAME_MAX_LEN = PetProfileStore.OWNER_NAME_MAX_LEN
 
-    /** 对齐 Aoba 手机版预设。 */
+    /** 与苍叶手机 SIZE_PRESETS 一致。 */
     val SIZE_PRESETS: Map<String, Int> = linkedMapOf(
         "小" to 96,
         "中" to 128,
@@ -28,7 +28,7 @@ object PetPrefs {
     )
 
     const val SIZE_MIN_PX = 80
-    const val SIZE_MAX_PX = 200
+    const val SIZE_MAX_PX = 240
     const val SIZE_STEP_PX = 8
     const val DEFAULT_SIZE_LABEL = "中"
     val DEFAULT_SIZE_PX: Int = SIZE_PRESETS.getValue(DEFAULT_SIZE_LABEL)
@@ -60,25 +60,29 @@ object PetPrefs {
         p.edit().putBoolean(KEY_MIGRATED, true).apply()
     }
 
-    /** 一次性把旧版偏大默认（中=264）拉回苍叶同款中=128。 */
+    /**
+     * 一次性：旧伊得手机大档（192/264/360 等）降回苍叶同档 96/128/176。
+     */
     private fun alignSizeOnce(ctx: Context) {
         val p = prefs(ctx)
-        if (p.getBoolean(KEY_SIZE_ALIGNED_AOBA, false)) return
+        if (p.getBoolean(KEY_SIZE_ALIGN_AOBA, false)) return
         val cur = if (p.contains(KEY_SIZE_PX)) p.getInt(KEY_SIZE_PX, DEFAULT_SIZE_PX) else DEFAULT_SIZE_PX
-        // 仅纠正明显是旧「中/大」锚点的值，用户自调过的仍 snap 进新范围
-        val reset = cur in setOf(192, 264, 360) || cur > SIZE_MAX_PX
-        if (reset) {
-            p.edit()
-                .putInt(KEY_SIZE_PX, DEFAULT_SIZE_PX)
-                .putString(KEY_SIZE, DEFAULT_SIZE_LABEL)
-                .putBoolean(KEY_SIZE_ALIGNED_AOBA, true)
-                .apply()
-        } else {
-            p.edit()
-                .putInt(KEY_SIZE_PX, snapSizePx(cur))
-                .putBoolean(KEY_SIZE_ALIGNED_AOBA, true)
-                .apply()
+        val aligned = when (cur) {
+            192, 144 -> 96
+            264 -> 128
+            360, 400 -> 176
+            in setOf(96, 128, 176) -> cur
+            else -> when {
+                cur >= 280 -> 176
+                cur >= 180 -> 128
+                else -> 96
+            }
         }
+        p.edit()
+            .putInt(KEY_SIZE_PX, snapSizePx(aligned))
+            .putString(KEY_SIZE, nearestSizeLabel(aligned))
+            .putBoolean(KEY_SIZE_ALIGN_AOBA, true)
+            .apply()
     }
 
     fun snapSizePx(px: Int): Int {
@@ -88,7 +92,6 @@ object PetPrefs {
         return stepped.coerceIn(SIZE_MIN_PX, SIZE_MAX_PX)
     }
 
-    /** 最近命名档（仅展示用）。 */
     fun nearestSizeLabel(px: Int): String {
         val target = snapSizePx(px)
         return SIZE_PRESETS.minByOrNull { kotlin.math.abs(it.value - target) }?.key
@@ -116,7 +119,7 @@ object PetPrefs {
         prefs(ctx).edit()
             .putInt(KEY_SIZE_PX, snapped)
             .putString(KEY_SIZE, label)
-            .putBoolean(KEY_SIZE_ALIGNED_AOBA, true)
+            .putBoolean(KEY_SIZE_ALIGN_AOBA, true)
             .apply()
     }
 

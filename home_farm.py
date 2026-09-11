@@ -19,6 +19,7 @@ ITEM_LABELS: dict[str, str] = {
     "flower_cut": "采下的花",
     "fish": "鲜鱼",
     "work_reward_box": "工作宝箱",
+    "achieve_reward_box": "成就宝箱",
 }
 
 SEED_TO_CROP: dict[str, str] = {

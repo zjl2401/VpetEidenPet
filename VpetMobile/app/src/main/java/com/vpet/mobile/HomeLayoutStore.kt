@@ -13,9 +13,9 @@ object HomeLayoutStore {
     private const val KEY_JSON = "home_layout_json"
     const val COLS_DEFAULT = 12
     const val ROWS_DEFAULT = 10
-    const val FLOOR_A = "#6A7080"
-    const val FLOOR_B = "#5A6070"
-    const val FURN = "#6AA8D8"
+    const val FLOOR_A = "#D8C0A0"
+    const val FLOOR_B = "#C8AE88"
+    const val FURN = "#F2C8D4"
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
 

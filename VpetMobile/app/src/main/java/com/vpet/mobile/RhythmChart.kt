@@ -35,18 +35,18 @@ object RhythmChart {
         seed: Int = Random.nextInt(),
     ): List<Note> {
         val dens = when (difficulty) {
-            "低" -> 0.34f
-            "高" -> 0.66f
-            else -> 0.50f
+            "低" -> 0.58f
+            "高" -> 0.94f
+            else -> 0.82f
         } * when {
-            durationMs >= 180_000 -> 0.82f
-            durationMs >= 120_000 -> 0.90f
+            durationMs >= 180_000 -> 0.88f
+            durationMs >= 120_000 -> 0.94f
             else -> 1f
         }
         val beat = 60_000f / bpm.coerceAtLeast(60f)
         val rng = Random(seed)
         val raw = ArrayList<Pair<Int, Int>>()
-        var t = 2200f
+        var t = kotlin.math.ceil(2200.0 / beat).toFloat() * beat
         var lane = rng.nextInt(LANES)
         val endT = maxOf(4000, durationMs - 2500).toFloat()
         while (t < endT) {
@@ -62,8 +62,8 @@ object RhythmChart {
                     raw += t.toInt() to lane
                 }
             }
-            var step = beat * if (rng.nextFloat() < 0.22f) 0.5f else 1f
-            if (rng.nextFloat() < 0.08f) step = beat * 1.5f
+            var step = beat * if (rng.nextFloat() < 0.28f) 0.5f else 1f
+            if (rng.nextFloat() < 0.06f) step = beat * 1.5f
             t += step
         }
         raw.sortWith(compareBy({ it.first }, { it.second }))

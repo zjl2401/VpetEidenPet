@@ -9,7 +9,7 @@
   {"title": "伤心", "files": ["sad1.png", "sad2.png"]},
   {"title": "吃东西", "files": ["eat1.png", "eat2.png"]},
   {"title": "睡眠", "files": ["sleep1.png", "sleep2.png"]},
-  {"title": "害羞", "files": ["shy1.png", "shy2.png"]},
+  {"title": "害羞", "files": ["shy1.png", "shy2.png", "shy3.png"]},
   {"title": "是 / 否", "files": ["yes.png", "no.png"]},
   {"title": "打电话", "files": ["call1.png", "call2.png"]},
   {"title": "移动", "files": ["move1.png", "move2.png", "move3.png"]},

@@ -137,6 +137,53 @@ class SystemHubActivity : AppCompatActivity() {
         binding.sysButtons.addView(row)
     }
 
+    /** 设置页双选/多选行（普通·黑框等）。 */
+    private fun addChoiceRow(
+        title: String,
+        options: List<Pair<String, String>>,
+        selected: String,
+        onPick: (String) -> Unit,
+    ) {
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        wrap.addView(
+            TextView(this).apply {
+                text = title
+                typeface = UiFonts.cute(this@SystemHubActivity)
+                setTextColor(getColor(R.color.text_main))
+                AppDataStore.applySp(this, AppDataStore.fontBodySp(this@SystemHubActivity))
+            },
+        )
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        for ((label, value) in options) {
+            val on = value == selected
+            row.addView(
+                Button(this).apply {
+                    text = if (on) "$label ✓" else label
+                    typeface = UiFonts.cute(this@SystemHubActivity)
+                    setTextColor(MenuDecor.MENU_FG)
+                    background = MenuDecor.moduleBtnBg(on)
+                    AppDataStore.applySp(this, AppDataStore.fontCaptionSp(this@SystemHubActivity))
+                    minHeight = 0
+                    minimumHeight = dp(36)
+                    setPadding(dp(10), dp(6), dp(10), dp(6))
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).also { it.marginEnd = dp(6) }
+                    setOnClickListener { onPick(value) }
+                },
+            )
+        }
+        wrap.addView(row)
+        binding.sysButtons.addView(wrap)
+    }
+
     /**
      * 设置页滑条。
      * @param applyOnStop 为 true 时仅在松手时回调 [onChange]（拖动中只刷新文案），减轻改大小开销。
@@ -758,12 +805,77 @@ class SystemHubActivity : AppCompatActivity() {
             },
         )
 
+        addSwitchRow("时间显示", AppDataStore.showTimers(this)) { on ->
+            AppDataStore.setShowTimers(this, on)
+            startService(
+                Intent(this, PetOverlayService::class.java).apply {
+                    action = PetOverlayService.ACTION_SYNC_TIMERS
+                },
+            )
+            Toast.makeText(
+                this,
+                if (on) "时间显示：开（模式旁自动秒表）" else "时间显示：关",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+
+        addSwitchRow("文本框", AppDataStore.showSpeech(this)) { on ->
+            AppDataStore.setShowSpeech(this, on)
+            if (!on) {
+                startService(
+                    Intent(this, PetOverlayService::class.java).apply {
+                        action = PetOverlayService.ACTION_HIDE_SPEECH
+                    },
+                )
+            }
+            Toast.makeText(
+                this,
+                if (on) "文本框：开" else "文本框：关（语音仍可播）",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+
+        addChoiceRow(
+            title = "立绘图组",
+            options = listOf("普通" to AppDataStore.SPRITE_PACK_NORMAL, "黑框" to AppDataStore.SPRITE_PACK_BLACK),
+            selected = AppDataStore.spritePack(this),
+        ) { pack ->
+            AppDataStore.setSpritePack(this, pack)
+            startService(
+                Intent(this, PetOverlayService::class.java).apply {
+                    action = PetOverlayService.ACTION_RELOAD_SPRITES
+                },
+            )
+            Toast.makeText(
+                this,
+                if (pack == AppDataStore.SPRITE_PACK_BLACK) "立绘：黑框（缺图回退普通）" else "立绘：普通",
+                Toast.LENGTH_SHORT,
+            ).show()
+            // 重建本页以刷新选中态
+            pageSettings()
+        }
+
         addSwitchRow("音效", AppDataStore.soundOn(this)) { on ->
             AppDataStore.setSoundOn(this, on)
         }
         addSwitchRow("语音", AppDataStore.voiceMode(this)) { on ->
             AppDataStore.setVoiceMode(this, on)
         }
+
+        addSliderRow(
+            title = "音乐音量",
+            progress = AppDataStore.musicVolume(this),
+            max = 100,
+            format = { "$it%" },
+            onChange = {
+                AppDataStore.setMusicVolume(this, it)
+                startService(
+                    Intent(this, PetOverlayService::class.java).apply {
+                        action = PetOverlayService.ACTION_APPLY_MUSIC_VOL
+                    },
+                )
+            },
+        )
 
         addSwitchRow(
             "熄屏显示",
@@ -805,6 +917,10 @@ class SystemHubActivity : AppCompatActivity() {
             format = { "$it%" },
             onChange = { AppDataStore.setSfxVolume(this, it) },
         )
+
+        addBtn("音乐 / 导入本地曲") {
+            startActivity(Intent(this, ToolsActivity::class.java))
+        }
 
         addSliderRow(
             title = "难度",

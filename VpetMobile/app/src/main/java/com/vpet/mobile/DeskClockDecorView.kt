@@ -3,7 +3,10 @@ package com.vpet.mobile
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.util.AttributeSet
 import android.util.TypedValue
@@ -30,7 +33,7 @@ class DeskClockDecorView @JvmOverloads constructor(
             field = value
             invalidate()
         }
-    var accentArgb: Int = 0xFF88FFCC.toInt()
+    var accentArgb: Int = 0xFF5A6A7C.toInt()
         set(value) {
             field = value
             invalidate()
@@ -60,27 +63,26 @@ class DeskClockDecorView @JvmOverloads constructor(
 
     private val innerFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        // 中间黑底再透一点（对照桌面 DESK_CLOCK_FILL_STIPPLE）
-        color = 0x8A162030.toInt()
     }
     private val innerStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = dp(2f)
-        color = 0xFF88CCFF.toInt()
+        color = Color.WHITE
     }
     private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF8899AA.toInt()
+        color = Color.WHITE
         textSize = sp(11f)
         typeface = Typeface.MONOSPACE
     }
     private val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = accentArgb
+        color = Color.WHITE
         textSize = sp(18f)
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
         textAlign = Paint.Align.CENTER
     }
 
     private var framesCache: Map<String, List<Bitmap>>? = null
+    private var panelShader: LinearGradient? = null
 
     /** 跟随系统「字体大小」设置。 */
     fun applyFontScale(ctx: Context = context) {
@@ -96,13 +98,17 @@ class DeskClockDecorView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
-        // 外层透明：只画数字框，不铺深色大底板
+        // 外层透明：半透明青蓝数字框
         val left = padPx
         val top = padPx
+        ensurePanelShader(left, left + innerW)
+        innerFill.shader = panelShader
         canvas.drawRect(left, top, left + innerW, top + innerH, innerFill)
+        innerFill.shader = null
         canvas.drawRect(left, top, left + innerW, top + innerH, innerStroke)
 
-        timePaint.color = accentArgb
+        timePaint.color = Color.WHITE
+        titlePaint.color = Color.WHITE
         canvas.drawText(titleText, left + dp(8f), top + dp(14f), titlePaint)
         canvas.drawText(timeText, left + innerW / 2f, top + innerH / 2f + dp(10f), timePaint)
 
@@ -112,6 +118,19 @@ class DeskClockDecorView @JvmOverloads constructor(
         val hw = bmp.width / 2f
         val hh = bmp.height / 2f
         canvas.drawBitmap(bmp, px - hw, py - hh, null)
+    }
+
+    private fun ensurePanelShader(x0: Float, x1: Float) {
+        if (panelShader != null) return
+        val (c0, c1) = panelColors()
+        panelShader = LinearGradient(x0, 0f, x1, 0f, c0, c1, Shader.TileMode.CLAMP)
+    }
+
+    private fun panelColors(): Pair<Int, Int> {
+        // 半透明青→蓝（对照桌面 DESK_CLOCK_GRAD_*）
+        val c0 = Color.argb(0xB0, 0x3D, 0xC8, 0xD4)
+        val c1 = Color.argb(0xB0, 0x3A, 0x7B, 0xD5)
+        return c0 to c1
     }
 
     private fun pickWalkerBitmap(edge: String): Bitmap? {

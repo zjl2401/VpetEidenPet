@@ -848,6 +848,49 @@ class PetModeHub(
         }
     }
 
+    /** 设置关闭「文本框」时立刻收起对话/字幕。 */
+    fun hideSpeechBubble() {
+        mainHandler.post { speech?.hide() }
+    }
+
+    /** 设置切换立绘图组后重载立绘。 */
+    fun reloadSpritesFromPrefs() {
+        mainHandler.post {
+            applyDisplaySizeToPetAndCompanion()
+            showToast(
+                if (AppDataStore.spritePackIsBlack(context)) "已切换黑框立绘" else "已切换普通立绘",
+            )
+        }
+    }
+
+    /** 设置「时间显示」：同步音乐/睡眠模式旁自动秒表。 */
+    fun syncAutoTimersFromPrefs() {
+        mainHandler.post {
+            syncMusicAutoTimer()
+            syncQuietAutoTimer()
+        }
+    }
+
+    fun applyMusicVolumeFromPrefs() {
+        mainHandler.post { musicPlayer?.applyVolumeFromPrefs() }
+    }
+
+    private fun syncMusicAutoTimer() {
+        if (musicMode && AppDataStore.showTimers(context)) {
+            toolClock?.showMusicAutoStopwatch()
+        } else {
+            toolClock?.hideMusicAutoStopwatch()
+        }
+    }
+
+    private fun syncQuietAutoTimer() {
+        val q = quiet
+        if (q == null || !q.active || isPomodoro) return
+        // 重建 HUD：开→带睡眠小人秒表；关→仅结束键
+        removeQuietHud()
+        ensureQuietHud()
+    }
+
     private fun launchQuiet() {
         val q = QuietSession(object : QuietSession.Host {
             override fun onQuietVisual(peek: Boolean) {
@@ -856,7 +899,17 @@ class PetModeHub(
             }
             override fun onQuietTick(elapsedSec: Long) {
                 if (!isPomodoro) {
-                    quietHud?.quietProgress?.text = "睡眠 ${QuietSession.formatDuration(elapsedSec)}"
+                    val b = quietHud ?: return
+                    val elapsedMs = elapsedSec * 1000L
+                    b.quietClockDecor.apply {
+                        applyFontScale(context)
+                        titleText = "睡眠"
+                        timeText = ToolClockUi.formatClockMs(elapsedMs)
+                        progressMs = elapsedMs
+                        walkerStyle = DeskClockDecorView.WalkerStyle.SLEEP
+                        accentArgb = 0xFF88AADD.toInt()
+                    }
+                    b.quietProgress.text = "睡眠 ${QuietSession.formatDuration(elapsedSec)}"
                 }
             }
             override fun onQuietEnded(elapsedSec: Long) {
@@ -1296,7 +1349,7 @@ class PetModeHub(
             if (musicPlayer?.playing == true) {
                 applyMusicWave(BundledMusic.waveColorsForFolder(BundledMusic.DEFAULT_FOLDER))
             }
-            toolClock?.showMusicAutoStopwatch()
+            syncMusicAutoTimer()
             startMusicAffinityTick()
             showToast("音乐漫步 · $importedTitle")
             syncModeBucket()
@@ -1312,7 +1365,7 @@ class PetModeHub(
         if (musicPlayer?.playing == true) {
             applyMusicWave(BundledMusic.waveColorsForTrack(bundled))
         }
-        toolClock?.showMusicAutoStopwatch()
+        syncMusicAutoTimer()
         startMusicAffinityTick()
         showToast("音乐漫步 · ${bundled.title}")
         syncModeBucket()
@@ -1357,7 +1410,7 @@ class PetModeHub(
         ambientMusicSignature = signature
         AppDataStore.unlock(context, "music_play")
         applyMusicWave(BundledMusic.waveColorsForSignature(signature))
-        toolClock?.showMusicAutoStopwatch()
+        syncMusicAutoTimer()
         showToast(
             if (fromStartup) "检测到音乐App · 音乐立绘（不播本地曲）"
             else "音乐App · 立绘漫步（切歌换色）",
@@ -2015,8 +2068,12 @@ class PetModeHub(
                 banter("sad")
             }
             "expr_shy" -> {
-                // 默认 shy1；桌面双击才 shy2 —— 手机单次触发放 shy1
-                animator.playPose(listOf(SpriteAssets.SHY1), PetAnimator.DUR_SHY, loop = false)
+                // 对照桌面：shy1→shy2→shy3 自动切帧
+                animator.playPose(
+                    listOf(SpriteAssets.SHY1, SpriteAssets.SHY2, SpriteAssets.SHY3),
+                    PetAnimator.DUR_SHY,
+                    loop = false,
+                )
                 fx?.showShy(PetAnimator.DUR_SHY)
             }
             "expr_wink" -> {
@@ -2315,8 +2372,28 @@ class PetModeHub(
 
     private fun ensureQuietHud() {
         if (quietHud != null) return
+        if (!AppDataStore.showTimers(context)) {
+            // 关「时间显示」：仍给结束按钮，但不建带小人的秒表
+            val b = OverlayQuietHudBinding.inflate(LayoutInflater.from(context))
+            b.quietClockDecor.visibility = android.view.View.GONE
+            b.quietProgress.visibility = android.view.View.VISIBLE
+            b.quietEnd.setOnClickListener { endQuiet(fromMenu = true) }
+            quietHud = b
+            attachTopHud(b.root, yOverlay = 48, topRoom = 100)
+            return
+        }
         val b = OverlayQuietHudBinding.inflate(LayoutInflater.from(context))
         b.quietEnd.setOnClickListener { endQuiet(fromMenu = true) }
+        b.quietClockDecor.apply {
+            applyFontScale(context)
+            titleText = "睡眠"
+            timeText = "00:00"
+            progressMs = 0L
+            walkerStyle = DeskClockDecorView.WalkerStyle.SLEEP
+            accentArgb = 0xFF88AADD.toInt()
+            visibility = android.view.View.VISIBLE
+        }
+        b.quietProgress.visibility = android.view.View.GONE
         quietHud = b
         attachTopHud(b.root, yOverlay = 48, topRoom = 100)
     }

@@ -38,8 +38,8 @@ VOICE_CHANNEL_ID = 1
 
 VOICE_PRIORITY_AMBIENT = 1
 VOICE_PRIORITY_SCENE = 2
-VOICE_GLOBAL_COOLDOWN_MS = 10_000
-VOICE_COOLDOWN_MIN_MS = 1_500
+VOICE_GLOBAL_COOLDOWN_MS = 30_000
+VOICE_COOLDOWN_MIN_MS = 5_000
 VOICE_COOLDOWN_MAX_MS = 60_000
 VOICE_HI_CATEGORY = "你好"
 
@@ -418,8 +418,12 @@ class VoicePlayer:
         self.global_cooldown_ms = max(VOICE_COOLDOWN_MIN_MS, min(VOICE_COOLDOWN_MAX_MS, int(ms)))
 
     def clear_global_cooldown(self) -> None:
-        """设置改间隔后立刻按新档位可触发，不被旧冷却卡住。"""
+        """立刻允许下一条（一般不用于改档；改档请用 restart_global_cooldown）。"""
         self._last_session_end_ms = 0
+
+    def restart_global_cooldown(self) -> None:
+        """从当前时刻起重新计「播完后静默」间隔，避免改档后立刻连播。"""
+        self._mark_session_end()
 
     def reload_catalog_async(self, *, on_done: Callable[[], None] | None = None) -> None:
         if on_done:

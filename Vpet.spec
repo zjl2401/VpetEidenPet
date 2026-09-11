@@ -41,6 +41,7 @@ a = Analysis(
         "media_bundled",
         "pet_id_cloud",
         "app_scene_desktop",
+        "system_media_control",
         "rhythm_chart_editor",
         "pet_outfit",
         "peer_friendship",

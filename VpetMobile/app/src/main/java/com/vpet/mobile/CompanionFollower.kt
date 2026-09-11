@@ -50,11 +50,13 @@ class CompanionFollower(
         const val FLY_BOB_PX = 5
         const val FLY_FRAME_MS = 320L
         /** 对照桌面 MINI_PET_SIZE / DEFAULT_SIZE：画布随主宠同比例，立绘共用 stand 参考缩放。 */
-        const val MINI_PET_SIZE = 120
-        const val DEFAULT_PET_SIZE = 128
-        /** 桌面 `_mini_pet_size_for` 上下限。 */
-        const val MINI_SIZE_MIN = 72
-        const val MINI_SIZE_MAX = 220
+        const val MINI_PET_SIZE = 72
+        const val DEFAULT_PET_SIZE = 176
+        /** 使魔画布上下限（相对主宠明显更小）。 */
+        const val MINI_SIZE_MIN = 48
+        const val MINI_SIZE_MAX = 160
+        /** 使魔立绘相对主宠 reference_scale 的倍率（勿过大）。 */
+        const val COMPANION_DRAW_BOOST = 1.35f
 
         fun companionSize(petPx: Int): Int {
             val px = petPx.coerceAtLeast(24)
@@ -295,10 +297,10 @@ class CompanionFollower(
         }
         val cw = cropped.width.coerceAtLeast(1)
         val ch = cropped.height.coerceAtLeast(1)
-        val scale = if (refScale > 0f) refScale else {
-            // 兜底：不应走到这里
-            minOf(canvasSize.toFloat() / cw, canvasSize.toFloat() / ch)
-        }
+        val fillScale = minOf(canvasSize.toFloat() / cw, canvasSize.toFloat() / ch)
+        val base = if (refScale > 0f) refScale else fillScale
+        // 共同放大：相对主宠 reference_scale 再 ×8，但不超过铺满画布
+        val scale = minOf(base * COMPANION_DRAW_BOOST, fillScale)
         val newW = max(1, (cw * scale).roundToInt())
         val newH = max(1, (ch * scale).roundToInt())
         val scaled = if (newW == cropped.width && newH == cropped.height) {

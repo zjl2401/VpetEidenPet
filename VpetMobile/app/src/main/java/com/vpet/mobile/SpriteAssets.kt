@@ -40,10 +40,17 @@ object SpriteAssets {
     const val WORK_WALK1 = WORK_FRONT1
     const val WORK_WALK2 = WORK_FRONT2
 
-    /** 伏案赶工主立绘（对照桌面 1/2/3work） */
-    const val WORK_DESK_1 = "sprites/1work.png"
-    const val WORK_DESK_2 = "sprites/2work.png"
-    const val WORK_DESK_3 = "sprites/3work.png"
+    /** 伏案旁侧细节（对照桌面 work_0~5） */
+    const val WORK_DESK_0 = "sprites/work_0.png"
+    const val WORK_DESK_1 = "sprites/work_1.png"
+    const val WORK_DESK_2 = "sprites/work_2.png"
+    const val WORK_DESK_3 = "sprites/work_3.png"
+    const val WORK_DESK_4 = "sprites/work_4.png"
+    const val WORK_DESK_5 = "sprites/work_5.png"
+    /** 伏案主立绘（对照桌面 1/2/3work） */
+    const val WORK_DETAIL_1 = "sprites/1work.png"
+    const val WORK_DETAIL_2 = "sprites/2work.png"
+    const val WORK_DETAIL_3 = "sprites/3work.png"
 
     const val BOX = "sprites/box.png"
     const val FLAG = "sprites/flag.png"
@@ -77,6 +84,7 @@ object SpriteAssets {
     const val SAD2 = "sprites/sad2.png"
     const val SHY1 = "sprites/shy1.png"
     const val SHY2 = "sprites/shy2.png"
+    const val SHY3 = "sprites/shy3.png"
     const val WINK = "sprites/wink.png"
     const val LIKE = "sprites/like.png"
     const val SQUAT = "sprites/squat.png"
@@ -145,7 +153,18 @@ object SpriteAssets {
         }
     }
 
-    fun resolve(context: Context, defaultPath: String): String = defaultPath
+    fun resolve(context: Context, defaultPath: String): String {
+        if (!defaultPath.startsWith("sprites/")) return defaultPath
+        if (!AppDataStore.spritePackIsBlack(context)) return defaultPath
+        val name = defaultPath.removePrefix("sprites/")
+        val black = "sprites_black/$name"
+        return try {
+            context.assets.open(black).close()
+            black
+        } catch (_: Exception) {
+            defaultPath
+        }
+    }
 
     fun load(
         context: Context,

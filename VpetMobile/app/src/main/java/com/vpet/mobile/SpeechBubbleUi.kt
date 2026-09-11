@@ -2,9 +2,15 @@ package com.vpet.mobile
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.Point
+import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import android.util.TypedValue
@@ -17,7 +23,7 @@ import com.vpet.mobile.databinding.OverlaySpeechBinding
 
 /**
  * 对话/台词气泡。定位对照桌面：桌宠正下方。
- * 系统→对话可用 border5；语音字幕为粉顶条扁平框；动作等为普通扁平框。
+ * 默认微信风气泡（圆角白底 + 上指小三角）；可选 border5 铭牌。
  */
 class SpeechBubbleUi(
     private val context: Context,
@@ -31,16 +37,19 @@ class SpeechBubbleUi(
     },
 ) {
     companion object {
-        const val PET_SPEECH_GAP = 6
+        const val PET_SPEECH_GAP = 4
         const val PET_SPEECH_FOLLOW_MS = 180L
         const val TYPEWRITER_MS = 70L
         const val HI_TYPEWRITER_MS = 130L
-        /** 扁平气泡：最短/最长内容宽（dp） */
-        private const val FLAT_MIN_DP = 56
-        private const val FLAT_MAX_DP = 280
-        private const val SPEECH_FG_VPET = 0xFF88CCFF.toInt()
-        private const val SPEECH_FG_ALLMATE = 0xFF1A4A99.toInt()
-        private const val SPEECH_TEXT_BG = 0xE0141824.toInt()
+        /** 微信风气泡：最短/最长内容宽（dp） */
+        private const val FLAT_MIN_DP = 48
+        private const val FLAT_MAX_DP = 260
+        /** 正文近黑，贴近微信聊天气泡 */
+        private const val SPEECH_FG_VPET = 0xFF191919.toInt()
+        private const val SPEECH_FG_ALLMATE = 0xFF3A2230.toInt()
+        /** 微信接收气泡白底 */
+        private const val SPEECH_BUBBLE_FILL = 0xFFFFFFFF.toInt()
+        private const val SPEECH_BUBBLE_SHADOW = 0x28000000
     }
 
     private var binding: OverlaySpeechBinding? = null
@@ -61,7 +70,7 @@ class SpeechBubbleUi(
         showInternal(text, autoHideMs, typewriterMs = 0L, border5 = border5)
     }
 
-    /** 语音字幕：瞬时全文，无打字音；粉顶条标题框。时长建议 = 语音时长 + 1s。 */
+    /** 语音字幕：瞬时全文，无打字音；微信风气泡。时长建议 = 语音时长 + 1s。 */
     fun showVoiceSubtitle(text: String, autoHideMs: Long = 3200L, source: String = "vpet") {
         voiceFg = if (source.equals("allmate", ignoreCase = true)) SPEECH_FG_ALLMATE else SPEECH_FG_VPET
         showInternal(
@@ -86,9 +95,9 @@ class SpeechBubbleUi(
         showTypewriter(text, autoHideMs, HI_TYPEWRITER_MS, border5 = false)
     }
 
-    /** 系统→对话（预设问答等）：border5 + 打字机。 */
+    /** 系统→对话：微信风气泡 + 打字机。 */
     fun showDialog(text: String, autoHideMs: Long = 4200L, typewriterMs: Long = TYPEWRITER_MS) {
-        showTypewriter(text, autoHideMs, typewriterMs, border5 = true)
+        showTypewriter(text, autoHideMs, typewriterMs, border5 = false)
     }
 
     private fun showInternal(
@@ -98,6 +107,10 @@ class SpeechBubbleUi(
         border5: Boolean,
         asVoice: Boolean = false,
     ) {
+        if (!AppDataStore.showSpeech(context)) {
+            hide()
+            return
+        }
         ensure()
         cancelType()
         useBorder5 = border5
@@ -237,35 +250,27 @@ class SpeechBubbleUi(
         b.speechText.setBackgroundColor(0x00000000)
     }
 
-    /** 扁平气泡：宽度随字数伸缩，长文自动换行。语音框带粉顶条 + 深蓝描边。 */
+    /** 微信风：圆角白底 + 上指三角尾，宽度随字数伸缩。 */
     private fun applyFlatChrome(fullText: String) {
         val b = binding ?: return
         b.speechBorder.visibility = View.GONE
         val padH = dp(12)
-        val padV = dp(10)
-        if (voiceStyle) {
-            b.speechRoot.setPadding(padH, padV + dp(3), padH, padV)
-            val body = android.graphics.drawable.GradientDrawable().apply {
-                setColor(SPEECH_TEXT_BG)
-                setStroke(dp(1), MenuDecor.THEME_BLUE_DEEP)
-            }
-            val layers = android.graphics.drawable.LayerDrawable(
-                arrayOf(
-                    android.graphics.drawable.GradientDrawable().apply {
-                        setColor(MenuDecor.THEME_PINK)
-                    },
-                    body,
-                ),
-            )
-            layers.setLayerInset(1, 0, dp(3), 0, 0)
-            b.speechRoot.background = layers
-            b.speechText.setTextColor(voiceFg)
-        } else {
-            b.speechRoot.setPadding(dp(10), dp(8), dp(10), dp(8))
-            b.speechRoot.setBackgroundColor(0xEE1A1A22.toInt())
-            b.speechText.setTextColor(0xFFFFFFFF.toInt())
-        }
-        val minW = dp(if (voiceStyle) 72 else FLAT_MIN_DP)
+        val padV = dp(9)
+        val tailH = dp(7)
+        val shadowPad = dp(2)
+        // 上：阴影 + 三角；左右下：内边距 + 轻微阴影余量
+        b.speechRoot.setPadding(padH + shadowPad, padV + tailH + shadowPad, padH + shadowPad, padV + shadowPad)
+        b.speechRoot.background = WeChatBubbleDrawable(
+            fillColor = SPEECH_BUBBLE_FILL,
+            cornerRadius = dp(8).toFloat(),
+            tailWidth = dp(12).toFloat(),
+            tailHeight = tailH.toFloat(),
+            shadowColor = SPEECH_BUBBLE_SHADOW,
+            shadowDy = dp(1).toFloat(),
+        )
+        b.speechRoot.elevation = 0f
+        b.speechText.setTextColor(if (voiceStyle) voiceFg else SPEECH_FG_VPET)
+        val minW = dp(if (voiceStyle) 64 else FLAT_MIN_DP)
         val maxW = minOf(dp(FLAT_MAX_DP), (screenSize().x * 0.72f).toInt().coerceAtLeast(minW))
         val tv = b.speechText
         AppDataStore.applySp(tv, AppDataStore.fontSp(context))
@@ -367,6 +372,75 @@ class SpeechBubbleUi(
             }
             roomHost?.addView(b.root, roomLp)
         }
+        b.root.setBackgroundColor(0x00000000)
         b.root.visibility = View.GONE
+    }
+
+    /**
+     * 微信风聊天气泡：圆角矩形 + 顶部居中小三角（指向桌宠）。
+     */
+    private class WeChatBubbleDrawable(
+        private val fillColor: Int,
+        private val cornerRadius: Float,
+        private val tailWidth: Float,
+        private val tailHeight: Float,
+        private val shadowColor: Int,
+        private val shadowDy: Float,
+    ) : Drawable() {
+        private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = fillColor
+        }
+        private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = shadowColor
+        }
+        private val path = Path()
+        private val body = RectF()
+
+        override fun draw(canvas: Canvas) {
+            val b = bounds
+            if (b.width() <= 0 || b.height() <= 0) return
+            val left = b.left.toFloat()
+            val top = b.top.toFloat()
+            val right = b.right.toFloat()
+            val bottom = b.bottom.toFloat()
+            val th = tailHeight.coerceAtMost((bottom - top) * 0.35f)
+            val tw = tailWidth.coerceAtMost((right - left) * 0.4f)
+            val cx = (left + right) * 0.5f
+            val r = cornerRadius.coerceAtMost(minOf(right - left, bottom - top - th) * 0.5f)
+
+            fun build(target: Path, dy: Float) {
+                target.reset()
+                body.set(left, top + th + dy, right, bottom + dy)
+                target.addRoundRect(body, r, r, Path.Direction.CW)
+                // 上指三角：尖端朝上，底边并入圆角顶边
+                target.moveTo(cx - tw * 0.5f, top + th + dy + 0.5f)
+                target.lineTo(cx, top + dy)
+                target.lineTo(cx + tw * 0.5f, top + th + dy + 0.5f)
+                target.close()
+            }
+
+            if (shadowDy > 0f) {
+                build(path, shadowDy)
+                canvas.drawPath(path, shadowPaint)
+            }
+            build(path, 0f)
+            canvas.drawPath(path, fillPaint)
+        }
+
+        override fun setAlpha(alpha: Int) {
+            fillPaint.alpha = alpha
+            shadowPaint.alpha = (alpha * 0.35f).toInt().coerceIn(0, 255)
+            invalidateSelf()
+        }
+
+        override fun setColorFilter(colorFilter: ColorFilter?) {
+            fillPaint.colorFilter = colorFilter
+            invalidateSelf()
+        }
+
+        @Deprecated("Deprecated in Java")
+        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
     }
 }

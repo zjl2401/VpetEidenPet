@@ -110,7 +110,7 @@ class PetAnimator(
     @Deprecated("use walkDir")
     val legacyWalkSign: Int get() = if (walkDir == SpriteAssets.Dir.LEFT) -1 else 1
 
-    private var deskPosePath: String = SpriteAssets.WORK_DESK_1
+    private var deskPosePath: String = SpriteAssets.WORK_DESK_0
 
     fun setDeskPose(path: String) {
         deskPosePath = path

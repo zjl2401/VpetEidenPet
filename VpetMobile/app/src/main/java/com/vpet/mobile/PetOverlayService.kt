@@ -30,6 +30,10 @@ class PetOverlayService : Service() {
         const val ACTION_STOP = "com.vpet.mobile.STOP_OVERLAY"
         const val ACTION_RESIZE = "com.vpet.mobile.RESIZE_OVERLAY"
         const val ACTION_APPLY_FONT = "com.vpet.mobile.APPLY_FONT"
+        const val ACTION_HIDE_SPEECH = "com.vpet.mobile.HIDE_SPEECH"
+        const val ACTION_RELOAD_SPRITES = "com.vpet.mobile.RELOAD_SPRITES"
+        const val ACTION_SYNC_TIMERS = "com.vpet.mobile.SYNC_TIMERS"
+        const val ACTION_APPLY_MUSIC_VOL = "com.vpet.mobile.APPLY_MUSIC_VOL"
         const val ACTION_OPEN_MENU = "com.vpet.mobile.OPEN_MENU"
         const val ACTION_FEED = "com.vpet.mobile.FEED_PET"
         const val ACTION_FEED_DRAG = "com.vpet.mobile.FEED_DRAG"
@@ -80,6 +84,18 @@ class PetOverlayService : Service() {
             ACTION_APPLY_FONT -> {
                 hub?.applyFontScaleToOverlay()
                 menuPanel?.refreshFonts()
+            }
+            ACTION_HIDE_SPEECH -> {
+                hub?.hideSpeechBubble()
+            }
+            ACTION_RELOAD_SPRITES -> {
+                hub?.reloadSpritesFromPrefs()
+            }
+            ACTION_SYNC_TIMERS -> {
+                hub?.syncAutoTimersFromPrefs()
+            }
+            ACTION_APPLY_MUSIC_VOL -> {
+                hub?.applyMusicVolumeFromPrefs()
             }
             ACTION_OPEN_MENU -> {
                 if (binding == null) {

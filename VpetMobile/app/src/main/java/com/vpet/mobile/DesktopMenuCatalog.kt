@@ -110,7 +110,7 @@ object DesktopMenuCatalog {
                                 Item("tool_pomo_end", "结束", Status.READY),
                             ),
                         ),
-                        Item("tool_schedule", "日程", Status.READY),
+                        Item("tool_weather", "天气", Status.READY),
                         Item(
                             "tool_birthday", "生日 ▶", Status.READY,
                             listOf(Item("tool_bday_set", "设定", Status.READY)),

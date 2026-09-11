@@ -14,7 +14,7 @@ import java.io.IOException
  */
 class VoicePlayer(private val context: Context) {
     companion object {
-        const val VOICE_GLOBAL_COOLDOWN_MS = 10_000L
+        const val VOICE_GLOBAL_COOLDOWN_MS = 30_000L
         val FORCE_CATEGORIES = setOf(
             "hi", "你好", "call", "kick", "eat", "sleep", "work", "dizzy", "yuqi", "end", "hurt", "hungry",
         )

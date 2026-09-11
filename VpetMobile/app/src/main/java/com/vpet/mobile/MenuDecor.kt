@@ -89,9 +89,94 @@ object MenuDecor {
         val key = label to sizePx
         glyphCache[key]?.let { return it }
         val seed = label.hashCode() and 0xFFFF
-        val img = makeGlyph8(seed)
+        val img = toolGlyph8(label) ?: makeGlyph8(seed)
         val out = Bitmap.createScaledBitmap(img, sizePx, sizePx, false)
         glyphCache[key] = out
+        return out
+    }
+
+    /** 时间工具等专用像素图标（对照桌面工具菜单辨识度）。 */
+    private fun toolGlyph8(label: String): Bitmap? {
+        val key = label.trim().trimStart('✓', '　', ' ').removeSuffix(" ▶")
+        val pts: List<Triple<Int, Int, Int>> = when {
+            key.contains("秒表") || key == "秒表" -> clockPts(THEME_PINK)
+            key.contains("计时") -> clockPts(THEME_BLUE)
+            key.contains("番茄") -> tomatoPts()
+            key.contains("日程") -> calendarPts()
+            key.contains("天气") -> sunPts()
+            key.contains("生日") -> cakePts()
+            else -> return null
+        }
+        return raster8(pts)
+    }
+
+    private fun clockPts(col: Int): List<Triple<Int, Int, Int>> {
+        val ring = listOf(
+            3 to 1, 4 to 1, 2 to 2, 5 to 2, 1 to 3, 6 to 3, 1 to 4, 6 to 4, 2 to 5, 5 to 5, 3 to 6, 4 to 6,
+        )
+        return ring.map { Triple(it.first, it.second, col) } +
+            listOf(Triple(3, 3, THEME_BLACK), Triple(3, 4, THEME_BLACK), Triple(4, 3, THEME_BLACK))
+    }
+
+    private fun tomatoPts(): List<Triple<Int, Int, Int>> {
+        val body = listOf(
+            2 to 3, 3 to 3, 4 to 3, 5 to 3,
+            1 to 4, 2 to 4, 3 to 4, 4 to 4, 5 to 4, 6 to 4,
+            1 to 5, 2 to 5, 3 to 5, 4 to 5, 5 to 5, 6 to 5,
+            2 to 6, 3 to 6, 4 to 6, 5 to 6,
+        )
+        return body.map { Triple(it.first, it.second, THEME_PINK) } +
+            listOf(Triple(3, 2, THEME_GREEN), Triple(4, 2, THEME_GREEN), Triple(3, 1, THEME_GREEN))
+    }
+
+    private fun calendarPts(): List<Triple<Int, Int, Int>> {
+        val frame = mutableListOf<Triple<Int, Int, Int>>()
+        for (x in 1..6) frame += Triple(x, 1, THEME_BLUE)
+        for (y in 2..6) {
+            frame += Triple(1, y, THEME_BLUE)
+            frame += Triple(6, y, THEME_BLUE)
+        }
+        for (x in 1..6) frame += Triple(x, 6, THEME_BLUE)
+        frame += Triple(2, 3, THEME_PINK)
+        frame += Triple(4, 3, THEME_ORANGE)
+        frame += Triple(3, 5, THEME_YELLOW)
+        return frame
+    }
+
+    private fun sunPts(): List<Triple<Int, Int, Int>> {
+        val core = listOf(3 to 3, 4 to 3, 3 to 4, 4 to 4)
+        val rays = listOf(3 to 1, 4 to 1, 1 to 3, 6 to 3, 1 to 4, 6 to 4, 3 to 6, 4 to 6)
+        return core.map { Triple(it.first, it.second, THEME_YELLOW) } +
+            rays.map { Triple(it.first, it.second, THEME_ORANGE) }
+    }
+
+    private fun cakePts(): List<Triple<Int, Int, Int>> {
+        val base = listOf(
+            2 to 5, 3 to 5, 4 to 5, 5 to 5,
+            1 to 6, 2 to 6, 3 to 6, 4 to 6, 5 to 6, 6 to 6,
+        )
+        return base.map { Triple(it.first, it.second, THEME_PINK) } +
+            listOf(Triple(3, 3, THEME_YELLOW), Triple(3, 4, THEME_BLUE), Triple(4, 4, THEME_BLUE))
+    }
+
+    private fun raster8(pts: List<Triple<Int, Int, Int>>): Bitmap {
+        val base = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)
+        for ((x, y, col) in pts) {
+            if (x in 0 until 8 && y in 0 until 8) base.setPixel(x, y, col)
+        }
+        val out = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)
+        for (y in 0 until 8) for (x in 0 until 8) {
+            val p = base.getPixel(x, y)
+            if (Color.alpha(p) == 0) continue
+            for ((dx, dy) in listOf(-1 to 0, 1 to 0, 0 to -1, 0 to 1)) {
+                val nx = x + dx
+                val ny = y + dy
+                if (nx in 0 until 8 && ny in 0 until 8 && Color.alpha(base.getPixel(nx, ny)) == 0) {
+                    out.setPixel(nx, ny, Color.argb(180, 156, 47, 85))
+                }
+            }
+            out.setPixel(x, y, p)
+        }
         return out
     }
 

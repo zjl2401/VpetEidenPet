@@ -1,4 +1,4 @@
-# Package Vpet to release\Vpet, clean old builds, create optional desktop shortcut
+﻿# Package Vpet to release\Vpet, clean old builds, create optional desktop shortcut
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File .\package_release.ps1
 #   powershell -ExecutionPolicy Bypass -File .\package_release.ps1 -Shortcut
@@ -132,14 +132,21 @@ $utf8Bom = New-Object System.Text.UTF8Encoding $true
 
 Write-Host "== desktop shortcut ==" -ForegroundColor Cyan
 if ($Shortcut) {
-    $exe = Join-Path $OutDir "Vpet.exe"
-    $wsh = New-Object -ComObject WScript.Shell
-    $sc = $wsh.CreateShortcut($DesktopLnk)
-    $sc.TargetPath = $exe
-    $sc.WorkingDirectory = $OutDir
-    $sc.IconLocation = ($exe + ",0")
-    $sc.Description = "Vpet Eiden"
-    $sc.Save()
+    # 始终指向源码工程启动脚本（勿指苍叶 Desktop\Vpet）
+    python -c "from make_app_icons import create_desktop_shortcut; create_desktop_shortcut()"
+    if ($LASTEXITCODE -ne 0) {
+        $bat = Join-Path $Root ([char]0x542F + [char]0x52A8 + " Vpet.bat")
+        if (-not (Test-Path $bat)) { $bat = Join-Path $Root "vpet_app.py" }
+        $ico = Join-Path $Root "app_icon.ico"
+        $wsh = New-Object -ComObject WScript.Shell
+        $sc = $wsh.CreateShortcut($DesktopLnk)
+        $sc.TargetPath = $bat
+        $sc.WorkingDirectory = $Root
+        $sc.Arguments = ""
+        if (Test-Path $ico) { $sc.IconLocation = ($ico + ",0") }
+        $sc.Description = "Vpet Eiden (VpetEidenPet)"
+        $sc.Save()
+    }
     Write-Host ("Shortcut: " + $DesktopLnk) -ForegroundColor Green
 } else {
     Write-Host "skip desktop shortcut (pass -Shortcut to create)" -ForegroundColor Yellow
