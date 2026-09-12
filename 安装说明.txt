@@ -153,7 +153,7 @@ A：托盘图标右键 → 退出启动器；或快捷键 Ctrl+Alt+Q（另支持
 正版与链接：
 - 官网：https://nucarnival.com/zh-CN/
 - EROLABS：https://www.ero-labs.com/zh/game.html?id=24
-- 源码 / 反馈：https://github.com/zjl2401/VpetAOBA
+- 源码 / 反馈：https://github.com/zjl2401/VpetEidenPet
 - 开发者：翛然而往
 
 感谢游玩，祝游玩愉快～

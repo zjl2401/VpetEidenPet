@@ -105,7 +105,7 @@ Vpet/
 
 ## 源码与反馈
 
-- GitHub：https://github.com/zjl2401/VpetAOBA  
+- GitHub：https://github.com/zjl2401/VpetEidenPet  
 - 开发者：翛然而往  
 
 ## 开发者打包

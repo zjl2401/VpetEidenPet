@@ -173,6 +173,29 @@ def _builtin_hat_sleep(put) -> None:
     put(5, 0, 1)
 
 
+def _builtin_beanie(put) -> None:
+    # 针织帽：圆顶 + 翻边 + 顶球（对齐苍叶）
+    put(5, 0, 1)
+    put(6, 0, 1)
+    for x in range(3, 9):
+        put(x, 1, 6)
+        put(x, 2, 6)
+        put(x, 3, 6)
+    for x in range(2, 10):
+        put(x, 4, 5)
+
+
+def _builtin_beret(put) -> None:
+    # 贝雷：扁圆斜戴（对齐苍叶）
+    for x in range(2, 10):
+        put(x, 2, 8)
+    for x in range(1, 10):
+        put(x, 3, 8)
+    for x in range(3, 9):
+        put(x, 4, 7)
+    put(1, 4, 7)
+
+
 def _builtin_glasses_thick(put) -> None:
     _fill_rect(put, 1, 4, 4, 7, 7)
     _fill_rect(put, 7, 4, 10, 7, 7)
@@ -212,6 +235,42 @@ def _builtin_glasses_gold(put) -> None:
     put(9, 6, 13)
     put(5, 5, 13)
     put(6, 5, 13)
+
+
+def _builtin_thin_round(put) -> None:
+    # 细圆框：中间透明（对齐苍叶）
+    for x, y in (
+        (2, 4), (3, 4), (1, 5), (4, 5), (1, 6), (4, 6), (2, 7), (3, 7),
+        (7, 4), (8, 4), (6, 5), (9, 5), (6, 6), (9, 6), (7, 7), (8, 7),
+    ):
+        put(x, y, 13)
+    put(5, 5, 13)
+    put(5, 6, 13)
+
+
+def _builtin_thin_oval(put) -> None:
+    # 细椭圆框（对齐苍叶）
+    for x, y in (
+        (1, 5), (2, 4), (3, 4), (4, 5), (4, 6), (3, 7), (2, 7), (1, 6),
+        (7, 5), (8, 4), (9, 4), (10, 5), (10, 6), (9, 7), (8, 7), (7, 6),
+    ):
+        put(x, y, 13)
+    put(5, 5, 13)
+    put(6, 5, 13)
+
+
+def _builtin_half_rim(put) -> None:
+    # 半框：上沿与鼻梁，中间透明（对齐苍叶）
+    for x in range(1, 5):
+        put(x, 4, 13)
+    for x in range(7, 11):
+        put(x, 4, 13)
+    put(1, 5, 13)
+    put(4, 5, 13)
+    put(7, 5, 13)
+    put(10, 5, 13)
+    put(5, 4, 13)
+    put(6, 4, 13)
 
 
 def _builtin_glasses_square(put) -> None:
@@ -418,10 +477,15 @@ BUILTIN_CATALOG: tuple[dict, ...] = (
     _entry("hat_winter", "冬帽", _builtin_hat_winter, group="帽子", ny=-0.44, scale=0.34),
     _entry("hat_cap", "鸭舌帽", _builtin_hat_cap, group="帽子", ny=-0.42, scale=0.34),
     _entry("hat_sleep", "睡帽", _builtin_hat_sleep, group="帽子", ny=-0.46, scale=0.32),
+    _entry("beanie", "针织帽", _builtin_beanie, group="帽子", ny=-0.48, scale=0.30),
+    _entry("beret", "贝雷", _builtin_beret, group="帽子", nx=-0.04, ny=-0.46, scale=0.28),
     # —— 眼镜 ——
     _entry("glasses_thick", "粗框眼镜", _builtin_glasses_thick, group="眼镜", ny=-0.16, scale=0.30),
     _entry("glasses_thin", "细框眼镜", _builtin_glasses_thin, group="眼镜", ny=-0.16, scale=0.28),
     _entry("glasses_gold", "金丝边", _builtin_glasses_gold, group="眼镜", ny=-0.16, scale=0.28),
+    _entry("thin_round", "细圆框", _builtin_thin_round, group="眼镜", ny=-0.22, scale=0.26),
+    _entry("thin_oval", "细椭圆", _builtin_thin_oval, group="眼镜", ny=-0.22, scale=0.26),
+    _entry("half_rim", "半框", _builtin_half_rim, group="眼镜", ny=-0.22, scale=0.26),
     _entry("glasses_square", "方框眼镜", _builtin_glasses_square, group="眼镜", ny=-0.16, scale=0.30),
     _entry("glasses_round", "圆框眼镜", _builtin_glasses_round, group="眼镜", ny=-0.16, scale=0.30),
     _entry("glasses_odd", "异形眼镜", _builtin_glasses_odd, group="眼镜", ny=-0.16, scale=0.30),

@@ -13,6 +13,10 @@ import android.os.Looper
  */
 class MusicPlayer(private val context: Context) {
     private var player: MediaPlayer? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var fadeRunnable: Runnable? = null
+    private var fadeTarget: Float? = null
+
     var playing = false
         private set
 
@@ -38,12 +42,12 @@ class MusicPlayer(private val context: Context) {
                 }
                 prepare()
                 isLooping = true
-                val vol = AppDataStore.musicVolumeF(context)
-                setVolume(vol, vol)
+                setVolume(0f, 0f)
                 start()
             }
             player = mp
             playing = true
+            beginFadeIn(AppDataStore.musicVolumeF(context))
         } catch (e: Exception) {
             playing = false
             onError(e.message ?: "无法播放")
@@ -73,8 +77,7 @@ class MusicPlayer(private val context: Context) {
                 }
                 prepare()
                 isLooping = loop
-                val vol = AppDataStore.musicVolumeF(context)
-                setVolume(vol, vol)
+                setVolume(0f, 0f)
                 start()
             }
             try {
@@ -83,6 +86,7 @@ class MusicPlayer(private val context: Context) {
             }
             player = mp
             playing = true
+            beginFadeIn(AppDataStore.musicVolumeF(context))
         } catch (e: Exception) {
             playing = false
             onError(e.message ?: "无法播放")
@@ -90,6 +94,7 @@ class MusicPlayer(private val context: Context) {
     }
 
     fun stop() {
+        cancelFade()
         try {
             player?.stop()
         } catch (_: Exception) {
@@ -103,12 +108,71 @@ class MusicPlayer(private val context: Context) {
     }
 
     fun applyVolumeFromPrefs() {
-        val mp = player ?: return
         val vol = AppDataStore.musicVolumeF(context)
+        fadeTarget?.let {
+            fadeTarget = vol
+            return
+        }
+        val mp = player ?: return
         try {
             mp.setVolume(vol, vol)
         } catch (_: Exception) {
         }
+    }
+
+    private fun cancelFade() {
+        fadeRunnable?.let { handler.removeCallbacks(it) }
+        fadeRunnable = null
+        fadeTarget = null
+    }
+
+    private fun beginFadeIn(target: Float, durationMs: Long = 900L) {
+        cancelFade()
+        val mp = player ?: return
+        val tgt = target.coerceIn(0f, 1f)
+        fadeTarget = tgt
+        try {
+            mp.setVolume(0f, 0f)
+        } catch (_: Exception) {
+        }
+        if (tgt <= 0.001f) {
+            fadeTarget = null
+            return
+        }
+        val steps = 18
+        val stepMs = (durationMs / steps).coerceAtLeast(30L)
+        var i = 0
+        val tick = object : Runnable {
+            override fun run() {
+                fadeRunnable = null
+                val cur = player ?: run {
+                    fadeTarget = null
+                    return
+                }
+                val goal = (fadeTarget ?: tgt).coerceIn(0f, 1f)
+                i += 1
+                val t = (i.toFloat() / steps.toFloat()).coerceIn(0f, 1f)
+                val ease = 1f - (1f - t) * (1f - t)
+                val vol = goal * ease
+                try {
+                    cur.setVolume(vol, vol)
+                } catch (_: Exception) {
+                }
+                if (i < steps) {
+                    fadeRunnable = this
+                    handler.postDelayed(this, stepMs)
+                } else {
+                    fadeTarget = null
+                    val finalVol = AppDataStore.musicVolumeF(context)
+                    try {
+                        cur.setVolume(finalVol, finalVol)
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+        fadeRunnable = tick
+        handler.postDelayed(tick, stepMs)
     }
 }
 

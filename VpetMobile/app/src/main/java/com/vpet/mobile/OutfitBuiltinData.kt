@@ -191,6 +191,30 @@ internal object OutfitBuiltinData {
             }, nx = 0.0f, ny = -0.46f, scale = 0.32f,
         ),
         Entry(
+            "beanie", "针织帽", "帽子",
+            cellsOf { put ->
+                put(5, 0, 1)
+                put(6, 0, 1)
+                for (x in 3 until 9) {
+                    put(x, 1, 6)
+                    put(x, 2, 6)
+                    put(x, 3, 6)
+                }
+                for (x in 2 until 10) {
+                    put(x, 4, 5)
+                }
+            }, nx = 0.0f, ny = -0.48f, scale = 0.30f,
+        ),
+        Entry(
+            "beret", "贝雷", "帽子",
+            cellsOf { put ->
+                for (x in 2 until 10) put(x, 2, 8)
+                for (x in 1 until 10) put(x, 3, 8)
+                for (x in 3 until 9) put(x, 4, 7)
+                put(1, 4, 7)
+            }, nx = -0.04f, ny = -0.46f, scale = 0.28f,
+        ),
+        Entry(
             "glasses_thick", "粗框眼镜", "眼镜",
             cellsOf { put ->
                 listOf(
@@ -235,6 +259,41 @@ internal object OutfitBuiltinData {
                     put(x, y, c)
                 }
             }, nx = 0.0f, ny = -0.16f, scale = 0.28f,
+        ),
+        Entry(
+            "thin_round", "细圆框", "眼镜",
+            cellsOf { put ->
+                listOf(
+                    2 to 4, 3 to 4, 1 to 5, 4 to 5, 1 to 6, 4 to 6, 2 to 7, 3 to 7,
+                    7 to 4, 8 to 4, 6 to 5, 9 to 5, 6 to 6, 9 to 6, 7 to 7, 8 to 7,
+                ).forEach { (x, y) -> put(x, y, 13) }
+                put(5, 5, 13)
+                put(5, 6, 13)
+            }, nx = 0.0f, ny = -0.22f, scale = 0.26f,
+        ),
+        Entry(
+            "thin_oval", "细椭圆", "眼镜",
+            cellsOf { put ->
+                listOf(
+                    1 to 5, 2 to 4, 3 to 4, 4 to 5, 4 to 6, 3 to 7, 2 to 7, 1 to 6,
+                    7 to 5, 8 to 4, 9 to 4, 10 to 5, 10 to 6, 9 to 7, 8 to 7, 7 to 6,
+                ).forEach { (x, y) -> put(x, y, 13) }
+                put(5, 5, 13)
+                put(6, 5, 13)
+            }, nx = 0.0f, ny = -0.22f, scale = 0.26f,
+        ),
+        Entry(
+            "half_rim", "半框", "眼镜",
+            cellsOf { put ->
+                for (x in 1 until 5) put(x, 4, 13)
+                for (x in 7 until 11) put(x, 4, 13)
+                put(1, 5, 13)
+                put(4, 5, 13)
+                put(7, 5, 13)
+                put(10, 5, 13)
+                put(5, 4, 13)
+                put(6, 4, 13)
+            }, nx = 0.0f, ny = -0.22f, scale = 0.26f,
         ),
         Entry(
             "glasses_square", "方框眼镜", "眼镜",

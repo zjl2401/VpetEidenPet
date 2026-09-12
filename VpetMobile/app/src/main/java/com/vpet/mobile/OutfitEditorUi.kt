@@ -483,6 +483,41 @@ object OutfitEditorUi {
             }
         })
         actions.addView(Button(themed).apply {
+            text = "保存佩戴"
+            setOnClickListener {
+                // 待添加件一并写入，避免预览有货却存空列表
+                if (pendingLive && pendingKind.isNotBlank() && draft.size < OutfitStore.MAX) {
+                    val d = OutfitStore.newDecor(
+                        pendingKind, pendingRef, pendingNx, pendingNy, scaleFromBar(), rotFromBar(),
+                    )
+                    if (OutfitStore.bitmapFor(context, d, 32) != null) {
+                        draft += d
+                        selectedId = d.id
+                        pendingLive = false
+                        rebuildList()
+                        rebuildPreview()
+                    }
+                }
+                // 「保存佩戴」不得当清空用
+                if (draft.isEmpty() && OutfitStore.load(context).isNotEmpty()) {
+                    Toast.makeText(
+                        context,
+                        "列表为空，已佩戴未改动；要清除请点「清空」",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                    return@setOnClickListener
+                }
+                OutfitStore.save(context, draft)
+                onSaved()
+                Toast.makeText(
+                    context,
+                    if (draft.isEmpty()) "当前无装扮" else "装扮已保存（${draft.size} 件）",
+                    Toast.LENGTH_SHORT,
+                ).show()
+                holder[0]?.dismiss()
+            }
+        })
+        actions.addView(Button(themed).apply {
             text = "清空"
             setOnClickListener {
                 draft.clear()
@@ -495,19 +530,6 @@ object OutfitEditorUi {
                 rebuildList()
                 rebuildPreview()
                 Toast.makeText(context, "已清空装扮", Toast.LENGTH_SHORT).show()
-            }
-        })
-        actions.addView(Button(themed).apply {
-            text = "保存佩戴"
-            setOnClickListener {
-                OutfitStore.save(context, draft)
-                onSaved()
-                Toast.makeText(
-                    context,
-                    if (draft.isEmpty()) "已清空装扮" else "装扮已保存（${draft.size} 件）",
-                    Toast.LENGTH_SHORT,
-                ).show()
-                holder[0]?.dismiss()
             }
         })
         actions.addView(Button(themed).apply {

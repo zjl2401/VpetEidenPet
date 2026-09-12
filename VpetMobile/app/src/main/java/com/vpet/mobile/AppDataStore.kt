@@ -31,8 +31,8 @@ object AppDataStore {
     private const val KEY_FREE_IDLE_SEC = "free_idle_banter_sec"
     private const val KEY_WEATHER_CITY = "weather_city"
 
-    /** 与桌面 FONT_SIZE_PRESETS 对齐：小/中/大/特大（档差拉开，便于肉眼分辨）。 */
-    val FONT_PRESETS = linkedMapOf("小" to 12f, "中" to 14f, "大" to 17f, "特大" to 21f)
+    /** 与桌面 FONT_SIZE_PRESETS 档位对齐：小/中/大/特大（手机 SP 略放大便于触控）。 */
+    val FONT_PRESETS = linkedMapOf("小" to 12f, "中" to 14f, "大" to 16f, "特大" to 18f)
 
     /**
      * Kotlin 的 `TextView.textSize =` 会按 **px** 赋值；字号设置必须走 SP。
