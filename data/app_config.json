@@ -36,7 +36,7 @@
   "voice_interval_ms": 30000,
   "voice_interval_preset": "中长",
   "voice_interval_schema": 3,
-  "last_interact_ts": 1789561803,
+  "last_interact_ts": 1789626194,
   "difficulty_t": 0.5,
   "strip_outer_black": false,
   "sprite_pack": "normal",

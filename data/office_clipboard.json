@@ -1,6 +1,36 @@
 {
   "items": [
     {
+      "id": "c1789626615052",
+      "text": "cd ~/projects/SC-GS\npython train.py -s data/standup -m output/standup \\\n  --eval --is_blender --deform_type node",
+      "ts": 1789626615,
+      "preview": "cd ~/projects/SC-GS python train.py -s data/standup -m output/standup \\   --eval"
+    },
+    {
+      "id": "c1789626597943",
+      "text": "conda activate sc_gs\nexport CUDA_HOME=/usr/local/cuda-12.2\nexport PATH=$CUDA_HOME/bin:$PATH\nexport CUDA_VISIBLE_DEVICES=2\n\ncd ~/projects\nls -lh pytorch3d.zip   # 应约 35M，不是 14\npython3 -c \"import zipfile; zipfile.ZipFile('pytorch3d.zip').extractall('.'); print('ok')\"\nls -d pytorch3d-*\ncd ~/projects/pytorch3d-main\npip install --no-build-isolation .\n\ncd ~/projects/SC-GS/submodules/diff-gaussian-rasterization\npip install --no-build-isolation -e .\n\npython -c \"import torch, pytorch3d.ops; from diff_gaussian_rasterization import GaussianRasterizer; print('all ok', torch.cuda.is_available())\"",
+      "ts": 1789626597,
+      "preview": "conda activate sc_gs export CUDA_HOME=/usr/local/cuda-12.2 export PATH=$CUDA_HOM"
+    },
+    {
+      "id": "c1789626583500",
+      "text": "& \"C:\\Windows\\System32\\OpenSSH\\scp.exe\" $HOME\\Downloads\\pytorch3d.zip jianle@10.132.99.99:~/projects/",
+      "ts": 1789626583,
+      "preview": "& \"C:\\Windows\\System32\\OpenSSH\\scp.exe\" $HOME\\Downloads\\pytorch3d.zip jianle@10."
+    },
+    {
+      "id": "c1789626545203",
+      "text": "    目录: C:\\Users\\36255\\Downloads\\SC-GS-test\\SC-GS-master\n\n\nMode                 LastWriteTime         Length Name\n----                 -------------         ------ ----\n-a----         2025/6/27      3:11           7575 train.py\n\n\n(base) PS C:\\Users\\36255\\Downloads> & \"C:\\Windows\\System32\\OpenSSH\\scp.exe\" $HOME\\Downloads\\SC-GS.zip jianle@10.132.99.99:~/projects/\njianle@10.132.99.99's password:\nPermission denied, please try again.\njianle@10.132.99.99's password:\nSC-GS.zip                                                                             100%   85MB   4.4MB/s   00:19\n(base) PS C:\\Users\\36255\\Downloads> cd $HOME\\Downloads\n(base) PS C:\\Users\\36255\\Downloads> $env:HTTPS_PROXY=\"http://127.0.0.1:10809\"\n(base) PS C:\\Users\\36255\\Downloads> $env:HTTP_PROXY=\"http://127.0.0.1:10809\"\n(base) PS C:\\Users\\36255\\Downloads> curl.exe -L --retry 5 --retry-all-errors -o pytorch3d.zip https://github.com/facebookresearch/pytorch3d/archive/refs/heads/stable.zip\n  % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current\n                                 Dload  Upload  Total   Spent   Left   Speed\n  0      0   0      0   0      0      0      0                              0\n100     14 100     14   0      0     10      0   00:01   00:01              0\n(base) PS C:\\Users\\36255\\Downloads> (Get-Item pytorch3d.zip).Length\n14\n(base) PS C:\\Users\\36255\\Downloads> & \"C:\\Windows\\System32\\OpenSSH\\scp.exe\" $HOME\\Downloads\\pytorch3d.zip jianle@10.132.99.99:~/projects/\njianle@10.132.99.99's password:\npytorch3d.zip                                                                         100%   14     2.0KB/s   00:00\n(base) PS C:\\Users\\36255\\Downloads> cd $HOME\\Downloads\n(base) PS C:\\Users\\36255\\Downloads> $env:HTTPS_PROXY=\"http://127.0.0.1:10809\"\n(base) PS C:\\Users\\36255\\Downloads> $env:HTTP_PROXY=\"http://127.0.0.1:10809\"\n(base) PS C:\\Users\\36255\\Downloads> curl.exe -L --retry 5 --retry-all-errors -o pytorch3d.zip https://github.com/facebookresearch/pytorch3d/archive/refs/heads/stable.zip\n  % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current\n                                 Dload  Upload  Total   Spent   Left   Speed\n  0      0   0      0   0      0      0      0                              0\n100     14 100     14   0      0     11      0   00:01   00:01              0\n(base) PS C:\\Users\\36255\\Downloads> (Get-Item pytorch3d.zip).Length\n14\n(base) PS C:\\Users\\36255\\Downloads> & \"C:\\Windows\\System32\\OpenSSH\\scp.exe\" $HOME\\Downloads\\pytorch3d.zip jianle@10.132.99.99:~/projects/\njianle@10.132.99.99's password:\npytorch3d.zip                                                                         100%   14     1.1KB/s   00:00\n(base) PS C:\\Users\\36255\\Downloads>",
+      "ts": 1789626545,
+      "preview": "    目录: C:\\Users\\36255\\Downloads\\SC-GS-test\\SC-GS-master   Mode                 "
+    },
+    {
+      "id": "c1789625965455",
+      "text": "conda activate sc_gs\nexport CUDA_HOME=/usr/local/cuda-12.2\nexport PATH=$CUDA_HOME/bin:$PATH\nexport CUDA_VISIBLE_DEVICES=2\n\ncd ~/projects\npython3 -c \"import zipfile; zipfile.ZipFile('pytorch3d.zip').extractall('.')\"\nls -d pytorch3d-*\ncd pytorch3d-stable   # 若目录名不同，改成上面 ls 看到的\npip install --no-build-isolation .\n\ncd ~/projects/SC-GS/submodules/diff-gaussian-rasterization && pip install --no-build-isolation -e .\ncd ~/projects/SC-GS/submodules/simple-knn && pip install --no-build-isolation -e .\n\npython -c \"import torch, pytorch3d.ops; from diff_gaussian_rasterization import GaussianRasterizer; print('all ok', torch.cuda.is_available())\"",
+      "ts": 1789625965,
+      "preview": "conda activate sc_gs export CUDA_HOME=/usr/local/cuda-12.2 export PATH=$CUDA_HOM"
+    },
+    {
       "id": "c1789563903463",
       "text": "cd $HOME\\Downloads\n$env:HTTPS_PROXY=\"http://127.0.0.1:10809\"\n$env:HTTP_PROXY=\"http://127.0.0.1:10809\"\ncurl.exe -L --retry 10 -o SC-GS.zip https://github.com/yihua7/SC-GS/archive/refs/heads/master.zip\nGet-Item SC-GS.zip | Select-Object Length",
       "ts": 1789563903,

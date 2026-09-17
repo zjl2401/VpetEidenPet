@@ -1,6 +1,6 @@
 {
   "points": 0.0,
-  "daily_ymd": "2026-09-16",
+  "daily_ymd": "2026-09-17",
   "daily_xp": 0.0,
   "channels_today": {},
   "coexist_scene": "",
@@ -10,18 +10,21 @@
       "code": [],
       "chat": [],
       "office": []
+    },
+    "2026-09-17": {
+      "code": []
     }
   },
   "focus_contract": {
     "active": false,
-    "scene": "",
-    "started_ms": 0,
-    "away_ms": 0,
+    "scene": "code",
+    "started_ms": 1789626110139,
+    "away_ms": 1789626159541,
     "target_sec": 1500
   },
   "quiet_scene_mode": true,
   "focus_nudge_enabled": false,
-  "focus_nudge_ymd": "2026-09-16",
+  "focus_nudge_ymd": "2026-09-17",
   "focus_nudge_count": 0,
   "last_grant_ms": 0,
   "milestones_noted": []

@@ -40,7 +40,7 @@
       "work"
     ],
     "mode_seconds": {
-      "free": 40746.7159999999,
+      "free": 41195.530999999886,
       "follow": 0.0,
       "stroll": 0.0,
       "quiet": 0.0,
@@ -52,7 +52,7 @@
     "sleep_total_seconds": 0.0,
     "music_total_seconds": 134.084,
     "companion_enabled": true,
-    "companion_open_count": 18,
+    "companion_open_count": 22,
     "owner_named": true,
     "gift_ready": false,
     "pixel_gift": false,
