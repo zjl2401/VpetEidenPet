@@ -1,0 +1,14 @@
+{
+  "items": [
+    {
+      "id": "explorer",
+      "title": "资源管理器",
+      "target": "explorer"
+    },
+    {
+      "id": "notepad",
+      "title": "记事本",
+      "target": "notepad"
+    }
+  ]
+}

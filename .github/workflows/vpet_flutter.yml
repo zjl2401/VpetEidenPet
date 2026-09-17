@@ -1,0 +1,71 @@
+name: VpetFlutter CI
+
+on:
+  push:
+    paths:
+      - "VpetFlutter/**"
+      - ".github/workflows/vpet_flutter.yml"
+  pull_request:
+    paths:
+      - "VpetFlutter/**"
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: VpetFlutter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.5"
+          channel: stable
+          cache: true
+      - name: Sync assets
+        run: python tools/sync_assets.py
+      - name: Pub get
+        run: flutter pub get
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+      - name: Build APK
+        run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eiden-android-apk
+          path: VpetFlutter/build/app/outputs/flutter-apk/app-release.apk
+
+  ios:
+    name: iOS (no codesign)
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: VpetFlutter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.5"
+          channel: stable
+          cache: true
+      - name: Sync assets
+        run: python3 tools/sync_assets.py
+      - name: Ensure platform folders
+        run: |
+          if [ ! -f ios/Runner.xcodeproj/project.pbxproj ]; then
+            flutter create --org com.vpet.eiden --project-name vpet_eiden .
+          fi
+      - name: Pub get
+        run: flutter pub get
+      - name: Build iOS (unsigned)
+        run: flutter build ios --release --no-codesign
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eiden-ios-unsigned
+          path: VpetFlutter/build/ios/iphoneos
+          if-no-files-found: warn

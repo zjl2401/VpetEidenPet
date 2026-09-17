@@ -46,6 +46,79 @@ def _show_pet_error(exc: BaseException) -> None:
         pass
 
 
+def _sync_sidecars_from_dev_src() -> None:
+    """开发机：每次启动把 Desktop\\VpetEidenPet 源码拷进 _internal，保证热更不丢。"""
+    try:
+        if getattr(sys, "frozen", False):
+            app_dir = Path(sys.executable).resolve().parent
+            internal = Path(getattr(sys, "_MEIPASS", str(app_dir / "_internal")))
+        else:
+            app_dir = Path(__file__).resolve().parent
+            internal = app_dir
+        src = Path.home() / "Desktop" / "VpetEidenPet"
+        if not (src / "pet.py").is_file():
+            src = Path(r"C:\Users\36255\Desktop\VpetEidenPet")
+        if not (src / "pet.py").is_file():
+            return
+        names = (
+            "pet.py",
+            "vpet_app.py",
+            "vpet_launcher.py",
+            "peer_friendship.py",
+            "pet_outfit.py",
+            "system_media_control.py",
+            "app_scene_desktop.py",
+            "owner_bond.py",
+            "emote_registry.py",
+            "character_profile.py",
+            "companion_quotes.py",
+            "voice_audio.py",
+            "voice_system.py",
+            "panel_decor.py",
+            "home_farm.py",
+            "home_cottage.py",
+            "bundled_paths.py",
+            "media_bundled.py",
+            "office_assist.py",
+        )
+        dests = [internal]
+        # onedir：_MEIPASS 常即 _internal；再兜一份 exe 旁 _internal
+        side = app_dir / "_internal"
+        if side.is_dir() and side.resolve() != internal.resolve():
+            dests.append(side)
+        copied = []
+        for name in names:
+            sp = src / name
+            if not sp.is_file():
+                continue
+            for d in dests:
+                try:
+                    dp = d / name
+                    dp.write_bytes(sp.read_bytes())
+                    copied.append(str(dp))
+                except Exception:
+                    pass
+        try:
+            stamp = internal / "HOT_RELOAD_STAMP.txt"
+            stamp.write_text(
+                f"synced {datetime.now().isoformat(timespec='seconds')} files={len(copied)}\n",
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+        try:
+            log_path = _pet_log_path()
+            with log_path.open("a", encoding="utf-8") as fh:
+                fh.write(
+                    f"\n--- {datetime.now().isoformat(timespec='seconds')} "
+                    f"dev-sync src={src} n={len(copied)} ---\n"
+                )
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def _runtime_module_dirs() -> list[Path]:
     """打包后优先找 _internal / exe 旁的 sidecar .py，便于热更新 pet.py。"""
     dirs: list[Path] = []
@@ -54,6 +127,10 @@ def _runtime_module_dirs() -> list[Path]:
         if meipass:
             dirs.append(Path(meipass))
         dirs.append(Path(sys.executable).resolve().parent)
+        # 明确加入 exe\_internal（有的布局 _MEIPASS 与源码侧车不同步时）
+        internal = Path(sys.executable).resolve().parent / "_internal"
+        if internal.is_dir():
+            dirs.insert(0, internal)
     dirs.append(Path(__file__).resolve().parent)
     out: list[Path] = []
     seen: set[str] = set()
@@ -81,9 +158,21 @@ def _load_sidecar_module(name: str) -> bool:
             mod = importlib.util.module_from_spec(spec)
             sys.modules[name] = mod
             spec.loader.exec_module(mod)
+            try:
+                log_path = _pet_log_path()
+                with log_path.open("a", encoding="utf-8") as fh:
+                    fh.write(
+                        f"\n--- {datetime.now().isoformat(timespec='seconds')} sidecar {name} <- {path} ---\n"
+                    )
+            except Exception:
+                pass
             return True
-        except Exception:
+        except Exception as exc:
             sys.modules.pop(name, None)
+            try:
+                _log_pet_error(exc)
+            except Exception:
+                pass
             continue
     return False
 
@@ -100,6 +189,10 @@ def _bootstrap_sidecars() -> None:
         "voice_system",
         "pet_id_cloud",
         "app_scene_desktop",
+        "owner_bond",
+        "emote_registry",
+        "character_profile",
+        "companion_quotes",
         "rhythm_chart_editor",
         "friend_talk_anim",
         "friend_crossover",
@@ -124,6 +217,7 @@ def _run_rpg() -> None:
 
 
 def main() -> None:
+    _sync_sidecars_from_dev_src()
     _bootstrap_sidecars()
     # 顶层侧显式引用，避免 PyInstaller 漏打进 pet / 启动器（二者原先在分支内 import）
     import pet  # noqa: F401

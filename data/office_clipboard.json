@@ -1,0 +1,64 @@
+{
+  "items": [
+    {
+      "id": "c1789563903463",
+      "text": "cd $HOME\\Downloads\n$env:HTTPS_PROXY=\"http://127.0.0.1:10809\"\n$env:HTTP_PROXY=\"http://127.0.0.1:10809\"\ncurl.exe -L --retry 10 -o SC-GS.zip https://github.com/yihua7/SC-GS/archive/refs/heads/master.zip\nGet-Item SC-GS.zip | Select-Object Length",
+      "ts": 1789563903,
+      "preview": "cd $HOME\\Downloads $env:HTTPS_PROXY=\"http://127.0.0.1:10809\" $env:HTTP_PROXY=\"ht"
+    },
+    {
+      "id": "c1789563849425",
+      "text": "Windows PowerShell\nCopyright (C) Microsoft Corporation. All rights reserved.\n\nno change     C:\\Users\\36255\\miniconda3\\Scripts\\conda.exe\nno change     C:\\Users\\36255\\miniconda3\\Scripts\\conda-env.exe\nno change     C:\\Users\\36255\\miniconda3\\Scripts\\conda-script.py\nno change     C:\\Users\\36255\\miniconda3\\Scripts\\conda-env-script.py\nno change     C:\\Users\\36255\\miniconda3\\condabin\\conda.bat\nno change     C:\\Users\\36255\\miniconda3\\Library\\bin\\conda.bat\nno change     C:\\Users\\36255\\miniconda3\\condabin\\_conda_activate.bat\nno change     C:\\Users\\36255\\miniconda3\\condabin\\rename_tmp.bat\nno change     C:\\Users\\36255\\miniconda3\\condabin\\conda_auto_activate.bat\nno change     C:\\Users\\36255\\miniconda3\\condabin\\conda_hook.bat\nno change     C:\\Users\\36255\\miniconda3\\Scripts\\activate.bat\nno change     C:\\Users\\36255\\miniconda3\\condabin\\activate.bat\nno change     C:\\Users\\36255\\miniconda3\\condabin\\deactivate.bat\nno change     C:\\Users\\36255\\miniconda3\\Scripts\\activate\nno change     C:\\Users\\36255\\miniconda3\\Scripts\\deactivate\nno change     C:\\Users\\36255\\miniconda3\\etc\\profile.d\\conda.sh\nno change     C:\\Users\\36255\\miniconda3\\etc\\fish\\conf.d\\conda.fish\nno change     C:\\Users\\36255\\miniconda3\\shell\\condabin\\Conda.psm1\nno change     C:\\Users\\36255\\miniconda3\\shell\\condabin\\conda-hook.ps1\nno change     C:\\Users\\36255\\miniconda3\\Lib\\site-packages\\xontrib\\conda.xsh\nno change     C:\\Users\\36255\\miniconda3\\etc\\profile.d\\conda.csh\nno change     C:\\Users\\36255\\Documents\\WindowsPowerShell\\profile.ps1\nNo action taken.\n加载个人及系统配置文件用了 4820 毫秒。\n(base) PS C:\\Users\\36255> cd $HOME\\Downloads\n(base) PS C:\\Users\\36255\\Downloads> curl.exe -L --retry 10 --retry-all-errors -o SC-GS.zip https://github.com/yihua7/SC-GS/archive/refs/heads/master.zip\ncurl: (28) Failed to connect to github.com:443 after 21071 ms: Could not connect to server\nWarning: Problem : timeout. Retrying in 1 second. 10 retries left.\ncurl: (28) Failed to connect to github.com:443 after 21033 ms: Could not connect to server\nWarning: Problem : timeout. Retrying in 2 seconds. 9 retries left.\ncurl: (28) Failed to connect to github.com:443 after 21045 ms: Could not connect to server\nWarning: Problem : timeout. Retrying in 4 seconds. 8 retries left.\ncurl: (28) Failed to connect to github.com:443 after 21078 ms: Could not connect to server\nWarning: Problem : timeout. Retrying in 8 seconds. 7 retries left.\ncurl: (28) Failed to connect to github.com:443 after 21046 ms: Could not connect to server\nWarning: Problem : timeout. Retrying in 16 seconds. 6 retries left.\n",
+      "ts": 1789563849,
+      "preview": "Windows PowerShell Copyright (C) Microsoft Corporation. All rights reserved.  no"
+    },
+    {
+      "id": "c1789563699972",
+      "text": "cd $HOME\\Downloads\ncurl.exe -L --retry 10 --retry-all-errors -o SC-GS.zip https://github.com/yihua7/SC-GS/archive/refs/heads/master.zip\nGet-Item SC-GS.zip | Select-Object Length\nExpand-Archive -Path SC-GS.zip -DestinationPath .\\SC-GS-test -Force\ndir .\\SC-GS-test",
+      "ts": 1789563699,
+      "preview": "cd $HOME\\Downloads curl.exe -L --retry 10 --retry-all-errors -o SC-GS.zip https:"
+    },
+    {
+      "id": "c1789563637828",
+      "text": "Length: unspecified [application/zip]\nSaving to: ‘SC-GS.zip’\n\nSC-GS.zip                         [   <=>                                            ]   9.44M  16.5KB/s               ^SC-GS.zip                         [                              <=>                 ]  12.97M  11.7KB/s    in 16m 15s\n\n2026-09-16 20:49:22 (13.6 KB/s) - ‘SC-GS.zip’ saved [13603919]\n\nArchive:  SC-GS.zip\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of SC-GS.zip or\n        SC-GS.zip.zip, and cannot find SC-GS.zip.ZIP, period.\n(sc_gs) jianle@lab3:~/projects$ cd $HOME\\Downloads\ncurl.exe -L --retry 10 --retry-all-errors -o SC-GS.zip https://github.com/yihua7/SC-GS/archive/refs/heads/master.zip\n\n# 检查大小（完整包大约几十 MB，且能打开）\nGet-Item SC-GS.zip | Select-Object Length\nExpand-Archive -Path SC-GS.zip -DestinationPath .\\SC-GS-test -Force\ndir .\\SC-GS-test\n-bash: cd: /home/jianleDownloads: No such file or directory\ncurl.exe: command not found\nGet-Item: command not found\nSelect-Object: command not found\nExpand-Archive: command not found\ndir: cannot access '.SC-GS-test': No such file or directory\n(sc_gs) jianle@lab3:~/projects$",
+      "ts": 1789563637,
+      "preview": "Length: unspecified [application/zip] Saving to: ‘SC-GS.zip’  SC-GS.zip         "
+    },
+    {
+      "id": "c1789563476660",
+      "text": "cd $HOME\\Downloads\ncurl.exe -L --retry 10 --retry-all-errors -o SC-GS.zip https://github.com/yihua7/SC-GS/archive/refs/heads/master.zip\n\n# 检查大小（完整包大约几十 MB，且能打开）\nGet-Item SC-GS.zip | Select-Object Length\nExpand-Archive -Path SC-GS.zip -DestinationPath .\\SC-GS-test -Force\ndir .\\SC-GS-test",
+      "ts": 1789563476,
+      "preview": "cd $HOME\\Downloads curl.exe -L --retry 10 --retry-all-errors -o SC-GS.zip https:"
+    },
+    {
+      "id": "c1789563365877",
+      "text": "rm -rf SC-GS SC-GS-master SC-GS-main\n\n# 断点续传 + 失败重试\nwget -c --tries=0 --timeout=30 --read-timeout=60 \\\n  -O SC-GS.zip \\\n  https://codeload.github.com/yihua7/SC-GS/zip/refs/heads/master\n\n# 下完先检查是不是完整 zip\nunzip -t SC-GS.zip\n--2026-09-16 20:33:05--  https://codeload.github.com/yihua7/SC-GS/zip/refs/heads/master\nResolving codeload.github.com (codeload.github.com)... 20.205.243.165\nConnecting to codeload.github.com (codeload.github.com)|20.205.243.165|:443... connected.\nHTTP request sent, awaiting response... 200 OK\nLength: unspecified [application/zip]\nSaving to: ‘SC-GS.zip’\n\nSC-GS.zip                         [   <=>                                            ]   9.44M  16.5KB/s               ^SC-GS.zip                         [                              <=>                 ]  12.97M  11.7KB/s    in 16m 15s\n\n2026-09-16 20:49:22 (13.6 KB/s) - ‘SC-GS.zip’ saved [13603919]\n\nArchive:  SC-GS.zip\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of SC-GS.zip or\n        SC-GS.zip.zip, and cannot find SC-GS.zip.ZIP, period.\n(sc_gs) jianle@lab3:~/projects$",
+      "ts": 1789563365,
+      "preview": "rm -rf SC-GS SC-GS-master SC-GS-main  # 断点续传 + 失败重试 wget -c --tries=0 --timeout="
+    },
+    {
+      "id": "c1789562618333",
+      "text": "cd ~/projects\nrm -f SC-GS.zip\nrm -rf SC-GS SC-GS-master SC-GS-main\n\n# 断点续传 + 失败重试\nwget -c --tries=0 --timeout=30 --read-timeout=60 \\\n  -O SC-GS.zip \\\n  https://codeload.github.com/yihua7/SC-GS/zip/refs/heads/master\n\n# 下完先检查是不是完整 zip\nunzip -t SC-GS.zip",
+      "ts": 1789562618,
+      "preview": "cd ~/projects rm -f SC-GS.zip rm -rf SC-GS SC-GS-master SC-GS-main  # 断点续传 + 失败重"
+    },
+    {
+      "id": "c1789561873807",
+      "text": "--2026-09-16 19:52:00--  https://codeload.github.com/yihua7/SC-GS/zip/refs/heads/master\nResolving codeload.github.com (codeload.github.com)... 20.205.243.165\nConnecting to codeload.github.com (codeload.github.com)|20.205.243.165|:443... connected.\nHTTP request sent, awaiting response... 200 OK\nLength: unspecified [application/zip]\nSaving to: ‘SC-GS.zip’\n\nSC-GS.zip                         [                          <=>                     ]  10.43M  37.6KB/s               ^SC-GS.zip                         [                         <=>                      ]  10.44M  34.4KB/s               ^SC-GS.zip                         [                        <=>                       ]  10.45M  31.6KB/s               ^SC-GS.zip                         [          <=>                                     ]  10.55M  25.5KB/s               ^SC-GS.zip                         [         <=>                                      ]  10.56M  25.9KB/s               ^SC-GS.zip                         [                   <=>                            ]  28.76M  26.3KB/s               ^SC-GS.zip                         [                    <=>                           ]  28.76M  25.2KB/s               ^SC-GS.zip                         [                                        <=>       ]  40.34M  30.5KB/s    in 26m 13s\n\n2026-09-16 20:18:14 (26.3 KB/s) - ‘SC-GS.zip’ saved [42304833]\n\nArchive:  SC-GS.zip\n  End-of-central-directory signature not found.  Either this file is not\n  a zipfile, or it constitutes one disk of a multi-part archive.  In the\n  latter case the central directory and zipfile comment will be found on\n  the last disk(s) of this archive.\nunzip:  cannot find zipfile directory in one of SC-GS.zip or\n        SC-GS.zip.zip, and cannot find SC-GS.zip.ZIP, period.\nmv: cannot stat 'SC-GS-main': No such file or directory\n-bash: cd: SC-GS: No such file or directory\nls: cannot access 'train.py': No such file or directory\n(sc_gs) jianle@lab3:~/projects$",
+      "ts": 1789561873,
+      "preview": "--2026-09-16 19:52:00--  https://codeload.github.com/yihua7/SC-GS/zip/refs/heads"
+    },
+    {
+      "id": "c1789561752432",
+      "text": "写代码 / 学习 / 办公 / 聊天",
+      "ts": 1789561752,
+      "preview": "写代码 / 学习 / 办公 / 聊天"
+    },
+    {
+      "id": "c1789555930526",
+      "text": "export CUDA_VISIBLE_DEVICES=2\npython train.py -s data/standup -m output/standup --eval --is_blender",
+      "ts": 1789555930,
+      "preview": "export CUDA_VISIBLE_DEVICES=2 python train.py -s data/standup -m output/standup "
+    }
+  ]
+}

@@ -34,6 +34,17 @@ from datetime import date, datetime
 from pathlib import Path
 from uuid import uuid4
 
+# 启动探针：确认跑的是磁盘源码而非冻结包
+try:
+    _boot = Path.home() / "AppData" / "Local" / "Vpet" / "sidecar_pet_boot.txt"
+    _boot.parent.mkdir(parents=True, exist_ok=True)
+    _boot.write_text(
+        f"{datetime.now().isoformat(timespec='seconds')} file={__file__}\n",
+        encoding="utf-8",
+    )
+except Exception:
+    pass
+
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 
 from bundled_paths import (
@@ -80,6 +91,11 @@ from panel_decor import (
 )
 import peer_friendship
 import friend_talk_anim
+import office_assist
+import owner_bond
+import emote_registry
+import character_profile
+import companion_quotes
 from voice_audio import ensure_voice_wav, voice_cache_path
 from voice_system import (
     VOICE_CHANNEL_ID,
@@ -905,9 +921,37 @@ def _build_music_tracks() -> tuple[dict[str, dict], tuple[str, ...]]:
 
 
 MUSIC_TRACKS, MUSIC_TRACK_ORDER = _build_music_tracks()
+# 曲库里有 BGM008 文件，但任何路径都禁止播放（自动/叠层/手选均不可）
+MUSIC_TRACK_NO_AUTO_PLAY: frozenset[str] = frozenset({"bgm008"})
+
+
+def _music_track_is_blocked(track_id: str) -> bool:
+    """bgm008 等禁用曲：按 id / 标题 / 文件名拦截。"""
+    tid = MUSIC_TRACK_LEGACY_IDS.get(str(track_id or ""), str(track_id or "")).strip().lower()
+    if not tid:
+        return True
+    if tid in MUSIC_TRACK_NO_AUTO_PLAY:
+        return True
+    compact = tid.replace(" ", "").replace("_", "").replace("-", "")
+    if "bgm008" in compact:
+        return True
+    info = MUSIC_TRACKS.get(tid) or {}
+    try:
+        stem = Path(str(info.get("src") or "")).stem.lower()
+    except Exception:
+        stem = ""
+    blob = f"{info.get('title') or ''} {stem}".lower().replace(" ", "")
+    return "bgm008" in blob
+
+
 DEFAULT_MUSIC_TRACK = next(
-    (tid for tid in MUSIC_TRACK_ORDER if MUSIC_TRACKS[tid].get("folder") == MUSIC_CATEGORY_BGM),
-    MUSIC_TRACK_ORDER[0] if MUSIC_TRACK_ORDER else "bgm001",
+    (
+        tid
+        for tid in MUSIC_TRACK_ORDER
+        if MUSIC_TRACKS[tid].get("folder") == MUSIC_CATEGORY_BGM
+        and not _music_track_is_blocked(tid)
+    ),
+    next((t for t in MUSIC_TRACK_ORDER if not _music_track_is_blocked(t)), MUSIC_TRACK_ORDER[0] if MUSIC_TRACK_ORDER else "bgm001"),
 )
 
 # 面板不用素材边框；对话文本框用 Eiden「border」（伊得铭牌米色框）
@@ -929,14 +973,14 @@ SPEECH_TEXT_PAD_X = 18
 SPEECH_TEXT_EDGE_SLACK = 12
 # 文字相对框内再下移一点（视觉居中，避免贴顶）
 SPEECH_TEXT_NUDGE_Y = 4
-# 对话内容区：border 中间已有实色，不再另铺白底
-SPEECH_TEXT_INNER_ALPHA = 0.0
-SPEECH_TEXT_BG = THEME_PANEL_INNER  # 仅扁平框（无 border）仍用
 # 跨宠「话/动」台词：浅青色气泡（对照苍叶浅蓝气泡气质）
 SPEECH_MEET_BUBBLE_FILL = "#D8F5F8"
 SPEECH_MEET_BUBBLE_STROKE = "#A8DCE8"
 SPEECH_MEET_BUBBLE_SHADOW = "#C0E8EE"
 SPEECH_MEET_BUBBLE_FG = "#2a5a68"
+# 对话内容区叠色：alpha=0 → 不叠浅绿/浅青，保留 border 素材自带米色中段（不抠透明）
+SPEECH_TEXT_INNER_ALPHA = 0.0
+SPEECH_TEXT_BG = SPEECH_MEET_BUBBLE_FILL
 # 普通对话微信风气泡（所属人问 / 伊得答）——实心不透明
 CHAT_AVATAR_PX = 40
 CHAT_BUBBLE_MAX_W = 280
@@ -985,7 +1029,7 @@ def _resolve_border_file(stem: str) -> Path | None:
 
 
 def _speech_text_bg_rgba() -> tuple[int, int, int, int]:
-    """对话内容区底色；alpha=0 时完全透出 border 中间实色。"""
+    """对话内容区可选叠色；alpha=0 表示不加浅绿层，也不抠空素材中段。"""
     try:
         hex_s = str(SPEECH_TEXT_BG).strip().lstrip("#")
         r = int(hex_s[0:2], 16)
@@ -1155,8 +1199,8 @@ def _compose_speech_border2(target_w: int, target_h: int) -> Image.Image | None:
     src_w, src_h = base.size
     target_w = max(SPEECH_BORDER2_MIN_W, int(target_w))
     target_h = max(SPEECH_BORDER2_MIN_H, int(target_h))
-    # v3：不再叠白底，透出 border 中间实色
-    key = (3, target_w, target_h)
+    # v6：不叠浅绿；也不抠中段透明（保留素材米色底，避免字边对 magenta 色键泛粉）
+    key = (6, target_w, target_h)
     cached = _SPEECH_BORDER2_COMPOSE_CACHE.get(key)
     if cached is not None:
         return cached
@@ -1182,7 +1226,7 @@ def _compose_speech_border2(target_w: int, target_h: int) -> Image.Image | None:
     out.paste(left_cap, (0, 0), left_cap)
     out.paste(mid, (left_cap.width, 0), mid)
     out.paste(right_cap, (target_w - right_cap.width, 0), right_cap)
-    # border 中间已是实色铭牌底：仅在需要时叠一层（默认透明，不再盖白）
+    # 仅当显式叠色时才盖一层；alpha=0 保留素材中段，绝不抠空
     fill = _speech_text_bg_rgba()
     if fill[3] > 0:
         inner_w = max(1, target_w - left_cap.width - right_cap.width)
@@ -2667,12 +2711,13 @@ BULB_FX_SIZE = 144
 AI_DIALOG_HIDE_MS = 5000
 AI_CHAT_IDLE_MS = 5000
 
-EXPRESSION_BOUNCE_PX = 14
-EXPRESSION_BOUNCE_MS = 100
-EXPRESSION_BOUNCE_GAP_MS = 50  # 多段弹之间的落地停顿
-# 表情弹动次数：开心/伤心/生气=3；无语=0；其余表情=1
+EXPRESSION_BOUNCE_PX = 18
+EXPRESSION_BOUNCE_MS = 160
+EXPRESSION_BOUNCE_GAP_MS = 70  # 多段弹之间的落地停顿
+# 开心/伤心/生气=3（开心另走 happy_bounce）；其余表情一律弹 1 下
 EXPRESSION_BOUNCE_TRIPLE = frozenset({"happy", "sad", "angry"})
-EXPRESSION_BOUNCE_SKIP = frozenset({"speechless"})  # 无语：不弹
+EXPRESSION_BOUNCE_SKIP = frozenset()
+
 KICK_BOUNCE_PX = 18
 KICK_BOUNCE_MS = 100
 KICK_BOUNCE_TIMES = 2  # 侧踢上下弹两下
@@ -2813,7 +2858,7 @@ PERSONA_SPRITE_BATCH_MS = 10
 UI_BUSY_LAG_THRESHOLD_MS = 800
 IDLE_WATCHDOG_MS = 5000
 # 代码修订号：右键菜单会短暂提示，用于确认是否加载到新 pet.py
-CODE_REV = "eiden-sfx-voice-20260903"
+CODE_REV = "eiden-srcpy-20260912"
 # 站立过久（含 idle 定时器丢了/幽灵菜单）强制重排走动
 STAND_STUCK_FORCE_MS = 12_000
 STAND_IDLE_OVERDUE_MS = 4_000
@@ -2885,12 +2930,13 @@ FAULT_ALERT_MESSAGES = ()  # 电脑版故障窗不再显示文字
 GAME_BGM_GATHER = "bgm001"
 GAME_BGM_QTE = "bgm002"
 GAME_BGM_QTE_ALERT = "bgm003"
-GAME_BGM_CHEST_WAIT = "bgm008"
+# bgm008 不作为任何场景配乐（勿自动切歌）
+GAME_BGM_CHEST_WAIT = ""
 GAME_BGM_RHYTHM_SELECT = "bgm001"  # 选曲/时长等待：不播（见 BLOCKED）
 GAME_BGM_PRESET_DIALOG = "bgm010"  # 普通对话
 GAME_BGM_HOME_DAY = "bgm007"  # 家园白天（含黎明）
 GAME_BGM_HOME_NIGHT = "bgm009"  # 家园夜晚（含黄昏）
-GAME_BGM_RHYTHM_WIN = "bgm004"  # 音游胜利庆功一小段
+GAME_BGM_RHYTHM_WIN = "bgm004"  # 游戏胜利庆功一小段（采集 / 音游等共用；勿用 bgm008）
 GAME_BGM_RHYTHM_WIN_SEC = 6.5
 GAME_BGM_VOCAB = "bgm024"  # 背单词
 GAME_BGM_VOCAB_NOTEBOOK = "bgm012"  # 生词本 / 单词本
@@ -2903,9 +2949,31 @@ GAME_BGM_BIRTHDAY = "bgm022"  # 生日设定 / 赠送礼物
 # 背景配乐起播渐入（音乐模式 / 叠层 BGM / 短庆功曲）
 MUSIC_FADE_IN_MS = 900
 MUSIC_FADE_IN_STEP_MS = 50
+HOT_RELOAD_MARKER = "20260912-srcpy"
+# 音游/音乐选曲：鼠标悬停一会后试听
+MUSIC_PICKER_HOVER_DELAY_MS = 320
+MUSIC_PICKER_PREVIEW_SEC = 8.0
 # 这些场景不叠层配乐（选曲等待静音；其余场景恢复）
 OVERLAY_BGM_BLOCKED_REASONS: frozenset[str] = frozenset({"rhythm_select"})
-# 达成下列成就时发「成就宝箱」；待开箱时播 GAME_BGM_CHEST_WAIT
+# 已指定场景的叠层 BGM：不可被「普通对话 / 待开箱」等低优先级切歌顶掉
+OVERLAY_BGM_PROTECTED_REASONS: frozenset[str] = frozenset(
+    {
+        "outfit",
+        "home",
+        "diary",
+        "phonograph",
+        "gallery",
+        "birthday",
+        "gather",
+        "qte",
+        "typing",
+        "vocab",
+        "vocab_notebook",
+    }
+)
+# 未进入指定模式时不要自动切歌的 reason（普通对话选题等）
+OVERLAY_BGM_NO_AUTO_SWITCH: frozenset[str] = frozenset({"preset_dialog"})
+# 达成下列成就时发「成就宝箱」（不再为此自动配乐）
 ACHIEVEMENT_CHEST_IDS: frozenset[str] = frozenset(
     {
         "gather_pro",
@@ -3080,6 +3148,9 @@ DEMO_ALWAYS_SHOW_GUIDES = False
 APP_CONFIG_FILE = DATA_DIR / "app_config.json"
 PET_PROFILE_FILE = DATA_DIR / "pet_profile.json"
 OWNER_AVATAR_FILE = DATA_DIR / "owner_avatar.png"
+OWNER_BOND_FILE = DATA_DIR / "owner_bond.json"
+ACTIVE_CHARACTER_FILE = DATA_DIR / "active_character.json"
+DATE_SCRIPTS_DIR = DATA_DIR / "date_scripts"
 DIARY_FILE = DATA_DIR / "diary.json"
 DIARY_PAGES_DIR = DATA_DIR / "diary_pages"
 VOCAB_FILE = DATA_DIR / "vocab.json"
@@ -4530,7 +4601,7 @@ GUIDE_TOPICS: dict[str, dict] = {
             "　　眷属：入口保留，尚未开发完全\n"
             "· 互动：动作 / 表情 / 对话 / 工具\n"
             "　　对话：AI 对话（千问；可设性格/语气/口癖；云端 DashScope 或本地 Ollama）/ 普通对话（设定问答）\n"
-            "　　工具：秒表、计时器、番茄钟、日程、天气、生日祝福\n"
+            "　　工具：办公助手（待办/剪贴板/常用语/快捷启动）· 秒表、计时器、番茄钟、日程、天气、生日祝福\n"
             "· 设置里开「时间显示」时，睡眠 / 音乐 / 工作旁会显示秒表或定时；\n"
             "　　关则去掉秒表，音乐仍保留控歌键"
         ),
@@ -4715,7 +4786,7 @@ SELECT_ACTIONS: dict[str, tuple[str, ...]] = {
 SKIP_GREEN_KEY_FILENAMES = frozenset()
 OUTER_LIME_KEY_FILENAMES = frozenset({"yes.jpg", "no.jpg", "box.jpg", "flag.jpg", "shy3.jpg"})
 # 抠绿/预抠后保持原画布布局：不按内容包围盒再裁、不按站立比例二次放大（避免切帧跳动/顶角被裁）
-# 注意：伏案主立绘 1/2/3work 须与 stand 同 reference_scale，勿放入本集合（否则会显小）
+# 注意：伏案主立绘 1/2/3work、打电话 call1/2 须与 stand 同 reference_scale，勿放入本集合（否则会显小）
 KEEP_SOURCE_LAYOUT_FILENAMES = frozenset(
     {
         "work_0.jpg",
@@ -4724,8 +4795,6 @@ KEEP_SOURCE_LAYOUT_FILENAMES = frozenset(
         "work_3.jpg",
         "work_4.jpg",
         "work_5.jpg",
-        "call1.jpg",
-        "call2.jpg",
     }
 )
 
@@ -7935,7 +8004,25 @@ def _build_phonograph_catalog(*, force: bool = False) -> list[dict]:
         )
 
     if VOICE_FEATURE_ENABLED and VOICE_ROOT.exists():
+        # Eiden：互动动作类语音（call/hi/eat/kick 等）为苍叶遗留，留声不列出
+        _skip_voice_cats = frozenset(
+            {
+                "call",
+                "hi",
+                "你好",
+                "eat",
+                "kick",
+                "hungry",
+                "game",
+                "walk",
+                "end",
+                "email",
+            }
+        )
         for clip in iter_all_clips():
+            cat = str(getattr(clip, "category", "") or "").strip().lower()
+            if cat in _skip_voice_cats:
+                continue
             catalog.append(
                 {
                     "id": phonograph_id(clip),
@@ -7955,10 +8042,22 @@ def _build_phonograph_catalog(*, force: bool = False) -> list[dict]:
         category="sfx",
     )
     for tid in MUSIC_TRACK_ORDER:
+        if _music_track_is_blocked(tid):
+            continue
         track = _music_track(tid)
         audio = _peek_music_track_audio(tid)
-        if audio is not None:
-            add_file(f"builtin:music:{tid}", str(track["phonograph"]), audio, category="music")
+        # 始终列入「音乐」分组；源未缓存时播放时再 resolve
+        catalog.append(
+            {
+                "id": f"builtin:music:{tid}",
+                "title": str(track["phonograph"]),
+                "kind": "file",
+                "path": audio,
+                "track_id": tid,
+                "category": "music",
+                "builtin": True,
+            }
+        )
 
     catalog.extend(
         [
@@ -8381,29 +8480,33 @@ def _schedule_matches_today(item: dict, weekday: int) -> bool:
 
 
 def _default_full_music_playlist() -> list[str]:
-    """默认播放列表＝曲库全部（不再默认只塞 radical_mat）。"""
+    """默认播放列表＝曲库可用曲（排除禁止播放的如 bgm008）。"""
     if MUSIC_TRACK_ORDER:
-        return list(MUSIC_TRACK_ORDER)
-    if DEFAULT_MUSIC_TRACK in MUSIC_TRACKS:
+        return [tid for tid in MUSIC_TRACK_ORDER if not _music_track_is_blocked(tid)]
+    if DEFAULT_MUSIC_TRACK in MUSIC_TRACKS and not _music_track_is_blocked(DEFAULT_MUSIC_TRACK):
         return [DEFAULT_MUSIC_TRACK]
     return []
 
 
 def _normalize_music_playlist(raw, *, fallback: str | None = None) -> list[str]:
-    """校验播放列表，至少保留一首有效曲。"""
+    """校验播放列表，至少保留一首有效曲（永不含 bgm008）。"""
     out: list[str] = []
     if isinstance(raw, list):
         for tid in raw:
             tid = MUSIC_TRACK_LEGACY_IDS.get(str(tid), str(tid))
-            if tid in MUSIC_TRACKS and tid not in out:
+            if tid in MUSIC_TRACKS and tid not in out and not _music_track_is_blocked(tid):
                 out.append(tid)
     if not out:
         fb_list = _default_full_music_playlist()
         if fallback:
             fb = MUSIC_TRACK_LEGACY_IDS.get(str(fallback), str(fallback))
-            if fb in MUSIC_TRACKS:
+            if fb in MUSIC_TRACKS and not _music_track_is_blocked(fb):
                 return [fb]
-        return fb_list or ([DEFAULT_MUSIC_TRACK] if DEFAULT_MUSIC_TRACK in MUSIC_TRACKS else [])
+        return fb_list or (
+            [DEFAULT_MUSIC_TRACK]
+            if DEFAULT_MUSIC_TRACK in MUSIC_TRACKS and not _music_track_is_blocked(DEFAULT_MUSIC_TRACK)
+            else []
+        )
     return out
 
 
@@ -12671,6 +12774,14 @@ class DesktopPet:
         self._overlay_bgm_reason: str | None = None
         self._overlay_bgm_track: str | None = None
         self._overlay_bgm_resume: dict | None = None
+        self._overlay_bgm_pending: dict | None = None
+        self._overlay_bgm_started_ms = 0
+        self._overlay_bgm_defer_tok = 0
+        self._overlay_bgm_pos_sec = 0.0
+        self._music_resume_pos_sec = 0.0
+        self._music_resume_track: str | None = None
+        self._music_resume_pending = False
+        self._panel_overlay_bgm_watch_job = None
         self.game_clear_win: tk.Toplevel | None = None
         self.game_clear_canvas: tk.Canvas | None = None
         self.game_clear_job: str | None = None
@@ -12692,7 +12803,7 @@ class DesktopPet:
         self.yesno_reveal_job: str | None = None
         self.music_sprite_mode = False
         self.music_ambient_only = False
-        self.app_scene: str = "none"  # none | game | video | music
+        self.app_scene: str = "none"  # none | game | video | music | code | study | office | chat
         self.app_scene_sig = ""
         self.app_scene_job: str | None = None
         self.app_scene_frame_job: str | None = None
@@ -12708,6 +12819,18 @@ class DesktopPet:
         self.app_scene_slide = 0
         self.app_scene_scroll_px = 0.0
         self._app_scene_photo: ImageTk.PhotoImage | None = None
+        self._bond_light_scene = ""
+        self._bond_light_react_ms = 0
+        self._bond_distract_ms = 0
+        self._owner_bond = owner_bond.load(OWNER_BOND_FILE)
+        self._active_character = character_profile.load_active_character(ACTIVE_CHARACTER_FILE)
+        # 世界掉落金币：完成事件旁弹落 → 桌宠走去拾取
+        self._world_coins: list[dict] = []
+        self._world_coin_job: str | None = None
+        self._world_coin_seek_id: str | None = None
+        self._surprise_session_sec: float = 0.0
+        self._surprise_last_spawn_ms: int = 0
+        self._surprise_last_quote: str = ""
         self._video_variant_pil: list[Image.Image] = []
         self._video_strip_cache: tuple[int, int, Image.Image, int] | None = None  # size, idx, strip, period
         self._video_pet_layer_cache: tuple[str, int, Image.Image] | None = None  # persona, size, layer
@@ -12756,6 +12879,7 @@ class DesktopPet:
             init_mixer=_init_pygame_mixer,
             stop_sfx=self._stop_active_sfx,
             load_catalog=VOICE_FEATURE_ENABLED,
+            on_clip_started=self._keep_overlay_bgm_after_voice,
         )
         if not VOICE_FEATURE_ENABLED:
             self.app_config["voice_mode"] = False
@@ -12940,6 +13064,12 @@ class DesktopPet:
         self._home_desktop_photos: list[ImageTk.PhotoImage] = []
         self._home_tick_job: str | None = None
         self._home_layout: dict | None = None
+        self._home_bgm_mute_flag = False
+        self._home_desktop_mute_lbl: tk.Label | None = None
+        self._home_desktop_mode_lbl: tk.Label | None = None
+        self._home_desktop_invite_lbl: tk.Label | None = None
+        self._home_guest_dir: str = "front"
+        self._home_guest_walk_frame: int = 0
         self._home_brush: str = "plant"
         self._home_canvas: tk.Canvas | None = None
         self._home_desktop_canvas: tk.Canvas | None = None
@@ -13047,6 +13177,23 @@ class DesktopPet:
         self.schedule_win: tk.Toplevel | None = None
         self.triggered_reminders_today: set[str] = set()
         self._reminder_day = ""
+        # 办公助手（离线优先）
+        self.office = office_assist.OfficeStore(DATA_DIR)
+        office_cfg = dict(self.app_config.get("office") or {})
+        office_cfg.setdefault("allow_network", False)
+        office_cfg.setdefault("clipboard_history", True)
+        office_cfg.setdefault("habit_reminders", True)
+        office_cfg.setdefault("sit_minutes", 50)
+        office_cfg.setdefault("water_minutes", 45)
+        self.app_config["office"] = office_cfg
+        self._office_todo_win: tk.Toplevel | None = None
+        self._office_clip_win: tk.Toplevel | None = None
+        self._office_phrase_win: tk.Toplevel | None = None
+        self._office_launch_win: tk.Toplevel | None = None
+        self._office_clip_job: str | None = None
+        self._office_habit_job: str | None = None
+        self._office_last_sit_ms = int(time.time() * 1000)
+        self._office_last_water_ms = int(time.time() * 1000)
         # 桌面秒表 / 计时器
         self._desk_clocks: dict[str, dict] = {}
         self._desk_clock_job: str | None = None
@@ -14105,12 +14252,27 @@ class DesktopPet:
         self._free_walk_wait_tries = 0
         self.mode = "free"
         self.state = "stand"
+        # 启动成功后提示热更标记，确认桌面快捷方式跑的是最新 pet.py
+        try:
+            pet_mod = sys.modules.get("pet")
+            pet_file = str(getattr(pet_mod, "__file__", "") or "")
+            mark = str(globals().get("HOT_RELOAD_MARKER") or CODE_REV)
+            tip = f"热更已加载 · {mark}"
+            if "VpetEidenApp" in pet_file.replace("\\", "/"):
+                tip += " · App"
+            self.root.after(600, lambda t=tip: self._show_toast(t, "#88ffcc", duration_ms=3200))
+        except Exception:
+            pass
         # 刚进自由：先让走路流畅；首次可稍长，之后尽快不挡走动
         thorough = bool(getattr(self, "_startup_thorough_warmup", False))
         self._free_settle_until_ms = int(time.time() * 1000) + (12000 if thorough else 3500)
         self._preload_assets_running = False
         try:
             self._prewarm_free_walk_priority()
+        except Exception:
+            pass
+        try:
+            self.root.after(2500, self._office_start_services)
         except Exception:
             pass
         self._resume_idle()
@@ -15090,47 +15252,26 @@ class DesktopPet:
         )
 
     def _trigger_sleep_banter(self) -> str:
-        # 开语音且有 sleep 资源时强制播（模式睡眠 / 动作睡眠共用）
-        if self._voice_enabled() and self._vpet_voice_category_ready("sleep"):
-            if self._addon_voice_vpet("sleep", chain=False, interrupt_busy=True):
-                return "voice"
+        # Eiden：互动动作无对应语音（目录为 Aoba），只出文本
         self._show_interact_banter_dialog("sleep")
         return "dialog"
 
     def _trigger_kick_banter(self) -> str:
-        # 侧踢专用语音：有 kick 资源时强制播（与 eat/sleep 同源），不与打字框二选一
-        if self._voice_enabled() and self._vpet_voice_category_ready("kick"):
-            if self._addon_voice_vpet("kick", chain=False, interrupt_busy=True):
-                return "voice"
+        # Eiden：互动动作无对应语音，只出文本
         self._show_interact_banter_dialog("kick")
         return "dialog"
 
     def _trigger_eat_banter(self) -> str:
-        # 有 eat 语音时：专用场景，强制播随机 eat（好吃 / 我开动了…），不与打字框二选一
-        # 避免落进「好吃好吃~」打字句时听起来像永远只触发「好吃」
-        if self._voice_enabled() and self._vpet_voice_category_ready("eat"):
-            if self._addon_voice_vpet("eat", chain=False, interrupt_busy=True):
-                return "voice"
+        # Eiden：互动动作无对应语音，只出文本
         self._show_interact_banter_dialog("eat")
         return "dialog"
 
     def _trigger_work_banter(self) -> str:
-        def dialog() -> None:
-            text = random.choice(WORK_MODE_BANTER)
-            self._show_speech_dialog(
-                text, auto_hide_ms=4200, typewriter_ms=TYPEWRITER_MS, use_border5=True
-            )
-
-        # 有 work 资源：强制播工作专用语音
-        if self._voice_enabled() and self._vpet_voice_category_ready("work"):
-            if self._play_scene_voice_vpet(
-                "work", chain=False, ignore_cooldown=True, interrupt_busy=True
-            ):
-                return "voice"
-        try:
-            dialog()
-        except Exception:
-            pass
+        # Eiden：互动动作无对应语音，只出文本
+        text = random.choice(WORK_MODE_BANTER)
+        self._show_speech_dialog(
+            text, auto_hide_ms=4200, typewriter_ms=TYPEWRITER_MS, use_border5=True
+        )
         return "dialog"
 
     def _try_voice_companion_startup(self) -> bool:
@@ -15378,26 +15519,23 @@ class DesktopPet:
         text_x = x0 + pad_x
         text_y = y0 + pad_y + SPEECH_TEXT_NUDGE_Y
         wrap_w = max(80, content_w)
-        if paint_text_on_canvas or label is None or not label.winfo_exists():
-            canvas.create_text(
-                text_x,
-                text_y,
-                text=text,
-                fill=text_fg,
-                font=CUTE_FONT,
-                anchor=tk.NW,
-                width=wrap_w,
-            )
-            return
-        label.config(text=text, fg=text_fg, bg=fill)
-        canvas.create_window(
+        # 色键透明窗上 create_window(Label) 常不可见：文字一律画在 canvas 上
+        self.speech_text_item = canvas.create_text(
             text_x,
             text_y,
-            window=label,
+            text=text,
+            fill=text_fg,
+            font=CUTE_FONT,
             anchor=tk.NW,
-            width=content_w,
-            height=content_h,
+            width=wrap_w,
         )
+        if label is not None:
+            try:
+                if label.winfo_exists():
+                    label.config(text=text, fg=text_fg, bg=fill)
+            except Exception:
+                pass
+        return
 
     def _schedule_voice_subtitle_hide(self, duration_ms: int, *, gen: int | None = None) -> None:
         if self.voice_subtitle_hide_job:
@@ -15422,6 +15560,9 @@ class DesktopPet:
     def _place_voice_subtitle_popup(self, win: tk.Toplevel | None) -> bool:
         """语音标题框：Vpet 在桌宠正下方；Allmate 在智能伴侣正下方；越界夹屏强制显示。"""
         if not win or not win.winfo_exists():
+            return False
+        # 其它文本已出现：立刻停语音框，禁止再定位/显示
+        if self._yield_voice_subtitle_to_other_text():
             return False
         # 已关掉时禁止再 deiconify（跟随 tick 与 hide 竞态会导致气泡「永久留着」）
         if not getattr(self, "_voice_subtitle_active", False):
@@ -15489,15 +15630,45 @@ class DesktopPet:
                 return hit
         return None
 
+    def _other_text_blocks_voice_subtitle(self) -> bool:
+        """语音文本层级最低：任意非语音对话框在场则让路。"""
+        if not (self.speech_dialog and self.speech_dialog.winfo_exists()):
+            return False
+        # speech_dialog 正作为语音框使用时，不算「其它文本」
+        return not bool(getattr(self, "_speech_from_voice", False))
+
+    def _yield_voice_subtitle_to_other_text(self) -> bool:
+        """其它文本触发时立刻收起语音文本框。返回 True 表示已让路。"""
+        if not self._other_text_blocks_voice_subtitle():
+            return False
+        if getattr(self, "_voice_subtitle_active", False) or (
+            self.voice_subtitle_win and self.voice_subtitle_win.winfo_exists()
+        ):
+            self._hide_voice_subtitle()
+        return True
+
+    def _outfit_editor_is_open(self) -> bool:
+        win = getattr(self, "outfit_editor_win", None)
+        try:
+            return bool(win is not None and win.winfo_exists())
+        except Exception:
+            return False
+
     def _show_voice_subtitle(self, title: str, duration_ms: int, source: str = "vpet") -> None:
-        """语音台词文本框：独立扁平窗；时长 = 语音 + 1s。与语音成对，强制显示标题框。"""
+        """语音台词文本框：独立扁平窗；时长 = 语音 + 1s。层级最低，不抢其它文本。"""
         if not self._speech_display_enabled():
+            return
+        # 装扮编辑中：禁止字幕窗（与预览烘烤抢主线程易卡死）
+        if self._outfit_editor_is_open():
             return
         # 相遇模式：不要语音字幕（含普通自由语音）
         if self._in_crossover_meet_mode() or self._meet_priority_active():
             return
-        # 相遇优先：自由语音字幕不得盖住相遇台词（打招呼 hi 等相遇后续仍允许）
-        if self._meet_priority_active() and self.speech_dialog and self.speech_dialog.winfo_exists():
+        # 其它文本在场：不触发语音文本框（也不关掉对方）
+        if self._other_text_blocks_voice_subtitle():
+            return
+        # 已有对话框占用（含 from_voice 路径）：勿再开独立语音窗叠两层
+        if self.speech_dialog and self.speech_dialog.winfo_exists():
             return
         display = (title or "").strip()
         display = re.sub(r"^((?:\d+)|(?:[a-zA-Z]))(?:[\s._\-]+)?", "", display).strip()
@@ -15509,10 +15680,6 @@ class DesktopPet:
         self._voice_subtitle_gen = gen
         self._voice_subtitle_source = str(source or "vpet").lower()
         fg = _speech_fg_for_source(source)
-        # 与普通对话框互斥
-        if self.speech_dialog and self.speech_dialog.winfo_exists():
-            self._speech_from_voice = False
-            self._hide_speech_dialog()
         self._ensure_voice_subtitle_win()
         self._voice_subtitle_active = True
         self._layout_voice_subtitle(display, color=fg)
@@ -16444,7 +16611,9 @@ class DesktopPet:
             self.achievements.setdefault("stats", {})["used_char_filter"] = True
             _save_achievements(self.achievements)
             self._check_achievements(source="filter")
-        if self.bg_music_playing or self.music_sprite_mode:
+        if self.bg_music_playing or (
+            self.music_sprite_mode and not bool(getattr(self, "music_ambient_only", False))
+        ):
             self._stop_bg_music()
             self._start_bg_music()
 
@@ -16730,31 +16899,162 @@ class DesktopPet:
             order[0], order[1] = order[1], order[0]
         self._bg_music_shuffle_bag = order
 
-    def _bg_music_play_track(self, track_id: str, *, single_loop: bool) -> bool:
-        wav = _music_playable_path(track_id)
+    def _music_track_duration_sec(self, track_id: str) -> float:
+        tid = MUSIC_TRACK_LEGACY_IDS.get(str(track_id), str(track_id))
+        if not tid:
+            return 0.0
+        try:
+            wav = _music_playable_path(tid)
+            if wav is None or not Path(wav).is_file():
+                return 0.0
+            ms = int(_get_audio_duration_ms(Path(wav)) or 0)
+            if ms <= 0:
+                ms = int(_get_wav_duration_ms(Path(wav)) or 0)
+            if ms > 500:
+                return float(ms) / 1000.0
+        except Exception:
+            pass
+        return 0.0
+
+    def _normalize_music_pos_sec(self, pos_sec: float, track_id: str | None = None) -> float:
+        sec = max(0.0, float(pos_sec or 0.0))
+        tid = str(track_id or getattr(self, "_music_resume_track", "") or getattr(self, "_overlay_bgm_track", "") or "")
+        dur = self._music_track_duration_sec(tid) if tid else 0.0
+        if dur > 1.5:
+            # 循环曲：get_pos 可能跨圈累加，折回轨内
+            sec = sec % dur
+            # 贴尾则从头，避免 seek 失败
+            if sec > dur - 0.12:
+                sec = 0.0
+        return sec
+
+    def _capture_music_playback_pos(self, *, mark_pending: bool = False) -> float:
+        """记录当前 music 进度；打断前 mark_pending=True，恢复时从断点续。"""
+        tid = str(
+            getattr(self, "_overlay_bgm_track", "")
+            or getattr(self, "_music_resume_track", "")
+            or ""
+        )
+        if not tid and bool(getattr(self, "music_sprite_mode", False)):
+            try:
+                playlist = self._music_playlist()
+                if playlist:
+                    tid = str(playlist[int(getattr(self, "bg_music_play_index", 0) or 0) % len(playlist)])
+            except Exception:
+                tid = ""
+        pos = float(getattr(self, "_music_resume_pos_sec", 0.0) or 0.0)
+        try:
+            import pygame
+
+            if pygame.mixer.get_init():
+                raw = int(pygame.mixer.music.get_pos())
+                if raw >= 0:
+                    pos = self._normalize_music_pos_sec(raw / 1000.0, tid)
+        except Exception:
+            pass
+        self._music_resume_pos_sec = pos
+        if tid:
+            self._music_resume_track = tid
+        if bool(getattr(self, "_overlay_bgm_active", False)) or str(
+            getattr(self, "_overlay_bgm_reason", "") or ""
+        ):
+            self._overlay_bgm_pos_sec = pos
+        if mark_pending and pos >= 0.0:
+            self._music_resume_pending = True
+        return pos
+
+    def _clear_music_resume_pos(self) -> None:
+        self._music_resume_pending = False
+        self._music_resume_pos_sec = 0.0
+        self._overlay_bgm_pos_sec = 0.0
+        self._music_resume_track = None
+
+    def _music_resume_start_for(self, track_id: str, *, consume: bool = True) -> float:
+        """若有同曲断点则返回续播秒数。"""
+        tid = MUSIC_TRACK_LEGACY_IDS.get(str(track_id), str(track_id))
+        saved = str(getattr(self, "_music_resume_track", "") or "")
+        pending = bool(getattr(self, "_music_resume_pending", False))
+        pos = float(getattr(self, "_music_resume_pos_sec", 0.0) or 0.0)
+        if bool(getattr(self, "_overlay_bgm_active", False)) or pending:
+            pos = max(pos, float(getattr(self, "_overlay_bgm_pos_sec", 0.0) or 0.0))
+        if not pending and pos < 0.05:
+            return 0.0
+        if saved and tid and saved != tid:
+            if consume:
+                self._clear_music_resume_pos()
+            return 0.0
+        start = self._normalize_music_pos_sec(pos, tid)
+        if consume and pending:
+            self._music_resume_pending = False
+        return start
+
+    def _bg_music_play_track(
+        self,
+        track_id: str,
+        *,
+        single_loop: bool,
+        force: bool = False,
+        start_sec: float | None = None,
+    ) -> bool:
+        tid = MUSIC_TRACK_LEGACY_IDS.get(str(track_id), str(track_id))
+        if _music_track_is_blocked(tid):
+            return False
+        # 检测听歌/视频/游戏：禁止任何内部曲库出声（装扮/日记窗强制续播除外）
+        if not force:
+            if bool(getattr(self, "music_ambient_only", False)):
+                return False
+            if str(getattr(self, "app_scene", "") or "") in ("game", "video"):
+                return False
+        wav = _music_playable_path(tid)
         if wav is None or not wav.exists():
             return False
         import pygame
 
         _init_pygame_mixer()
         self._cancel_bg_music_fade()
+        # 换曲：清断点；同曲恢复：用打断位置
+        if start_sec is None:
+            start_sec = self._music_resume_start_for(tid, consume=True)
+        else:
+            start_sec = self._normalize_music_pos_sec(float(start_sec), tid)
+            self._music_resume_pending = False
+        prev_tid = str(getattr(self, "_music_resume_track", "") or "")
+        if prev_tid and prev_tid != tid and float(start_sec or 0) < 0.05:
+            self._clear_music_resume_pos()
+            start_sec = 0.0
         pygame.mixer.music.load(str(wav))
         pygame.mixer.music.set_volume(0.0)
-        # 单曲始终循环；多曲「播完一首 → 下一首」，由 watch 衔接，音乐模式不停就不会停
-        pygame.mixer.music.play(-1 if single_loop else 0)
+        loops = -1 if single_loop else 0
+        start = max(0.0, float(start_sec or 0.0))
+        played = False
+        if start > 0.05:
+            try:
+                pygame.mixer.music.play(loops, start=start)
+                played = True
+            except TypeError:
+                played = False
+            except Exception:
+                played = False
+        if not played:
+            pygame.mixer.music.play(loops)
+            start = 0.0
         self.bg_music_playing = True
+        self._music_resume_track = tid
+        self._music_resume_pos_sec = start
+        if bool(getattr(self, "_overlay_bgm_active", False)):
+            self._overlay_bgm_pos_sec = start
         self._begin_bg_music_fade_in()
         # 若正在播源文件，后台慢慢补 cache，下次可走短路径；绝不挡主线程
         try:
-            track = _music_track(track_id)
+            track = _music_track(tid)
             cache = Path(track["cache"])
             src = Path(track["src"])
             if wav.resolve() == src.resolve() and (not cache.is_file()):
-                tid = str(track_id)
+                expected = str(tid)
 
-                def _bg_cache(expected: str = tid) -> None:
+                def _bg_cache(exp: str = expected) -> None:
                     try:
-                        _ensure_music_track_wav(expected)
+                        _ensure_music_track_wav(exp)
                     except Exception:
                         pass
 
@@ -16768,6 +17068,7 @@ class DesktopPet:
         if not playlist:
             return
         self.bg_music_user_paused = False
+        self._clear_music_resume_pos()
         if len(playlist) == 1:
             self.bg_music_play_index = 0
             self._bg_music_play_track(playlist[0], single_loop=True)
@@ -16861,6 +17162,16 @@ class DesktopPet:
     def _bg_music_toggle_pause(self) -> None:
         if not getattr(self, "music_sprite_mode", False):
             return
+        # 环境跟听：只控外部音乐软件，不碰内部 BGM
+        if bool(getattr(self, "music_ambient_only", False)):
+            ok = self._send_external_media_command("play_pause")
+            self._show_toast(
+                "播放/暂停（外部）" if ok else "未能控制外部播放",
+                "#88ccff" if ok else "#ff8866",
+                duration_ms=1200,
+            )
+            self._refresh_music_media_play_btn()
+            return
         try:
             import pygame
 
@@ -16901,13 +17212,38 @@ class DesktopPet:
         self._refresh_music_media_play_btn()
         self._sync_music_wave_to_playback()
 
+    def _send_external_media_command(self, command: str) -> bool:
+        """控制网易云 / QQ / Spotify 等外部播放器（GSMTC 或全局媒体键）。"""
+        try:
+            import system_media_control as smc
+
+            return bool(smc.send_command(command))
+        except Exception:
+            return False
+
     def _bg_music_next_track(self) -> None:
         if not getattr(self, "music_sprite_mode", False):
+            return
+        if bool(getattr(self, "music_ambient_only", False)):
+            ok = self._send_external_media_command("next")
+            self._show_toast(
+                "下一首（外部）" if ok else "未能切歌（外部）",
+                "#88ccff" if ok else "#ff8866",
+                duration_ms=1200,
+            )
             return
         self._advance_bg_music_track(silent=False)
 
     def _bg_music_prev_track(self) -> None:
         if not getattr(self, "music_sprite_mode", False):
+            return
+        if bool(getattr(self, "music_ambient_only", False)):
+            ok = self._send_external_media_command("prev")
+            self._show_toast(
+                "上一首（外部）" if ok else "未能切歌（外部）",
+                "#88ccff" if ok else "#ff8866",
+                duration_ms=1200,
+            )
             return
         self._retreat_bg_music_track()
 
@@ -16934,6 +17270,11 @@ class DesktopPet:
         self.bg_music_watch_job = self._safe_after(500, tick)
 
     def _start_bg_music(self) -> None:
+        # 环境检测（视频/音乐/游戏）只切姿势/特效，不播桌宠曲库
+        if bool(getattr(self, "music_ambient_only", False)):
+            return
+        if str(getattr(self, "app_scene", "") or "") in ("game", "video"):
+            return
         if self.bg_music_playing:
             return
         playlist = self._music_playlist()
@@ -16969,6 +17310,14 @@ class DesktopPet:
             self._sync_music_wave_to_playback()
 
     def _stop_bg_music(self) -> None:
+        # 装扮/日记/家园等叠层 BGM 占用通道：勿掐渐入、勿停播（否则窗口内按键一触发 stop 就静音）
+        if bool(getattr(self, "_overlay_bgm_active", False)):
+            self.bg_music_paused_for_call = False
+            self.bg_music_user_paused = False
+            # 保持 bg_music_playing，便于音量/渐入逻辑继续生效
+            self.bg_music_playing = True
+            self._refresh_music_media_play_btn()
+            return
         self._cancel_bg_music_watch()
         self._cancel_bg_music_fade()
         self._cancel_affinity_tick()
@@ -16987,18 +17336,24 @@ class DesktopPet:
 
     def _resolve_overlay_bgm_id(self, track_id: str) -> str | None:
         tid = MUSIC_TRACK_LEGACY_IDS.get(str(track_id), str(track_id))
+        if not tid or _music_track_is_blocked(tid):
+            return None
         if tid in MUSIC_TRACKS:
             return tid
         low = tid.lower().strip()
         if not low:
             return None
         for cand in MUSIC_TRACK_ORDER:
+            if _music_track_is_blocked(cand):
+                continue
             if cand == low or cand.endswith(low) or low in cand:
                 return cand
         # 主题曲等：按标题 / 文件名匹配（兼容「鉴定/检定」异体）
         needles = {low, low.replace("鉴定", "检定"), low.replace("检定", "鉴定")}
         needles = {n for n in needles if n}
         for cand in MUSIC_TRACK_ORDER:
+            if _music_track_is_blocked(cand):
+                continue
             info = MUSIC_TRACKS.get(cand) or {}
             title = str(info.get("title") or "").lower()
             try:
@@ -17041,8 +17396,11 @@ class DesktopPet:
                 return 0.0
             self._cancel_bg_music_watch()
             self._cancel_bg_music_fade()
-            # 庆功曲不要被叠层标记占住
+            # 庆功短曲：勿打断装扮等指定场景叠层
             if bool(getattr(self, "_overlay_bgm_active", False)):
+                cur = str(getattr(self, "_overlay_bgm_reason", "") or "")
+                if cur in OVERLAY_BGM_PROTECTED_REASONS:
+                    return 0.0
                 self._overlay_bgm_active = False
                 self._overlay_bgm_reason = None
                 self._overlay_bgm_track = None
@@ -17075,6 +17433,240 @@ class DesktopPet:
         except Exception:
             return 0.0
 
+    def _cancel_music_picker_preview(self, *, resume: bool = False) -> None:
+        """取消选曲悬停试听；resume=True 时若先前打断了手动音乐则尝试续播。"""
+        leave_job = getattr(self, "_music_picker_leave_job", None)
+        if leave_job:
+            try:
+                self.root.after_cancel(leave_job)
+            except Exception:
+                pass
+        self._music_picker_leave_job = None
+        job = getattr(self, "_music_picker_hover_job", None)
+        if job:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+        self._music_picker_hover_job = None
+        self._music_picker_hover_tid = None
+        stop_job = getattr(self, "_music_picker_preview_stop_job", None)
+        if stop_job:
+            try:
+                self.root.after_cancel(stop_job)
+            except Exception:
+                pass
+        self._music_picker_preview_stop_job = None
+        was = bool(getattr(self, "_music_picker_preview_active", False))
+        want_resume = bool(getattr(self, "_music_picker_preview_resume", False))
+        panel_resume = getattr(self, "_music_picker_preview_panel_resume", None)
+        self._music_picker_preview_active = False
+        self._music_picker_preview_resume = False
+        self._music_picker_preview_panel_resume = None
+        if was:
+            try:
+                import pygame
+
+                if pygame.mixer.get_init():
+                    pygame.mixer.music.stop()
+            except Exception:
+                pass
+        if resume and isinstance(panel_resume, dict) and panel_resume.get("reason"):
+            try:
+                track = str(panel_resume.get("track") or "")
+                pos = float(panel_resume.get("pos_sec") or 0.0)
+                if track:
+                    self._music_resume_track = track
+                    self._music_resume_pos_sec = pos
+                    self._overlay_bgm_pos_sec = pos
+                    self._music_resume_pending = True
+                self._reassert_panel_overlay_bgm()
+            except Exception:
+                pass
+            return
+        if resume and want_resume:
+            try:
+                if (
+                    getattr(self, "music_sprite_mode", False)
+                    and not bool(getattr(self, "music_ambient_only", False))
+                    and not getattr(self, "bg_music_user_paused", False)
+                ):
+                    self._music_resume_pending = True
+                    self._start_bg_music()
+                    return
+            except Exception:
+                pass
+        if resume:
+            try:
+                self._maybe_resume_home_bgm_after_other()
+            except Exception:
+                pass
+
+    def _schedule_music_picker_preview(self, track_id: str) -> None:
+        tid = MUSIC_TRACK_LEGACY_IDS.get(str(track_id or ""), str(track_id or "")).strip()
+        if not tid or tid not in MUSIC_TRACKS or _music_track_is_blocked(tid):
+            return
+        # 换曲悬停：只停试听，不立刻恢复整曲（避免切格子卡顿）
+        self._cancel_music_picker_preview(resume=False)
+        tok = int(getattr(self, "_music_picker_preview_tok", 0) or 0) + 1
+        self._music_picker_preview_tok = tok
+        self._music_picker_hover_tid = tid
+
+        def _fire(t: str = tid, k: int = tok) -> None:
+            self._music_picker_hover_job = None
+            if int(getattr(self, "_music_picker_preview_tok", 0) or 0) != k:
+                return
+            if str(getattr(self, "_music_picker_hover_tid", "") or "") != t:
+                return
+            self._start_music_picker_preview(t, token=k)
+
+        self._music_picker_hover_job = self.root.after(
+            int(MUSIC_PICKER_HOVER_DELAY_MS), _fire
+        )
+
+    def _start_music_picker_preview(self, track_id: str, *, token: int) -> None:
+        if int(getattr(self, "_music_picker_preview_tok", 0) or 0) != token:
+            return
+        tid = MUSIC_TRACK_LEGACY_IDS.get(str(track_id or ""), str(track_id or "")).strip()
+        if _music_track_is_blocked(tid):
+            return
+        src = _music_playable_path(tid)
+        if src is None or not src.is_file():
+            self._show_toast("暂无法试听（缺音频）", "#ff8866", duration_ms=1200)
+            return
+        sec = float(MUSIC_PICKER_PREVIEW_SEC)
+        cache = DATA_AUDIO_DIR / f"music_{tid}_preview_{int(sec)}.wav"
+        try:
+            _ensure_data_dirs()
+        except Exception:
+            pass
+        wav = _ensure_audio_wav(src, cache, clip_sec=sec) or src
+        resume = bool(
+            getattr(self, "music_sprite_mode", False)
+            and not bool(getattr(self, "music_ambient_only", False))
+            and bool(getattr(self, "bg_music_playing", False))
+            and not bool(getattr(self, "bg_music_user_paused", False))
+        )
+        try:
+            import pygame
+
+            _init_pygame_mixer()
+            if not pygame.mixer.get_init():
+                return
+            self._cancel_bg_music_watch()
+            self._cancel_bg_music_fade()
+            # 试听可短暂占用通道；装扮/日记等保护层先记下再让出，试听结束拉回
+            try:
+                self._capture_music_playback_pos(mark_pending=True)
+            except Exception:
+                pass
+            self._music_picker_preview_panel_resume = None
+            if bool(getattr(self, "_overlay_bgm_active", False)):
+                cur = str(getattr(self, "_overlay_bgm_reason", "") or "")
+                if cur in ("outfit", "diary") or self._panel_overlay_bgm_spec():
+                    spec = self._panel_overlay_bgm_spec()
+                    if spec:
+                        self._music_picker_preview_panel_resume = {
+                            "reason": spec[0],
+                            "track": spec[1],
+                            "pos_sec": float(getattr(self, "_overlay_bgm_pos_sec", 0.0) or 0.0),
+                        }
+                    elif cur in ("outfit", "diary"):
+                        self._music_picker_preview_panel_resume = {
+                            "reason": cur,
+                            "track": str(getattr(self, "_overlay_bgm_track", "") or ""),
+                            "pos_sec": float(getattr(self, "_overlay_bgm_pos_sec", 0.0) or 0.0),
+                        }
+                if cur in OVERLAY_BGM_PROTECTED_REASONS:
+                    try:
+                        self._stop_overlay_bgm(reason=cur, resume=False)
+                    except Exception:
+                        pass  # 勿因停叠层失败而放弃试听
+                else:
+                    self._overlay_bgm_active = False
+                    self._overlay_bgm_reason = None
+                    self._overlay_bgm_track = None
+            pygame.mixer.music.load(str(wav))
+            pygame.mixer.music.set_volume(self._sound_scale("music"))
+            pygame.mixer.music.play(0)
+            self.bg_music_playing = False
+            self._music_picker_preview_active = True
+            self._music_picker_preview_resume = resume
+            title = _music_track(tid).get("title") or tid
+            self._show_toast(f"试听 · {title}（{int(sec)}s）", "#88ccff", duration_ms=1400)
+
+            def _stop(k: int = token) -> None:
+                self._music_picker_preview_stop_job = None
+                if int(getattr(self, "_music_picker_preview_tok", 0) or 0) != k:
+                    return
+                self._cancel_music_picker_preview(resume=True)
+
+            self._music_picker_preview_stop_job = self.root.after(
+                int(sec * 1000) + 60, _stop
+            )
+        except Exception:
+            self._music_picker_preview_active = False
+            self._music_picker_preview_resume = False
+            self._music_picker_preview_panel_resume = None
+
+    def _bind_music_picker_hover_preview(self, widgets, track_id: str) -> None:
+        tid = str(track_id)
+
+        def on_enter(_e=None, t=tid) -> None:
+            leave_job = getattr(self, "_music_picker_leave_job", None)
+            if leave_job:
+                try:
+                    self.root.after_cancel(leave_job)
+                except Exception:
+                    pass
+                self._music_picker_leave_job = None
+            self._schedule_music_picker_preview(t)
+
+        def on_leave(_e=None, t=tid) -> None:
+            leave_job = getattr(self, "_music_picker_leave_job", None)
+            if leave_job:
+                try:
+                    self.root.after_cancel(leave_job)
+                except Exception:
+                    pass
+
+            def _maybe_stop(cur: str = t) -> None:
+                self._music_picker_leave_job = None
+                # 已移到其它曲目悬停则不打断
+                if str(getattr(self, "_music_picker_hover_tid", "") or "") != cur:
+                    return
+                self._cancel_music_picker_preview(resume=True)
+
+            # 短延迟：在格子内图标/文字间移动时不误停
+            self._music_picker_leave_job = self.root.after(180, _maybe_stop)
+
+        def on_motion(_e=None, t=tid) -> None:
+            # 部分环境下 Button 不稳触发 Enter；移动时补一次调度
+            if str(getattr(self, "_music_picker_hover_tid", "") or "") == t:
+                job = getattr(self, "_music_picker_hover_job", None)
+                if job or bool(getattr(self, "_music_picker_preview_active", False)):
+                    return
+            on_enter(_e, t)
+
+        def _bind_one(w) -> None:
+            try:
+                w.bind("<Enter>", on_enter, add="+")
+                w.bind("<Leave>", on_leave, add="+")
+                w.bind("<Motion>", on_motion, add="+")
+            except Exception:
+                pass
+
+        def _bind_tree(root_w) -> None:
+            _bind_one(root_w)
+            try:
+                for ch in root_w.winfo_children():
+                    _bind_tree(ch)
+            except Exception:
+                pass
+
+        for w in widgets:
+            _bind_tree(w)
+
     def _resume_music_after_rhythm_fanfare(self) -> None:
         if not getattr(self, "music_sprite_mode", False):
             return
@@ -17087,20 +17679,364 @@ class DesktopPet:
         except Exception:
             pass
 
-    def _start_overlay_bgm(self, track_id: str, *, reason: str) -> None:
+    def _panel_overlay_bgm_spec(self) -> tuple[str, str] | None:
+        """装扮 / 日记窗仍开着时返回 (reason, track_id)。优先装扮。"""
+        try:
+            ow = getattr(self, "outfit_editor_win", None)
+            if ow is not None and ow.winfo_exists():
+                return ("outfit", GAME_BGM_OUTFIT)
+        except Exception:
+            pass
+        try:
+            dw = getattr(self, "diary_win", None)
+            if dw is not None and dw.winfo_exists():
+                return ("diary", GAME_BGM_DIARY)
+        except Exception:
+            pass
+        return None
+
+    def _cancel_panel_overlay_bgm_watch(self) -> None:
+        job = getattr(self, "_panel_overlay_bgm_watch_job", None)
+        if job:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+        self._panel_overlay_bgm_watch_job = None
+
+    def _schedule_panel_overlay_bgm_watch(self) -> None:
+        """装扮/日记开着时低频检查：真停播才拉回；切勿频繁 load。"""
+        self._cancel_panel_overlay_bgm_watch()
+        if not self._panel_overlay_bgm_spec():
+            return
+
+        def tick() -> None:
+            self._panel_overlay_bgm_watch_job = None
+            if self._closing or not self._alive():
+                return
+            spec = self._panel_overlay_bgm_spec()
+            if not spec:
+                return
+            try:
+                self._reassert_panel_overlay_bgm()
+            except Exception:
+                pass
+            try:
+                # 拉长间隔：重 load 会卡主线程，2s 一次太凶
+                self._panel_overlay_bgm_watch_job = self.root.after(5200, tick)
+            except Exception:
+                self._panel_overlay_bgm_watch_job = None
+
+        try:
+            self._panel_overlay_bgm_watch_job = self.root.after(5200, tick)
+        except Exception:
+            self._panel_overlay_bgm_watch_job = None
+
+    def _overlay_bgm_window_still_open(self, reason: str) -> bool:
+        """延后开播时确认对应窗还在。"""
+        attr = {
+            "outfit": "outfit_editor_win",
+            "diary": "diary_win",
+            "phonograph": "phonograph_win",
+            "gallery": "gallery_win",
+            "home": "home_win",
+        }.get(str(reason))
+        if not attr:
+            return True
+        win = getattr(self, attr, None)
+        try:
+            if win is not None and win.winfo_exists():
+                return True
+        except Exception:
+            pass
+        # 家园：编辑窗或桌面贴窗任一在即可续播
+        if str(reason) == "home":
+            try:
+                desk = getattr(self, "home_desktop_win", None)
+                if desk is not None and desk.winfo_exists():
+                    return True
+            except Exception:
+                pass
+        return False
+
+    def _defer_start_overlay_bgm(
+        self,
+        track_id: str,
+        *,
+        reason: str,
+        force: bool = False,
+        delay_ms: int = 360,
+    ) -> None:
+        """面板先画完再播 BGM，避免开窗瞬间 load 音乐卡死。"""
+        tok = int(getattr(self, "_overlay_bgm_defer_tok", 0) or 0) + 1
+        self._overlay_bgm_defer_tok = tok
+
+        def go(
+            expected: int = tok,
+            tid: str = str(track_id),
+            rid: str = str(reason),
+            fr: bool = bool(force),
+        ) -> None:
+            if expected != int(getattr(self, "_overlay_bgm_defer_tok", 0) or 0):
+                return
+            if self._closing or not self._alive():
+                return
+            if not self._overlay_bgm_window_still_open(rid):
+                return
+            try:
+                self._start_overlay_bgm(tid, reason=rid, force=fr)
+            except Exception:
+                pass
+
+        try:
+            self.root.after(max(80, int(delay_ms)), go)
+        except Exception:
+            go()
+
+    def _overlay_bgm_blocked_by_other_music(self) -> bool:
+        """其它占用 music 通道的曲目：叠层 BGM 让路，结束后再续（语音/音效走 Channel，不挡）。"""
+        if getattr(self, "phonograph_playing_id", None):
+            return True
+        if bool(getattr(self, "_music_picker_preview_active", False)):
+            return True
+        if bool(getattr(self, "bg_music_paused_for_call", False)):
+            return True
+        # 音乐模式正在播列表曲（非叠层自己）
+        if (
+            bool(getattr(self, "music_sprite_mode", False))
+            and not bool(getattr(self, "music_ambient_only", False))
+            and not bool(getattr(self, "bg_music_user_paused", False))
+            and not bool(getattr(self, "_overlay_bgm_active", False))
+        ):
+            return True
+        return False
+
+    def _soft_keep_overlay_bgm(self) -> bool:
+        """叠层 BGM 仍该播时：尽量不 stop/load；停了则从断点 play 续上。"""
+        if not bool(getattr(self, "_overlay_bgm_active", False)):
+            return False
+        if self._overlay_bgm_blocked_by_other_music():
+            return False
+        tid = str(getattr(self, "_overlay_bgm_track", "") or "")
+        reason = str(getattr(self, "_overlay_bgm_reason", "") or "")
+        if not tid or not reason:
+            return False
+        if not self._overlay_bgm_window_still_open(reason):
+            return False
+        try:
+            import pygame
+
+            if not pygame.mixer.get_init():
+                return False
+            if pygame.mixer.music.get_busy():
+                self.bg_music_playing = True
+                # 持续记进度，供打断后续播
+                try:
+                    self._capture_music_playback_pos(mark_pending=False)
+                except Exception:
+                    pass
+                try:
+                    want = float(self._sound_scale("music"))
+                    cur = float(pygame.mixer.music.get_volume())
+                    if cur < max(0.02, want * 0.2):
+                        pygame.mixer.music.set_volume(want)
+                except Exception:
+                    pass
+                return True
+            # 通道空了：从断点续播（文件应仍在 music 里）
+            start = self._music_resume_start_for(tid, consume=False)
+            start = self._normalize_music_pos_sec(
+                max(start, float(getattr(self, "_overlay_bgm_pos_sec", 0.0) or 0.0)),
+                tid,
+            )
+            played = False
+            if start > 0.05:
+                try:
+                    pygame.mixer.music.play(-1, start=start)
+                    played = True
+                except Exception:
+                    played = False
+            if not played:
+                try:
+                    pygame.mixer.music.play(-1)
+                    start = 0.0
+                    played = True
+                except Exception:
+                    return False
+            pygame.mixer.music.set_volume(float(self._sound_scale("music")))
+            self.bg_music_playing = True
+            self._overlay_bgm_pos_sec = start
+            self._music_resume_pos_sec = start
+            self._music_resume_track = tid
+            self._music_resume_pending = False
+            self._overlay_bgm_started_ms = int(time.time() * 1000)
+            return True
+        except Exception:
+            return False
+
+    def _keep_overlay_bgm_after_voice(self) -> None:
+        """语音/音效播完瞬间：若装扮等窗仍开，把可能被 SDL 掐掉的叠层 BGM 拉回。"""
+        if self._closing or not self._alive():
+            return
+        # 语音开播前若还在播，进度已在 soft_keep 忙时采样；若已停则带断点续
+        try:
+            import pygame
+
+            if pygame.mixer.get_init() and not pygame.mixer.music.get_busy():
+                if bool(getattr(self, "_overlay_bgm_active", False)):
+                    self._music_resume_pending = True
+                    tid = str(getattr(self, "_overlay_bgm_track", "") or "")
+                    if tid:
+                        self._music_resume_track = tid
+        except Exception:
+            pass
+        if self._soft_keep_overlay_bgm():
+            if str(getattr(self, "_overlay_bgm_reason", "") or "") in ("outfit", "diary"):
+                self._schedule_panel_overlay_bgm_watch()
+            return
+        try:
+            self._reassert_panel_overlay_bgm()
+        except Exception:
+            pass
+        try:
+            self._maybe_resume_home_bgm_after_other()
+        except Exception:
+            pass
+
+    def _reassert_panel_overlay_bgm(self) -> bool:
+        """窗仍开着时轻量续播装扮/日记 BGM（同曲尽量不 load）。"""
+        spec = self._panel_overlay_bgm_spec()
+        if not spec:
+            self._cancel_panel_overlay_bgm_watch()
+            return False
+        reason, track = spec
+        # 其它音乐占用：等结束再拉回；语音/音效不同通道，不在此让路
+        if self._overlay_bgm_blocked_by_other_music():
+            self._schedule_panel_overlay_bgm_watch()
+            return False
+        # 已在播同曲：软续，勿重 load
+        if (
+            bool(getattr(self, "_overlay_bgm_active", False))
+            and str(getattr(self, "_overlay_bgm_reason", "") or "") == reason
+            and str(getattr(self, "_overlay_bgm_track", "") or "") == self._resolve_overlay_bgm_id(track)
+        ):
+            if self._soft_keep_overlay_bgm():
+                self._schedule_panel_overlay_bgm_watch()
+                return True
+        try:
+            # force 只绕过「环境跟听」门闩，不代表必须重载文件
+            self._start_overlay_bgm(track, reason=reason, force=True)
+        except Exception:
+            return False
+        self._schedule_panel_overlay_bgm_watch()
+        return True
+
+    def _start_overlay_bgm(self, track_id: str, *, reason: str, force: bool = False) -> None:
         """小游戏 / 场景叠层 BGM：单曲循环，不进音乐模式 UI；不叠音波光圈以免卡。"""
         if str(reason) in OVERLAY_BGM_BLOCKED_REASONS:
             return
+        # 未指定模式：不要自动切 BGM（普通对话 / 自由态待开箱等）
+        if str(reason) in OVERLAY_BGM_NO_AUTO_SWITCH:
+            return
+        # 装扮/日记窗仍开：允许强制续播，不被检测听歌/视频拦住
+        panel_force = bool(force)
+        if not panel_force and str(reason) in ("outfit", "diary"):
+            try:
+                if str(reason) == "outfit":
+                    ow = getattr(self, "outfit_editor_win", None)
+                    panel_force = bool(ow is not None and ow.winfo_exists())
+                else:
+                    dw = getattr(self, "diary_win", None)
+                    panel_force = bool(dw is not None and dw.winfo_exists())
+            except Exception:
+                panel_force = False
+        if not panel_force:
+            # 检测听歌 / 视频 / 游戏：只切姿势特效，禁止叠层内部曲
+            if bool(getattr(self, "music_ambient_only", False)):
+                return
+            if str(getattr(self, "app_scene", "") or "") in ("game", "video"):
+                return
         tid = self._resolve_overlay_bgm_id(track_id)
         if not tid:
             return
+        cur_reason = str(getattr(self, "_overlay_bgm_reason", "") or "")
+        # 已在装扮等指定场景：勿被其它 reason 顶掉
+        if (
+            bool(getattr(self, "_overlay_bgm_active", False))
+            and cur_reason in OVERLAY_BGM_PROTECTED_REASONS
+            and str(reason) != cur_reason
+            and str(reason) not in OVERLAY_BGM_PROTECTED_REASONS
+        ):
+            return
+        # 其它 music 通道占用：记下待续，窗在则由 watch / resume 拉回循环
+        if self._overlay_bgm_blocked_by_other_music():
+            try:
+                self._capture_music_playback_pos(mark_pending=True)
+            except Exception:
+                pass
+            self._overlay_bgm_pending = {
+                "track": tid,
+                "reason": str(reason),
+                "force": bool(panel_force),
+            }
+            if str(reason) in ("outfit", "diary"):
+                self._schedule_panel_overlay_bgm_watch()
+            elif str(reason) == "home":
+                try:
+                    self._maybe_resume_home_bgm_after_other()
+                except Exception:
+                    pass
+            return
+        self._overlay_bgm_pending = None
         if (
             bool(getattr(self, "_overlay_bgm_active", False))
             and str(getattr(self, "_overlay_bgm_track", "") or "") == tid
-            and str(getattr(self, "_overlay_bgm_reason", "") or "") == reason
+            and cur_reason == reason
         ):
-            return
+            # 同曲同场景：严禁反复 music.load（会卡死主线程）
+            busy = False
+            try:
+                import pygame
+
+                busy = bool(pygame.mixer.get_init() and pygame.mixer.music.get_busy())
+            except Exception:
+                busy = False
+            now_ms = int(time.time() * 1000)
+            started = int(getattr(self, "_overlay_bgm_started_ms", 0) or 0)
+            recently = started > 0 and (now_ms - started) < 4500
+            if busy or recently:
+                try:
+                    import pygame
+
+                    if pygame.mixer.get_init():
+                        try:
+                            cur_vol = float(pygame.mixer.music.get_volume())
+                        except Exception:
+                            cur_vol = 0.0
+                        want = float(self._sound_scale("music"))
+                        self.bg_music_playing = True
+                        if cur_vol < max(0.02, want * 0.12):
+                            self._begin_bg_music_fade_in()
+                except Exception:
+                    self.bg_music_playing = True
+                if str(reason) in ("outfit", "diary"):
+                    self._schedule_panel_overlay_bgm_watch()
+                return
+            # 标记还在但通道已空（常见于语音 Sound 抢 mixer）：软续 play(-1)，勿先 stop
+            if self._soft_keep_overlay_bgm():
+                if str(reason) in ("outfit", "diary"):
+                    self._schedule_panel_overlay_bgm_watch()
+                return
+            # 软续失败才落到下面重开
         if not bool(getattr(self, "_overlay_bgm_active", False)):
+            # 仅保留「同曲打断待续」断点；新开叠层曲从头播
+            saved = str(getattr(self, "_music_resume_track", "") or "")
+            pending = bool(getattr(self, "_music_resume_pending", False))
+            if not (pending and saved == tid):
+                try:
+                    self._clear_music_resume_pos()
+                except Exception:
+                    pass
             self._overlay_bgm_resume = {
                 "was_playing": bool(
                     getattr(self, "bg_music_playing", False)
@@ -17122,27 +18058,57 @@ class DesktopPet:
             except Exception:
                 pass
             self.bg_music_playing = False
+        # 换叠层曲：旧曲断点作废
+        prev_overlay = str(getattr(self, "_overlay_bgm_track", "") or "")
+        if prev_overlay and prev_overlay != tid:
+            if str(getattr(self, "_music_resume_track", "") or "") == prev_overlay:
+                self._clear_music_resume_pos()
+            self._overlay_bgm_pos_sec = 0.0
         self._overlay_bgm_active = True
         self._overlay_bgm_reason = str(reason)
         self._overlay_bgm_track = tid
         try:
-            if not self._bg_music_play_track(tid, single_loop=True):
+            if not self._bg_music_play_track(tid, single_loop=True, force=panel_force):
                 self._overlay_bgm_active = False
                 self._overlay_bgm_reason = None
                 self._overlay_bgm_track = None
+                self._overlay_bgm_started_ms = 0
+            else:
+                self._overlay_bgm_started_ms = int(time.time() * 1000)
+                if str(reason) in ("outfit", "diary"):
+                    self._schedule_panel_overlay_bgm_watch()
         except Exception:
             self._overlay_bgm_active = False
             self._overlay_bgm_reason = None
             self._overlay_bgm_track = None
+            self._overlay_bgm_started_ms = 0
 
     def _stop_overlay_bgm(self, *, reason: str | None = None, resume: bool = True) -> None:
         if not bool(getattr(self, "_overlay_bgm_active", False)):
             return
         if reason is not None and str(getattr(self, "_overlay_bgm_reason", "") or "") != str(reason):
             return
+        was = str(reason or getattr(self, "_overlay_bgm_reason", "") or "")
+        # 打断前记下进度，便于稍后同曲续播
+        try:
+            self._capture_music_playback_pos(mark_pending=True)
+        except Exception:
+            pass
+        # 取消尚未执行的延后开播
+        try:
+            self._overlay_bgm_defer_tok = int(getattr(self, "_overlay_bgm_defer_tok", 0) or 0) + 1
+        except Exception:
+            pass
+        # 装扮结束 / 宝箱等待：任何时候都不要自动续播内部曲（尤其 bgm008）
+        if was in ("outfit", "chest_wait"):
+            resume = False
+        if was in ("outfit", "diary"):
+            self._cancel_panel_overlay_bgm_watch()
         self._overlay_bgm_active = False
         self._overlay_bgm_reason = None
         self._overlay_bgm_track = None
+        self._overlay_bgm_started_ms = 0
+        self._overlay_bgm_pending = None
         self._cancel_bg_music_fade()
         try:
             import pygame
@@ -17159,37 +18125,47 @@ class DesktopPet:
             and snap.get("music_mode")
             and snap.get("was_playing")
             and getattr(self, "music_sprite_mode", False)
+            and not bool(getattr(self, "music_ambient_only", False))
+            and str(getattr(self, "app_scene", "") or "") not in ("game", "video")
         ):
             try:
                 self._start_bg_music()
                 self._start_music_wave_fx(force_rebuild=False)
             except Exception:
                 pass
+            return
+        # 其它场景曲结束：家园仍开着且未静音则可再开（装扮等 resume=False 也要恢复家园）
+        if was != "home":
+            try:
+                self._maybe_resume_home_bgm_after_other()
+            except Exception:
+                pass
+
+    def _play_game_victory_fanfare(self) -> float:
+        """小游戏胜利：成功音效 + bgm004 短庆功（与音游等一致；绝不播 bgm008）。"""
+        try:
+            _play_ui_sfx("game_success", volume=0.58)
+        except Exception:
+            pass
+        try:
+            return float(
+                self._play_short_bgm_clip(
+                    GAME_BGM_RHYTHM_WIN, clip_sec=GAME_BGM_RHYTHM_WIN_SEC
+                )
+                or 0
+            )
+        except Exception:
+            return 0.0
 
     def _maybe_start_chest_wait_bgm(self) -> None:
-        """有未开成就宝箱且非对局中时播 bgm008。"""
-        if getattr(self, "phonograph_playing_id", None):
-            return
-        reason = str(getattr(self, "_overlay_bgm_reason", "") or "")
-        if reason in (
-            "gather",
-            "qte",
-            "rhythm_select",
-            "preset_dialog",
-            "home",
-            "vocab",
-            "vocab_notebook",
-            "typing",
-            "gallery",
-            "phonograph",
-            "outfit",
-        ):
-            return
-        items = (self.wallet.get("items") if isinstance(getattr(self, "wallet", None), dict) else None) or {}
-        if int(items.get("achieve_reward_box", 0) or 0) <= 0:
-            self._stop_overlay_bgm(reason="chest_wait")
-            return
-        self._start_overlay_bgm(GAME_BGM_CHEST_WAIT, reason="chest_wait")
+        """成就宝箱永不自动配乐（bgm008 永久停用）；顺带清掉残留 chest_wait。"""
+        try:
+            if str(getattr(self, "_overlay_bgm_reason", "") or "") == "chest_wait":
+                self._stop_overlay_bgm(reason="chest_wait", resume=False)
+        except Exception:
+            pass
+        # 明确不启动任何曲目
+        return
 
     def _grant_achievement_chest(self, aid: str) -> None:
         have = self._grant_wallet_item("achieve_reward_box", 1)
@@ -17248,6 +18224,10 @@ class DesktopPet:
         self._sync_auto_desk_clocks()
         if not said and self.app_scene not in ("game", "video", "music"):
             self._show_toast("音乐已关闭 · 回到自由", PIXEL_COLOR)
+        try:
+            self._maybe_resume_home_bgm_after_other()
+        except Exception:
+            pass
 
     def _apply_music_on(self) -> None:
         if self._mode_switch_take_pre_cleaned():
@@ -17260,6 +18240,11 @@ class DesktopPet:
             if self.mode == "game":
                 self._stop_game_mode()
         self._end_app_game_video_scenes(silent=True)
+        # 面板手动音乐：只播内部歌单；停掉外部播放器，避免和软件音乐叠一起
+        try:
+            self._send_external_media_command("stop")
+        except Exception:
+            pass
         # 音乐模式＝漫步：只走路听歌，不触发动作/台词特效
         self.mode = "stroll"
         self.follow_animating = False
@@ -17270,15 +18255,45 @@ class DesktopPet:
         self.music_sprite_mode = True
         self.music_ambient_only = False
         self.app_scene = "music"
+        self.app_scene_fx_on = False
+        self.app_scene_sig = ""
+        self._clear_app_scene_sticky()
         self.bg_music_user_paused = False
         self._sync_mode_time_bucket()
         self._stop_voice_for_music_mode()
+        # 手动音乐模式要占用通道：先停场景叠层（装扮窗若仍开着，关闭音乐后再开装扮会重开曲）
+        if bool(getattr(self, "_overlay_bgm_active", False)):
+            try:
+                self._stop_overlay_bgm(resume=False)
+            except Exception:
+                pass
+        self.bg_music_playing = False
         # 先切立绘；声波等真正开播后再出（_start_bg_music → _on_bg_music_track_changed）
         self._set_image(self._current_stand_sprite())
         self._place_window(light=True)
         self._start_bg_music()
         self._sync_music_wave_to_playback()
         self._sync_auto_desk_clocks()
+        self._refresh_music_media_play_btn()
+        # 再兜一次：确保控歌栏已建（⏮ ⏯ ⏭ ⏹）
+        try:
+            if not (
+                self._desk_clock_active("music")
+                and (self._desk_clocks.get("music") or {}).get("with_media")
+                and not bool((self._desk_clocks.get("music") or {}).get("media_external"))
+            ):
+                self._start_desk_clock(
+                    "music",
+                    kind="stopwatch",
+                    title="音乐",
+                    force=True,
+                    with_media=True,
+                    show_timer_face=self._timers_display_enabled(),
+                    media_external=False,
+                )
+                self._refresh_music_media_play_btn()
+        except Exception:
+            pass
         playlist = self._music_playlist()
         mode_label = self._music_play_mode_label()
         if len(playlist) == 1:
@@ -17359,6 +18374,99 @@ class DesktopPet:
         ):
             try:
                 self._apply_music_off()
+            except Exception:
+                pass
+
+    def _stop_internal_playback_for_app_scene(self) -> None:
+        """检测听歌/视频/游戏：停掉内部曲；装扮/日记窗仍开着则保留/拉回场景曲。"""
+        panel = self._panel_overlay_bgm_spec()
+        try:
+            self._cancel_bg_music_watch()
+        except Exception:
+            pass
+        try:
+            self._cancel_bg_music_fade()
+        except Exception:
+            pass
+        try:
+            if bool(getattr(self, "_overlay_bgm_active", False)):
+                cur = str(getattr(self, "_overlay_bgm_reason", "") or "")
+                # 装扮/日记窗开着：不要掐对应场景曲
+                if panel and cur == panel[0]:
+                    pass
+                else:
+                    self._stop_overlay_bgm(resume=False)
+        except Exception:
+            pass
+        try:
+            # 有面板叠层时 _stop_bg_music 会早退保场景曲
+            self._stop_bg_music()
+        except Exception:
+            pass
+        if panel:
+            try:
+                self._reassert_panel_overlay_bgm()
+            except Exception:
+                pass
+            return
+        try:
+            import pygame
+
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+        except Exception:
+            pass
+        self.bg_music_playing = False
+        self.bg_music_user_paused = False
+        self._overlay_bgm_resume = None
+
+    def _engage_music_ambient_follow(self, signature: str = "", *, toast: str = "") -> None:
+        """切到「检测跟听」：只听外部软件，绝不播内部曲。"""
+        # 必须先置位，阻断 watch / start_bg_music 竞态再开内部曲
+        self.music_sprite_mode = True
+        self.music_ambient_only = True
+        self.app_scene = "music"
+        self.app_scene_fx_on = True
+        self._mark_app_scene_entered()
+        self._stop_internal_playback_for_app_scene()
+        self.bg_music_user_paused = False
+        self._music_session_start_ms = 0
+        try:
+            self._stop_voice_for_music_mode()
+        except Exception:
+            pass
+        try:
+            self._set_image(self._current_stand_sprite())
+        except Exception:
+            pass
+        try:
+            self._start_music_wave_fx(force_rebuild=False)
+            self._sync_music_wave_to_playback()
+        except Exception:
+            pass
+        try:
+            self._sync_auto_desk_clocks()
+            self._refresh_music_media_play_btn()
+        except Exception:
+            pass
+        # 再强制建一栏外部控歌，避免旧栏仍绑内部切歌
+        try:
+            self._start_desk_clock(
+                "music",
+                kind="stopwatch",
+                title="音乐",
+                force=True,
+                with_media=True,
+                show_timer_face=False,
+                media_external=True,
+            )
+            self._refresh_music_media_play_btn()
+        except Exception:
+            pass
+        tip = str(toast or "").strip()
+        if tip:
+            try:
+                self._show_toast(tip, "#88ccff", duration_ms=1800)
             except Exception:
                 pass
 
@@ -17484,6 +18592,11 @@ class DesktopPet:
             scene, sig = "none", ""
         try:
             self._on_desktop_app_scene(scene, sig)
+        except Exception:
+            pass
+        try:
+            tick_scene = scene if scene != "hold" else str(getattr(self, "app_scene", "") or "none")
+            self._tick_owner_bond_scene(tick_scene)
         except Exception:
             pass
         if not self._closing:
@@ -17648,6 +18761,40 @@ class DesktopPet:
             # 视频客户端同窗丢标题：继续粘住
             if video_ambient and sticky_is_video_app and fg_exe == sticky:
                 return
+            # 轻场景（办公/聊天/代码/学习）：同进程短暂丢标题不立刻清掉
+            light_now = self.app_scene in ("code", "study", "office", "chat")
+            if light_now and sticky and fg_exe == sticky:
+                self._app_scene_soft_miss = int(getattr(self, "_app_scene_soft_miss", 0) or 0) + 1
+                if self._app_scene_soft_miss < APP_SCENE_SOFT_MISS_EXIT:
+                    return
+            if light_now and sticky:
+                # 仍是聊天/办公系进程 → 刷新粘住
+                if sticky in app_scene_desktop._CHAT_EXES and fg_exe in app_scene_desktop._CHAT_EXES:
+                    self._app_scene_sticky_exe = fg_exe
+                    self._app_scene_miss = 0
+                    self._app_scene_soft_miss = 0
+                    return
+                if sticky in app_scene_desktop._OFFICE_EXES and fg_exe in app_scene_desktop._OFFICE_EXES:
+                    self._app_scene_sticky_exe = fg_exe
+                    self._app_scene_miss = 0
+                    self._app_scene_soft_miss = 0
+                    return
+                if sticky in app_scene_desktop._CODE_EXES and fg_exe in app_scene_desktop._CODE_EXES:
+                    self._app_scene_sticky_exe = fg_exe
+                    self._app_scene_miss = 0
+                    self._app_scene_soft_miss = 0
+                    return
+                if sticky in app_scene_desktop._STUDY_EXES and fg_exe in app_scene_desktop._STUDY_EXES:
+                    self._app_scene_sticky_exe = fg_exe
+                    self._app_scene_miss = 0
+                    self._app_scene_soft_miss = 0
+                    return
+            if light_now and not in_ambient:
+                # 轻场景退出：只清状态，不走游戏/视频结束动画
+                self.app_scene = "none"
+                self.app_scene_fx_on = False
+                self._clear_app_scene_sticky()
+                return
             self._force_end_app_scene_ambient()
             return
         self._app_scene_miss = 0
@@ -17657,7 +18804,8 @@ class DesktopPet:
         if scene == self.app_scene and signature == self.app_scene_sig:
             if scene in ("game", "video") and self.state == "scene_rest":
                 return
-            if scene == "music" and self.music_sprite_mode:
+            # 已在跟听：同签名续命。面板手动音乐需落到下方，切成只听软件。
+            if scene == "music" and self.music_sprite_mode and self.music_ambient_only:
                 return
         prev = self.app_scene
         prev_sig = self.app_scene_sig
@@ -17686,6 +18834,16 @@ class DesktopPet:
         elif scene == "music":
             self._end_app_game_video_scenes(silent=True)
             self._enter_app_music_ambient(signature)
+        elif scene in ("code", "study", "office", "chat"):
+            # 轻场景：不抢姿势，只更新 app_scene 供共在/契约计时
+            if prev in ("game", "video"):
+                self._end_app_game_video_scenes(silent=True)
+            if self.music_sprite_mode and self.music_ambient_only and prev == "music":
+                self._apply_music_off()
+            if self.app_scene != scene:
+                self.app_scene = scene
+                self.app_scene_fx_on = False
+                self._mark_app_scene_entered()
 
     def _try_engage_app_scene_fx(self) -> bool:
         """兼容旧调用：特效已在检测时开启，点宠不再当开关。"""
@@ -17698,38 +18856,22 @@ class DesktopPet:
         if prev_colors is not None and tuple(prev_colors) == tuple(new_colors):
             new_colors = _music_wave_colors_random(seed=f"{signature}|alt")
         self._ambient_wave_colors = new_colors
+        # 已在面板手动音乐：强制切跟听（停内部，只控外部）
         if self.music_sprite_mode and not self.music_ambient_only:
-            self.app_scene = "music"
-            self.app_scene_fx_on = True
-            self._mark_app_scene_entered()
-            self._start_music_wave_fx(force_rebuild=False)
-            self._sync_music_wave_to_playback()
+            self._engage_music_ambient_follow(
+                signature, toast="检测到音乐 · 已切跟听（外部）"
+            )
             return
         if self.music_sprite_mode and self.music_ambient_only:
-            self.app_scene = "music"
-            self.app_scene_fx_on = True
-            self._mark_app_scene_entered()
-            # 切歌换色：动画帧会读 _ambient_wave_colors，无需毁窗重建
-            self._start_music_wave_fx(force_rebuild=False)
-            self._sync_music_wave_to_playback()
+            self._engage_music_ambient_follow(signature, toast="")
             return
         if self._scene_busy_for_app():
             return
-        self._yield_to_app_scene(keep_menu_music=True)
+        self._yield_to_app_scene(keep_menu_music=False)
         self.mode = "stroll"
         self.state = "stand"
-        self.music_sprite_mode = True
-        self.music_ambient_only = True
-        self.app_scene = "music"
-        self.app_scene_fx_on = True
-        self._mark_app_scene_entered()
-        self._stop_voice_for_music_mode()
-        self._stop_bg_music()
-        self._set_image(self._current_stand_sprite())
         self._resume_idle()
-        self._start_music_wave_fx(force_rebuild=False)
-        self._sync_music_wave_to_playback()
-        self._show_toast("检测到音乐", "#88ccff", duration_ms=1800)
+        self._engage_music_ambient_follow(signature, toast="检测到音乐 · 跟听外部")
 
     def _enter_app_game_scene(self) -> None:
         if self._scene_busy_for_app() and self.app_scene != "game":
@@ -17741,6 +18883,7 @@ class DesktopPet:
         self.app_scene = "game"
         self.app_scene_fx_on = True
         self._mark_app_scene_entered()
+        self._stop_internal_playback_for_app_scene()
         self.mode = "stroll"
         self.state = "scene_rest"
         self.rest_base_y = self.y
@@ -17758,12 +18901,14 @@ class DesktopPet:
             self._schedule_app_scene_frame_tick()
             if not getattr(self, "rest_bobble_job", None):
                 self._schedule_rest_bobble()
+            self._stop_internal_playback_for_app_scene()
             return
         self._yield_to_app_scene(keep_menu_music=False)
         self._stop_idle_jobs_for_scene()
         self.app_scene = "video"
         self.app_scene_fx_on = True
         self._mark_app_scene_entered()
+        self._stop_internal_playback_for_app_scene()
         self.mode = "stroll"
         self.state = "scene_rest"
         self.rest_base_y = self.y
@@ -18159,7 +19304,9 @@ class DesktopPet:
             list_btn.config(bg=MENU_ACTIVE if mode == "list" else MENU_BG)
             random_btn.config(bg=MENU_ACTIVE if mode == "random" else MENU_BG)
             path_label.config(text=self._music_path_label())
-            if self.bg_music_playing or self.music_sprite_mode:
+            if self.bg_music_playing or (
+                self.music_sprite_mode and not bool(getattr(self, "music_ambient_only", False))
+            ):
                 self._stop_bg_music()
                 self._start_bg_music()
 
@@ -18321,7 +19468,9 @@ class DesktopPet:
                     refresh_playlist_label()
             except Exception:
                 pass
-            if self.bg_music_playing or self.music_sprite_mode:
+            if self.bg_music_playing or (
+                self.music_sprite_mode and not bool(getattr(self, "music_ambient_only", False))
+            ):
                 self._stop_bg_music()
                 self._start_bg_music()
 
@@ -19236,6 +20385,12 @@ class DesktopPet:
             return
         self._force_quitting = True
         self._closing = True
+        try:
+            for e in list(getattr(self, "_world_coins", []) or []):
+                self._destroy_world_coin(e, collect=False)
+            self._world_coins = []
+        except Exception:
+            pass
         try:
             self._stop_peer_meet_poll()
         except Exception:
@@ -20535,8 +21690,9 @@ class DesktopPet:
 
     def _arm_meet_dialog_text(self) -> None:
         """点了「话」等进入对话流程后，才允许相遇对话框文本。"""
-        self._meet_mode_allow_dialog_text = True
         self._enter_crossover_meet_mode()
+        # 必须在 enter 之后设：首次 enter 会把 allow 清成 False
+        self._meet_mode_allow_dialog_text = True
         self._bump_meet_mode_activity()
 
     def _exit_crossover_meet_mode(self, *, reason: str = "") -> None:
@@ -20669,22 +21825,30 @@ class DesktopPet:
         use_border5: bool = False,
         max_chars: int = 24,
         bubble_tone: str | None = None,
+        force: bool = False,
     ) -> bool:
-        """见面路径短句入口：必须已点「话」才允许出字；靠近/点「遇」保持静音。"""
-        if not bool(getattr(self, "_meet_mode_allow_dialog_text", False)):
+        """见面路径短句。默认需已点「话」；force=True 用于 2–10 次眼熟内心 OS。"""
+        if not force and not bool(getattr(self, "_meet_mode_allow_dialog_text", False)):
             return False
+        if force:
+            try:
+                self._meet_mode_allow_dialog_text = True
+                self._meet_mode_on = True
+            except Exception:
+                pass
         t = self._normalize_meet_line(text, max_chars=max_chars)
         if not t:
             return False
         hide = max(900, min(int(auto_hide_ms), 2200))
         self._begin_meet_priority(hold_ms=hide + 2200)
+        tone = bubble_tone if bubble_tone is not None else "cyan"
         try:
             self._show_speech_dialog(
                 t,
                 auto_hide_ms=hide,
                 use_border5=use_border5,
                 from_meet=True,
-                bubble_tone=bubble_tone,
+                bubble_tone=tone,
             )
             return True
         except Exception:
@@ -21157,6 +22321,12 @@ class DesktopPet:
             self._hide_crossover_bar()
             if action == peer_friendship.ACTION_STROLL_TOGETHER or action == "stroll":
                 self._start_crossover_stroll_together(peer, from_act_ready=True)
+            elif action == getattr(peer_friendship, "ACTION_HOME_GUEST", "home_guest") or action == "home_guest":
+                if not (self.home_win and self.home_win.winfo_exists()):
+                    self._open_home()
+                self.root.after(180, self._home_toggle_aoba_guest)
+            elif action == peer_friendship.ACTION_HIGHFIVE or action == "highfive":
+                self._start_crossover_highfive(peer)
             return
         if m == "act" or m == "stroll":
             self._hide_crossover_bar()
@@ -21241,19 +22411,31 @@ class DesktopPet:
                     max_chars=14,
                 )
                 if line:
-                    # 相遇模式保持无字：只做弹动，不弹内心 OS / 普通文本
+                    spoken = f"（{line}）"
                     if lead_first:
                         try:
                             self._announce_peer_speech(
-                                f"（{line}）",
+                                spoken,
                                 auto_hide_ms=1800,
                                 instant=False,
                                 reason="meet",
                                 write_session=False,
                             )
+                            self._show_meet_speech(
+                                spoken,
+                                auto_hide_ms=1800,
+                                use_border5=False,
+                                max_chars=16,
+                                bubble_tone="cyan",
+                                force=True,
+                            )
                         except Exception:
                             pass
-                    # 不再 _show_meet_speech，避免相遇刷文本
+                    else:
+                        try:
+                            self._schedule_meet_os_after_peer(spoken, other_id)
+                        except Exception:
+                            pass
             # 未到正式相识：清 flow 稍延后，避免把对方接话信号冲掉
             self._crossover_bar_sig = None
             delay_clear = 2200 if familiar else 200
@@ -21289,7 +22471,9 @@ class DesktopPet:
             # 超时仍说，避免一直憋着
             try:
                 self._announce_peer_speech(line, auto_hide_ms=1800, reason="meet", write_session=False)
-                self._show_meet_speech(line, auto_hide_ms=1800, use_border5=False, max_chars=16)
+                self._show_meet_speech(
+                    line, auto_hide_ms=1800, use_border5=False, max_chars=16, bubble_tone="cyan", force=True
+                )
             except Exception:
                 pass
             return
@@ -21316,7 +22500,9 @@ class DesktopPet:
             return
         try:
             self._announce_peer_speech(line, auto_hide_ms=1800, reason="meet", write_session=False)
-            self._show_meet_speech(line, auto_hide_ms=1800, use_border5=False, max_chars=16)
+            self._show_meet_speech(
+                line, auto_hide_ms=1800, use_border5=False, max_chars=16, bubble_tone="cyan", force=True
+            )
         except Exception:
             pass
 
@@ -21548,6 +22734,17 @@ class DesktopPet:
         if kind == "act" and not peer_friendship.actions_available(int(st.get("level") or 1), n):
             self._show_toast("相识后可并肩散步（第11次起）", "#ff88aa", duration_ms=2600)
             return
+        if kind == "talk":
+            try:
+                peer_friendship.note_milestone(PEER_PRESENCE_DIR, "first_talk", xp=2.5)
+                peer_friendship.grant_xp(
+                    PEER_PRESENCE_DIR,
+                    0.8,
+                    channel=peer_friendship.XP_CHANNEL_TALK,
+                    note="认真聊天",
+                )
+            except Exception:
+                pass
         existing = peer_friendship.load_session(PEER_PRESENCE_DIR)
         # 已有「同意图」场次则加入，不另开；点「话」不误入「动」，反之亦然
         if kind == "talk" and self._crossover_session_talkish(existing):
@@ -21654,7 +22851,12 @@ class DesktopPet:
                     "long_topic": str(plan.get("long_topic") or plan.get("mood_topic") or ""),
                     "mood_emote": str(plan.get("mood_emote") or plan.get("emote_open") or ""),
                     "emote_open": str(plan.get("emote_open") or plan.get("mood_emote") or ""),
+                    "emote1": str(plan.get("emote1") or ""),
+                    "emote2": str(plan.get("emote2") or ""),
+                    "style": str(plan.get("style") or ""),
+                    "talk_style": str(plan.get("style") or ""),
                     "mid_lines": list(plan.get("mid_lines") or []),
+                    "mid_emotes": list(plan.get("mid_emotes") or []),
                     "topic_editable": bool(plan.get("topic_editable", True)),
                     "garble_left": int(plan.get("garble_left") or 0),
                     "dialog_step": 0,
@@ -22107,15 +23309,17 @@ class DesktopPet:
     def _stop_crossover_stroll(self, *, clear_session: bool = False) -> None:
         self._crossover_stroll_active = False
         self._crossover_stroll_peer_id = ""
-        if self._crossover_stroll_job:
+        stroll_job = getattr(self, "_crossover_stroll_job", None)
+        if stroll_job:
             try:
-                self.root.after_cancel(self._crossover_stroll_job)
+                self.root.after_cancel(stroll_job)
             except Exception:
                 pass
             self._crossover_stroll_job = None
-        if self._crossover_chat_job:
+        chat_job = getattr(self, "_crossover_chat_job", None)
+        if chat_job:
             try:
-                self.root.after_cancel(self._crossover_chat_job)
+                self.root.after_cancel(chat_job)
             except Exception:
                 pass
             self._crossover_chat_job = None
@@ -22399,6 +23603,52 @@ class DesktopPet:
         except Exception:
             pass
 
+    def _start_crossover_highfive(self, peer: dict) -> None:
+        """挚友击掌：双方确认后才播放；防骚扰。"""
+        fri = peer_friendship.load(PEER_PRESENCE_DIR)
+        st = peer_friendship.stats(float(fri.get("points") or 0), fri)
+        level = int(st.get("level") or 1)
+        ok, tip = peer_friendship.can_use_intimate_action(
+            PEER_PRESENCE_DIR, peer_friendship.ACTION_HIGHFIVE, level
+        )
+        if ok:
+            try:
+                self._play_expression("happy")
+            except Exception:
+                pass
+            self._show_toast("击掌！啪——", "#88ffcc", duration_ms=2200)
+            try:
+                peer_friendship.grant_xp(
+                    PEER_PRESENCE_DIR,
+                    1.5,
+                    channel=peer_friendship.XP_CHANNEL_STROLL,
+                    note="击掌",
+                )
+                self._refresh_panel_friendship()
+            except Exception:
+                pass
+            return
+        # 本侧点头确认
+        peer_friendship.set_mutual_consent(
+            PEER_PRESENCE_DIR,
+            peer_friendship.ACTION_HIGHFIVE,
+            PEER_KIND,
+            agreed=True,
+        )
+        ready = peer_friendship.mutual_consent_ready(
+            peer_friendship.load(PEER_PRESENCE_DIR),
+            peer_friendship.ACTION_HIGHFIVE,
+        )
+        if ready:
+            self._show_toast("双方已确认，再点一次击掌吧", "#88ffcc", duration_ms=2400)
+        else:
+            other = "苍叶" if PEER_KIND == "eiden" else "伊得"
+            self._show_toast(
+                f"已记录你的确认 · 等{other}也同意（{tip}）",
+                "#ffcc66",
+                duration_ms=2800,
+            )
+
     def _crossover_stroll_chat_tick(self) -> None:
         """并肩闲聊：前两句实词，其后乱码；轮次超时本机接管，保证多句对话。"""
         self._crossover_chat_job = None
@@ -22598,6 +23848,14 @@ class DesktopPet:
                 )
             except Exception:
                 pass
+            try:
+                self._crossover_maybe_talk_emote(
+                    line1,
+                    session=session,
+                    preferred=str(session.get("emote1") or ""),
+                )
+            except Exception:
+                pass
             self._crossover_dialogue_said_step = 1
             if talk_mode == "tell":
                 try:
@@ -22700,6 +23958,14 @@ class DesktopPet:
                     )
                 except Exception:
                     pass
+                try:
+                    self._crossover_maybe_talk_emote(
+                        line2,
+                        session=session,
+                        preferred=str(session.get("emote2") or ""),
+                    )
+                except Exception:
+                    pass
                 self._crossover_dialogue_said_step = 2
                 until = int(getattr(self, "_peer_speech_until_ms", 0) or now_ms + hide_ms)
                 peer_friendship.merge_session(
@@ -22745,6 +24011,14 @@ class DesktopPet:
                         instant=True,
                         from_meet=True,
                         bubble_tone="cyan",
+                    )
+                except Exception:
+                    pass
+                try:
+                    self._crossover_maybe_talk_emote(
+                        line2,
+                        session=session,
+                        preferred=str(session.get("emote2") or ""),
                     )
                 except Exception:
                     pass
@@ -23153,7 +24427,19 @@ class DesktopPet:
                         if ok
                         else float(getattr(peer_friendship, "QUIZ_WRONG_POINTS", -0.5))
                     )
-                    peer_friendship.add_friendship_points(PEER_PRESENCE_DIR, delta)
+                    peer_friendship.add_friendship_points(
+                        PEER_PRESENCE_DIR,
+                        delta,
+                        channel=peer_friendship.XP_CHANNEL_QUIZ,
+                        note="回忆问答" if ok else "问答未中",
+                    )
+                    if ok:
+                        try:
+                            peer_friendship.note_milestone(
+                                PEER_PRESENCE_DIR, "first_quiz_ok", xp=2.0
+                            )
+                        except Exception:
+                            pass
                 except Exception:
                     pass
                 try:
@@ -23299,6 +24585,50 @@ class DesktopPet:
     def _crossover_play_scene_emote(self, emote: str) -> None:
         """长谈氛围/结局时轻表情，失败则忽略。"""
         try:
+            self._crossover_soft_emote(emote)
+        except Exception:
+            pass
+
+    def _crossover_maybe_talk_emote(
+        self,
+        line: str = "",
+        *,
+        session: dict | None = None,
+        force: bool = False,
+        chance: float | None = None,
+        preferred: str = "",
+    ) -> None:
+        """说话时附带轻表情：乱码更高频，普通对话也会常出。"""
+        try:
+            sess = session if isinstance(session, dict) else {}
+            style = str(sess.get("talk_style") or sess.get("style") or "")
+            talk_mode = str(sess.get("talk_mode") or "")
+            try:
+                garbled = bool(peer_friendship.looks_like_garbled_line(line)) or style == "garble"
+            except Exception:
+                garbled = style == "garble"
+            pref = str(preferred or "").strip()
+            if chance is None:
+                chance = 0.92 if (garbled or pref) else 0.58
+            if pref:
+                force = True
+            if not force and random.random() > float(chance):
+                return
+            now = int(time.time() * 1000)
+            last = int(getattr(self, "_crossover_talk_emote_ms", 0) or 0)
+            gap = 580 if garbled else 980
+            if now - last < gap and not force:
+                return
+            try:
+                emote = peer_friendship.pick_talk_line_emote(
+                    garbled=garbled,
+                    style=style,
+                    talk_mode=talk_mode,
+                    preferred=pref,
+                )
+            except Exception:
+                emote = pref or ("awkward" if garbled else "like")
+            self._crossover_talk_emote_ms = now
             self._crossover_soft_emote(emote)
         except Exception:
             pass
@@ -23493,13 +24823,20 @@ class DesktopPet:
             )
         except Exception:
             pass
-        if mid_turn in (0, 2) and str(session.get("emote_open") or session.get("mood_emote") or "").strip():
-            try:
-                self._crossover_play_scene_emote(
-                    str(session.get("emote_open") or session.get("mood_emote") or "")
-                )
-            except Exception:
-                pass
+        # 乱码中段：几乎每句都跟表情
+        try:
+            mid_emotes = session.get("mid_emotes") if isinstance(session.get("mid_emotes"), list) else []
+            preferred = ""
+            if mid_turn < len(mid_emotes):
+                preferred = str(mid_emotes[mid_turn] or "").strip()
+            self._crossover_maybe_talk_emote(
+                line,
+                session={**session, "style": "garble"},
+                preferred=preferred,
+                chance=0.95,
+            )
+        except Exception:
+            pass
         left_n = max(0, garble_left - 1)
         try:
             peer_friendship.merge_session(
@@ -24105,6 +25442,16 @@ class DesktopPet:
                 restored["ts"] = now_ms
                 if my_id == str(session.get("leader_id") or ""):
                     peer_friendship.save_session(PEER_PRESENCE_DIR, restored)
+                    try:
+                        peer_friendship.note_milestone(PEER_PRESENCE_DIR, "first_stroll", xp=3.5)
+                        peer_friendship.grant_xp(
+                            PEER_PRESENCE_DIR,
+                            2.0,
+                            channel=peer_friendship.XP_CHANNEL_STROLL,
+                            note="并肩散步",
+                        )
+                    except Exception:
+                        pass
                 self._stop_crossover_stroll(clear_session=False)
                 self._crossover_bar_sig = None
                 target = self._crossover_bar_peer_for_display()
@@ -24696,6 +26043,35 @@ class DesktopPet:
                 pass
         return False
 
+    def _edit_panels_open(self) -> bool:
+        """装扮 / 画素材 / 带 BGM 的面板打开时：暂停走动，把主线程留给界面。"""
+        for attr in (
+            "outfit_editor_win",
+            "home_paint_win",
+            "gift_win",
+            "diary_win",
+            "phonograph_win",
+            "gallery_win",
+        ):
+            win = getattr(self, attr, None)
+            try:
+                if win is not None and win.winfo_exists() and bool(win.winfo_viewable()):
+                    return True
+            except Exception:
+                pass
+        return False
+
+    def _prefer_dialog_parent(self) -> tk.Misc:
+        """命名/取色等模态窗优先挂在当前编辑窗上，避免被装扮/画板盖住像卡死。"""
+        for attr in ("home_paint_win", "outfit_editor_win", "home_win", "gift_win"):
+            win = getattr(self, attr, None)
+            try:
+                if win is not None and win.winfo_exists():
+                    return win
+            except Exception:
+                pass
+        return self.root
+
     def _lift_menu_above_pet(self, win: tk.Misc | None) -> None:
         """菜单置顶且压在宠上；不做全窗 restack（避免右击时色键立绘被层级重排弄没）。"""
         if win is None:
@@ -25013,6 +26389,10 @@ class DesktopPet:
         tk.Label(head, text=title, font=PIXEL_FONT, fg=MENU_FG, bg=MENU_BG).pack(side=tk.LEFT)
         count_lbl = tk.Label(head, text="", font=HINT_FONT, fg=MENU_MUTED, bg=MENU_BG)
         count_lbl.pack(side=tk.RIGHT)
+        try:
+            self._show_toast("悬停曲目约0.3秒可试听8秒", "#88ccff", duration_ms=2800)
+        except Exception:
+            pass
 
         filter_row = tk.Frame(win, bg=MENU_BG, padx=10)
         filter_row.pack(fill=tk.X, pady=(0, 4))
@@ -25046,6 +26426,7 @@ class DesktopPet:
         _scroll_arm_canvas(wrap, canvas)
 
         def pick(tid: str) -> None:
+            self._cancel_music_picker_preview(resume=False)
             try:
                 win.destroy()
             except Exception:
@@ -25054,6 +26435,7 @@ class DesktopPet:
             on_pick(tid)
 
         def rebuild_grid() -> None:
+            self._cancel_music_picker_preview(resume=False)
             for child in grid.winfo_children():
                 try:
                     child.destroy()
@@ -25084,7 +26466,7 @@ class DesktopPet:
                 name = str(track["title"])
                 if len(name) > 14:
                     name = name[:13] + "…"
-                tk.Label(
+                name_lbl = tk.Label(
                     cell,
                     text=name,
                     font=_ui_title_font(8),
@@ -25092,9 +26474,11 @@ class DesktopPet:
                     bg="#f4f4f4",
                     wraplength=88,
                     justify=tk.CENTER,
-                ).pack(pady=(2, 0))
+                )
+                name_lbl.pack(pady=(2, 0))
                 for wdg in (cell, btn):
                     wdg.bind("<Button-1>", lambda _e, t=tid: pick(t))
+                self._bind_music_picker_hover_preview((cell, btn, name_lbl), tid)
             for c in range(MUSIC_PICKER_COLS):
                 grid.grid_columnconfigure(c, weight=1)
             on_configure()
@@ -25124,6 +26508,7 @@ class DesktopPet:
         rebuild_grid()
 
         def on_close() -> None:
+            self._cancel_music_picker_preview(resume=True)
             while canvas in _SCROLL_WHEEL_STACK:
                 try:
                     _SCROLL_WHEEL_STACK.remove(canvas)
@@ -25238,6 +26623,7 @@ class DesktopPet:
 
         def rebuild_grid() -> None:
             nonlocal visible_ids
+            self._cancel_music_picker_preview(resume=False)
             for child in grid.winfo_children():
                 try:
                     child.destroy()
@@ -25283,6 +26669,7 @@ class DesktopPet:
                 label_refs[tid] = name_lbl
                 for wdg in (cell, name_lbl):
                     wdg.bind("<Button-1>", lambda _e, t=tid: toggle(t))
+                self._bind_music_picker_hover_preview((cell, btn, name_lbl), tid)
             for c in range(MUSIC_PICKER_COLS):
                 grid.grid_columnconfigure(c, weight=1)
             refresh_count()
@@ -25360,6 +26747,7 @@ class DesktopPet:
         tk.Button(foot, text="确定", command=confirm, font=PIXEL_FONT, bg=MENU_ACTIVE, fg=MENU_FG).pack(side=tk.RIGHT)
 
         def on_close() -> None:
+            self._cancel_music_picker_preview(resume=True)
             while canvas in _SCROLL_WHEEL_STACK:
                 try:
                     _SCROLL_WHEEL_STACK.remove(canvas)
@@ -25990,7 +27378,7 @@ class DesktopPet:
         win.configure(bg=MENU_BG)
         win.protocol("WM_DELETE_WINDOW", self._close_vocab_notebook)
         try:
-            self._start_overlay_bgm(GAME_BGM_VOCAB_NOTEBOOK, reason="vocab_notebook")
+            self._defer_start_overlay_bgm(GAME_BGM_VOCAB_NOTEBOOK, reason="vocab_notebook", delay_ms=360)
         except Exception:
             pass
         w, h = _fit_panel_wh(win, PANEL_FIXED_W, PANEL_FIXED_H)
@@ -26257,10 +27645,6 @@ class DesktopPet:
         self._restore_mini_pets_after_gather()
         try:
             self._stop_overlay_bgm(reason="gather")
-        except Exception:
-            pass
-        try:
-            self._maybe_start_chest_wait_bgm()
         except Exception:
             pass
 
@@ -27232,14 +28616,17 @@ class DesktopPet:
         controls_armed: bool = False,
         with_media: bool = False,
         show_timer_face: bool = True,
+        media_external: bool = False,
         on_done=None,
     ) -> None:
         """kind: stopwatch | countdown。force=工具打开时无视显示开关。
         with_controls：秒表/计时器/番茄 显示 ⏸▶⏹。
         controls_armed：有控件但开局即走（番茄工作/休息）；否则等点 ▶。
         with_media：音乐模式下方 ⏮ ⏯ ⏭ ⏹（⏹ 结束回自由）。
-        show_timer_face：是否显示秒表数字/绕圈小人；关「时间显示」时音乐可仅留媒体键。"""
+        show_timer_face：是否显示秒表数字/绕圈小人；关「时间显示」时音乐可仅留媒体键。
+        media_external：环境跟听时控外部软件（不播内部曲）。"""
         show_face = bool(show_timer_face)
+        external = bool(media_external)
         # 音乐媒体栏在关时间显示时仍要建（仅无秒表面）
         if (
             not force
@@ -27252,8 +28639,10 @@ class DesktopPet:
         now = int(time.time() * 1000)
         if slot == "sleep":
             self._sleep_session_start_ms = now
-        elif slot == "music":
+        elif slot == "music" and not external:
             self._music_session_start_ms = now
+        elif slot == "music" and external:
+            self._music_session_start_ms = 0
         m = self._desk_clock_metrics()
         pad = int(m["pad"])
         inner_w, inner_h = int(m["inner_w"]), int(m["inner_h"])
@@ -27316,6 +28705,7 @@ class DesktopPet:
             "with_controls": bool(with_controls),
             "with_media": bool(with_media),
             "show_timer_face": show_face,
+            "media_external": external,
             "controls_armed": bool(controls_armed),
             "force": bool(force),
             "running": running,
@@ -27353,17 +28743,25 @@ class DesktopPet:
             mf.pack(fill=tk.X, padx=6, pady=(0, 4))
             mid = tk.Frame(mf, bg=clock_chrome)
             mid.pack(anchor=tk.CENTER)
+            prev_tip = "上一首（外部）" if external else "上一首"
+            next_tip = "下一首（外部）" if external else "下一首"
+            play_tip = "播放/暂停（外部）" if external else "播放/暂停"
+            stop_tip = "结束跟听 · 回自由" if external else "结束音乐 · 回自由"
             self._icon_transport_btn(
                 mid, "⏮", self._bg_music_prev_track,
-                tip="上一首", font=btn_font, tone="orange",
+                tip=prev_tip, font=btn_font, tone="orange",
                 transparency=glass, key_chrome=clock_chrome,
             ).pack(side=tk.LEFT, padx=3)
-            play_glyph = "▶" if getattr(self, "bg_music_user_paused", False) else "⏸"
+            play_glyph = (
+                "⏯"
+                if external
+                else ("▶" if getattr(self, "bg_music_user_paused", False) else "⏸")
+            )
             play_btn = self._icon_transport_btn(
                 mid,
                 play_glyph,
                 self._bg_music_toggle_pause,
-                tip="播放/暂停",
+                tip=play_tip,
                 font=btn_font,
                 tone="pink",
                 transparency=glass,
@@ -27373,12 +28771,12 @@ class DesktopPet:
             info["media_play_btn"] = play_btn
             self._icon_transport_btn(
                 mid, "⏭", self._bg_music_next_track,
-                tip="下一首", font=btn_font, tone="green",
+                tip=next_tip, font=btn_font, tone="green",
                 transparency=glass, key_chrome=clock_chrome,
             ).pack(side=tk.LEFT, padx=3)
             self._icon_transport_btn(
                 mid, "⏹", self._apply_music_off,
-                tip="结束音乐 · 回自由", font=btn_font, tone="purple",
+                tip=stop_tip, font=btn_font, tone="purple",
                 transparency=glass, key_chrome=clock_chrome,
             ).pack(side=tk.LEFT, padx=(8, 3))
 
@@ -27471,7 +28869,12 @@ class DesktopPet:
         try:
             if not btn.winfo_exists():
                 return
-            btn.config(text="▶" if getattr(self, "bg_music_user_paused", False) else "⏸")
+            if bool(info.get("media_external")) or bool(
+                getattr(self, "music_ambient_only", False)
+            ):
+                btn.config(text="⏯")
+            else:
+                btn.config(text="▶" if getattr(self, "bg_music_user_paused", False) else "⏸")
         except Exception:
             pass
 
@@ -27766,6 +29169,7 @@ class DesktopPet:
                     "controls_armed": bool(info.get("controls_armed")),
                     "with_media": bool(info.get("with_media")),
                     "show_timer_face": bool(info.get("show_timer_face", True)),
+                    "media_external": bool(info.get("media_external")),
                     "on_done": info.get("on_done"),
                     "running": bool(info.get("running")),
                     "accum_ms": accum,
@@ -27804,6 +29208,7 @@ class DesktopPet:
                 controls_armed=False,  # 先不自动跑，恢复 accum 后再决定
                 with_media=bool(snap["with_media"]),
                 show_timer_face=bool(snap.get("show_timer_face", True)),
+                media_external=bool(snap.get("media_external")),
                 on_done=snap["on_done"],
             )
             info = self._desk_clocks.get(slot)
@@ -27846,14 +29251,18 @@ class DesktopPet:
         else:
             self._hide_desk_clock("sleep")
 
-        # 音乐：时间显示关只去掉秒表面，媒体键 ⏮⏯⏭⏹ 必须保留
+        # 音乐栏：
+        # - 手动音乐：播内部曲；「时间显示」开才出秒表数字/小人，关则只留控歌键
+        # - 环境检测：切图跟听、无秒表；控歌键控外部软件，不播内部曲
         if getattr(self, "music_sprite_mode", False):
-            want_face = show
+            ambient = bool(getattr(self, "music_ambient_only", False))
+            want_face = bool(show) and not ambient
             info = self._desk_clocks.get("music")
             active = self._desk_clock_active("music")
             face_ok = bool(info and bool(info.get("show_timer_face", True)) == want_face)
             media_ok = bool(info and info.get("with_media"))
-            if not active or not media_ok or not face_ok:
+            ambient_ok = bool(info and bool(info.get("media_external", False)) == ambient)
+            if not active or not media_ok or not face_ok or not ambient_ok:
                 music_sess = int(getattr(self, "_music_session_start_ms", 0) or 0)
                 wx = wy = None
                 if active and info:
@@ -27872,17 +29281,22 @@ class DesktopPet:
                     force=True,
                     with_media=True,
                     show_timer_face=want_face,
+                    media_external=ambient,
                 )
-                if music_sess > 0:
+                if (not ambient) and music_sess > 0:
                     self._music_session_start_ms = music_sess
+                elif ambient:
+                    self._music_session_start_ms = 0
                 info2 = self._desk_clocks.get("music")
                 if info2 and wx is not None and wy is not None:
                     try:
                         info2["win"].geometry(f"+{wx}+{wy}")
                     except Exception:
                         pass
+                self._refresh_music_media_play_btn()
             else:
                 self._ensure_desk_clock_on_screen("music")
+                self._refresh_music_media_play_btn()
         else:
             self._hide_desk_clock("music")
 
@@ -28204,6 +29618,30 @@ class DesktopPet:
         self._pomodoro_completed = done
         self._pomodoro_round = done + 1
         self._show_toast(f"第 {done} 轮番茄完成 · 开始第 {self._pomodoro_round} 轮", "#88ffcc", duration_ms=2400)
+        try:
+            tip = home_farm.grant_pomodoro_farm_reward(self.wallet)
+            self._persist_wallet()
+            self.root.after(700, lambda t=tip: self._show_toast(t, "#a8e878", duration_ms=2400))
+        except Exception:
+            pass
+        try:
+            self._grant_owner_bond(owner_bond.CH_POMODORO, toast=True)
+            self._reward_drop_for_event("pomodoro")
+        except Exception:
+            pass
+        # 跨宠已连线时：共同专注弱加友情（办公向）
+        try:
+            flow = peer_friendship.get_flow(PEER_PRESENCE_DIR)
+            if flow and str(flow.get("flow")) == peer_friendship.FLOW_LINKED:
+                peer_friendship.grant_xp(
+                    PEER_PRESENCE_DIR,
+                    1.0,
+                    channel=peer_friendship.XP_CHANNEL_CO_FOCUS,
+                    note="共同专注一轮番茄",
+                )
+                self._refresh_panel_friendship()
+        except Exception:
+            pass
         if done > 0 and done % 4 == 0:
             self.root.after(
                 800,
@@ -28213,6 +29651,10 @@ class DesktopPet:
                     duration_ms=2800,
                 ),
             )
+            try:
+                self._play_bond_reaction("contract_done", force_emote=True)
+            except Exception:
+                pass
         self._pomodoro_begin_work()
 
     def _clear_pomodoro_flags(self) -> None:
@@ -28440,6 +29882,18 @@ class DesktopPet:
         subtitle = f"接取 {catches} 个 · 得分 {score}\n错过 {misses}  ·  库存 {self._food_inventory_total()}\n{detail}"
         if coin_gain > 0:
             subtitle += f"\n金币 +{coin_gain}"
+        failed = misses >= catches or catches <= 0
+        if failed:
+            try:
+                _play_ui_sfx("game_fail", volume=0.58)
+            except Exception:
+                pass
+        else:
+            # 与音游等胜利相同：游戏成功音效 + bgm004，不用 bgm008
+            try:
+                self._play_game_victory_fanfare()
+            except Exception:
+                pass
         self._show_game_clear(
             title="采集完成",
             subtitle=subtitle,
@@ -28447,7 +29901,7 @@ class DesktopPet:
             on_done=self._resume_idle,
         )
         # 差劲：错过 ≥ 接住，或整局 0 接（与结算画面并存，hurt 仅附加）
-        if misses >= catches or catches <= 0:
+        if failed:
             self._play_game_fail_voice("hurt")
 
     def _hide_game_clear(self) -> None:
@@ -28971,8 +30425,183 @@ class DesktopPet:
         )
 
     def _open_invite_stub(self) -> None:
+        """面板「眷属」：打开友情关系卡（对齐苍叶入口；画面用伊得粉调）。"""
         self._hide_main_menu()
-        self._show_toast("尚未开发完全", "#ffcc66", duration_ms=2800)
+        self._open_friendship_relation_card()
+
+    def _open_friendship_relation_card(self) -> None:
+        """友情关系卡：阶段、进度、今日经验、权限树、下一解锁预览。"""
+        old = getattr(self, "friendship_card_win", None)
+        if old is not None:
+            try:
+                if old.winfo_exists():
+                    old.lift()
+                    old.focus_force()
+                    return
+            except Exception:
+                pass
+        try:
+            card = peer_friendship.relation_card(PEER_PRESENCE_DIR)
+        except Exception:
+            self._show_toast("暂时读不到友情档案", "#ff8866")
+            return
+        theme = HOME_THEME
+        win = tk.Toplevel(self.root)
+        self.friendship_card_win = win
+        win.title("友情关系")
+        self._apply_window_layer(win)
+        try:
+            _apply_paper_theme_window(win, theme, motif="home")
+        except Exception:
+            win.configure(bg=theme["bg"])
+        paper = theme["bg"]
+        frame = tk.Frame(win, bg=paper, padx=12, pady=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        stage_name = str(card.get("stage_name") or "初识")
+        title = str(card.get("title") or "")
+        lv = int(card.get("level") or 1)
+        peer_names = str(card.get("peer_names") or "苍叶 ↔ 伊得")
+        tk.Label(frame, text=peer_names, font=PIXEL_FONT, fg=THEME_PINK, bg=paper).pack(anchor=tk.W)
+        tk.Label(
+            frame,
+            text=f"「{stage_name}」· {title} · Lv{lv}",
+            font=_ui_title_font(10),
+            fg=theme["ink"],
+            bg=paper,
+        ).pack(anchor=tk.W, pady=(2, 4))
+
+        bar_host = tk.Frame(frame, bg=paper)
+        bar_host.pack(fill=tk.X, pady=(0, 4))
+        bar_cv = tk.Canvas(bar_host, width=PANEL_BAR_W, height=PANEL_BAR_H, bg=paper, highlightthickness=0)
+        bar_cv.pack(side=tk.LEFT)
+        _draw_panel_bar(bar_cv, int(card.get("bar_pct") or 0), THEME_PINK, width=PANEL_BAR_W, height=PANEL_BAR_H)
+        cur = float(card.get("bar_cur") or 0)
+        need = float(card.get("bar_need") or 1)
+        tk.Label(
+            bar_host,
+            text=f"{cur:.0f}/{need:.0f}",
+            font=_ui_hint_font(8),
+            fg=theme["muted"],
+            bg=paper,
+        ).pack(side=tk.LEFT, padx=(8, 0))
+
+        daily_left = float(card.get("daily_xp_left") or 0)
+        daily_cap = float(card.get("daily_xp_cap") or 100)
+        daily_xp = float(card.get("daily_xp") or 0)
+        tk.Label(
+            frame,
+            text=f"今日经验 {daily_xp:.0f}/{daily_cap:.0f}（还可 +{daily_left:.0f}）",
+            font=_ui_hint_font(8),
+            fg="#5a8860" if daily_left > 0 else "#c08060",
+            bg=paper,
+        ).pack(anchor=tk.W)
+
+        nxt = str(card.get("next_unlock") or "")
+        nxt_d = str(card.get("next_unlock_detail") or "")
+        tk.Label(
+            frame,
+            text=f"下一解锁：{nxt}",
+            font=_ui_body_font(9),
+            fg=theme["ink"],
+            bg=paper,
+            wraplength=320,
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(6, 0))
+        if nxt_d and nxt_d not in nxt:
+            tk.Label(
+                frame,
+                text=nxt_d,
+                font=_ui_hint_font(8),
+                fg=theme["muted"],
+                bg=paper,
+                wraplength=320,
+                justify=tk.LEFT,
+            ).pack(anchor=tk.W)
+
+        tips = card.get("maintain_tips") or card.get("maintain_hints") or []
+        if tips:
+            tip_txt = "今日可维护：\n" + "\n".join(f"· {t}" for t in tips[:2])
+            tk.Label(
+                frame,
+                text=tip_txt,
+                font=_ui_hint_font(8),
+                fg=theme["muted"],
+                bg=paper,
+                justify=tk.LEFT,
+                wraplength=320,
+            ).pack(anchor=tk.W, pady=(6, 4))
+
+        tree_fr = tk.Frame(frame, bg=theme["chrome"], padx=6, pady=4)
+        tree_fr.pack(fill=tk.X, pady=(4, 6))
+        tk.Label(
+            tree_fr, text="互动权限", font=_ui_title_font(8), fg=THEME_PINK, bg=theme["chrome"]
+        ).pack(anchor=tk.W)
+        for node in card.get("perm_tree") or []:
+            on = bool(node.get("unlocked"))
+            mark = "●" if on else "○"
+            color = "#5a8860" if on else theme["muted"]
+            line = f"{mark} {node.get('name')}：{node.get('unlock_label') or '—'}"
+            tk.Label(
+                tree_fr, text=line, font=_ui_hint_font(8), fg=color, bg=theme["chrome"], anchor=tk.W
+            ).pack(fill=tk.X)
+
+        btn_row = tk.Frame(frame, bg=paper)
+        btn_row.pack(fill=tk.X, pady=(4, 0))
+        need_lv = int(getattr(peer_friendship, "HOME_GUEST_UNLOCK_LEVEL", 2) or 2)
+        guest_unlocked = lv >= need_lv
+
+        def _do_invite() -> None:
+            try:
+                win.destroy()
+            except Exception:
+                pass
+            self.friendship_card_win = None
+            if not (self.home_win and self.home_win.winfo_exists()):
+                self._open_home()
+            self.root.after(200, self._home_toggle_aoba_guest)
+
+        tk.Button(
+            btn_row,
+            text="邀请做客" if guest_unlocked else f"做客需「熟人」(Lv{need_lv})",
+            font=PIXEL_FONT,
+            bg=theme["chrome_btn"] if guest_unlocked else theme["chrome_btn2"],
+            fg=theme["ink"] if guest_unlocked else theme["muted"],
+            relief=tk.FLAT,
+            command=_do_invite
+            if guest_unlocked
+            else (
+                lambda: self._show_toast(
+                    f"升到「熟人」(Lv{need_lv}) 后可邀请苍叶来家园",
+                    "#ffcc66",
+                    duration_ms=2600,
+                )
+            ),
+            padx=8,
+            pady=4,
+        ).pack(side=tk.LEFT)
+        tk.Button(
+            btn_row,
+            text="关闭",
+            font=PIXEL_FONT,
+            bg=theme["chrome_btn2"],
+            fg=theme["ink"],
+            relief=tk.FLAT,
+            command=lambda: (win.destroy(), setattr(self, "friendship_card_win", None)),
+            padx=8,
+            pady=4,
+        ).pack(side=tk.RIGHT)
+
+        try:
+            win.update_idletasks()
+            w = max(win.winfo_reqwidth(), 340)
+            h = max(win.winfo_reqheight(), 280)
+            x = max(0, int(self.x) + self.display_size + 8)
+            y = max(0, int(self.y))
+            win.geometry(f"{w}x{h}+{x}+{y}")
+        except Exception:
+            pass
+        win.protocol("WM_DELETE_WINDOW", lambda: (win.destroy(), setattr(self, "friendship_card_win", None)))
 
     def _open_ai_chat_stub(self) -> None:
         """兼容旧入口名：打开 AI 对话窗（需在 data/ai_config.json 配置 api_key 才走云端）。"""
@@ -29182,6 +30811,9 @@ class DesktopPet:
         self._home_desktop_photos.clear()
         self._home_desk_drag = None
         self._home_desktop_title = None
+        self._home_desktop_mute_lbl = None
+        self._home_desktop_mode_lbl = None
+        self._home_desktop_invite_lbl = None
         if not self._home_any_view_open():
             self._cancel_home_day_cycle()
             try:
@@ -29219,7 +30851,7 @@ class DesktopPet:
             return
         self._home_setup_assets()
         self._home_layout = layout
-        self._place_home_on_desktop()
+        self._place_home_on_desktop(restore=True)
 
     def _home_setup_assets(self) -> None:
         rpg_root = resolve_bundled("Vpetgame", legacy=LEGACY_GAME_ROOT)
@@ -29284,8 +30916,310 @@ class DesktopPet:
         return max(1, (datetime.now().date() - start_dt.date()).days + 1)
 
     def _home_max_rooms(self) -> int:
-        return home_room.max_rooms_for_companion_days(self._companion_days())
+        bond_lv = 1
+        try:
+            bond_lv = int(owner_bond.stats(self._owner_bond).get("level") or 1)
+        except Exception:
+            bond_lv = 1
+        return home_room.max_rooms_with_bond(self._companion_days(), bond_lv)
 
+    def _persist_owner_bond(self) -> None:
+        try:
+            owner_bond.save(OWNER_BOND_FILE, self._owner_bond)
+        except Exception:
+            pass
+
+    def _grant_owner_bond(self, channel: str, *, amount: float | None = None, toast: bool = True) -> dict:
+        try:
+            result = owner_bond.grant(OWNER_BOND_FILE, amount, channel=channel)
+            self._owner_bond = owner_bond.load(OWNER_BOND_FILE)
+        except Exception:
+            return {}
+        tip = str(result.get("tip") or "")
+        gained = float(result.get("gained") or 0)
+        if toast and (gained > 0 or tip):
+            msg = tip or f"羁绊 +{gained:.1f}"
+            color = "#e8a0b8" if result.get("leveled_up") else "#88ccff"
+            try:
+                self._show_toast(msg, color, duration_ms=2200)
+            except Exception:
+                pass
+        if result.get("leveled_up"):
+            try:
+                self._play_bond_reaction("bond_milestone")
+            except Exception:
+                pass
+        return result
+
+    def _sprite_dirs_for_react(self) -> list[Path]:
+        dirs: list[Path] = []
+        for key in ("sprites", "Sprites", "bundled"):
+            pass
+        try:
+            from bundled_paths import resolve_bundled
+
+            for name in ("VpetPNG", "sprites"):
+                try:
+                    p = resolve_bundled(name)
+                    if p and Path(p).exists():
+                        dirs.append(Path(p))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        # 常见本机精灵目录
+        for cand in (
+            Path(__file__).resolve().parent / "bundled" / "VpetPNG",
+            Path(__file__).resolve().parent / "assets" / "sprites",
+            DATA_DIR.parent / "bundled" / "VpetPNG",
+        ):
+            if cand.is_dir():
+                dirs.append(cand)
+        return dirs
+
+    def _play_bond_reaction(self, tag_or_scene: str, *, force_emote: bool = False) -> None:
+        """轻反应：优先自定义素材标签，否则回退已有表情。安静模式默认只 toast。"""
+        quiet = bool((self._owner_bond or {}).get("quiet_scene_mode", True)) and not force_emote
+        scene_tags = set(emote_registry.SCENE_TO_REACT.keys())
+        if tag_or_scene in scene_tags:
+            info = emote_registry.resolve_scene_reaction(tag_or_scene, self._sprite_dirs_for_react())
+            emote = str(info.get("emote") or "idea")
+            label = str(info.get("label") or tag_or_scene)
+        else:
+            meta = emote_registry.resolve_react_tag(tag_or_scene)
+            emote = str(meta.get("fallback_emote") or "like")
+            label = str(meta.get("label") or tag_or_scene)
+        if quiet and not force_emote:
+            try:
+                self._show_toast(f"· {label}", "#c8b0d8", duration_ms=1600)
+            except Exception:
+                pass
+            return
+        try:
+            if emote == "hi":
+                self._play_action("hi")
+            elif emote == "squat":
+                self._play_action("squat")
+            else:
+                self._trigger_mood_action(emote)
+        except Exception:
+            try:
+                self._show_toast(f"· {label}", "#c8b0d8", duration_ms=1600)
+            except Exception:
+                pass
+
+    def _append_bond_diary_note(self, text: str) -> None:
+        text = str(text or "").strip()
+        if not text:
+            return
+        try:
+            entries = _load_diary()
+            today = datetime.now().strftime("%Y-%m-%d")
+            # 避免同日重复同文
+            for e in entries[-8:]:
+                if str(e.get("date") or "") == today and text in str(e.get("text") or e.get("body") or ""):
+                    return
+            entries.append(
+                {
+                    "id": str(uuid4()),
+                    "date": today,
+                    "text": text,
+                    "body": text,
+                    "mood_face": "happy",
+                    "auto": True,
+                    "source": "owner_bond",
+                }
+            )
+            _save_diary(entries[-200:])
+        except Exception:
+            pass
+
+    def _tick_owner_bond_scene(self, scene: str) -> None:
+        """共在计时、轻反应、专注契约、分心轻提醒。"""
+        if not getattr(self, "_owner_bond", None):
+            self._owner_bond = owner_bond.load(OWNER_BOND_FILE)
+        sc = str(scene or "none")
+        if sc == "hold":
+            sc = str(getattr(self, "app_scene", "") or "none")
+        now_ms = int(time.time() * 1000)
+        # 进入新轻场景：低频轻反应
+        light_scenes = ("code", "study", "office", "chat")
+        if sc in light_scenes and sc != str(getattr(self, "_bond_light_scene", "") or ""):
+            self._bond_light_scene = sc
+            last = int(getattr(self, "_bond_light_react_ms", 0) or 0)
+            if now_ms - last >= 180_000:
+                self._bond_light_react_ms = now_ms
+                self._play_bond_reaction(sc)
+        elif sc not in light_scenes and sc not in ("game", "video", "music"):
+            self._bond_light_scene = ""
+
+        data, milestones = owner_bond.tick_coexist(self._owner_bond, sc, now_ms=now_ms)
+        self._owner_bond = data
+        for sec in milestones:
+            mins = max(1, sec // 60)
+            base = owner_bond.CHANNEL_BASE_XP.get(owner_bond.CH_SCENE_COEXIST, 2.0)
+            gained, meta = owner_bond.apply_xp(self._owner_bond, base, channel=owner_bond.CH_SCENE_COEXIST)
+            label = owner_bond.SCENE_LABELS.get(sc, sc)
+            if gained > 0:
+                tip = f"一起{label} {mins} 分钟 · 羁绊 +{gained:.1f}"
+                if meta.get("leveled_up"):
+                    tip = f"羁绊升至「{owner_bond.stats(self._owner_bond).get('stage_name')}」！"
+                    try:
+                        self._play_bond_reaction("bond_milestone")
+                    except Exception:
+                        pass
+                self._show_toast(tip, "#a8d8b4", duration_ms=2200)
+                try:
+                    self._reward_drop_for_event("coexist")
+                except Exception:
+                    pass
+            self._append_bond_diary_note(owner_bond.diary_line_for_coexist(sc, mins))
+        # 桌面陪伴累积 → 随机刷宝箱小惊喜
+        try:
+            self._tick_desktop_surprise(sc, now_ms=now_ms)
+        except Exception:
+            pass
+        self._persist_owner_bond()
+
+        data, ev = owner_bond.update_focus_contract(self._owner_bond, sc, now_ms=now_ms)
+        self._owner_bond = data
+        if ev == "remind":
+            self._show_toast("契约中…先回来吧", "#ffcc88", duration_ms=1800)
+        elif ev == "complete":
+            self._persist_owner_bond()
+            self._grant_owner_bond(owner_bond.CH_FOCUS_CONTRACT, toast=True)
+            self._play_bond_reaction("contract_done", force_emote=True)
+            try:
+                self._reward_drop_for_event("focus")
+            except Exception:
+                pass
+            try:
+                tip = home_farm.grant_focus_contract_farm_drop(self.wallet)
+                self._persist_wallet()
+                self.root.after(600, lambda t=tip: self._show_toast(t, "#a8e878", duration_ms=2400))
+            except Exception:
+                pass
+            self._show_toast("专注契约完成！", "#88ffcc", duration_ms=2400)
+        elif ev == "fail":
+            self._persist_owner_bond()
+            self._show_toast("契约中断了，下次再一起", "#8899aa", duration_ms=2000)
+        else:
+            self._persist_owner_bond()
+
+        # 分心轻提醒（默认关）
+        if sc in ("chat", "video") and owner_bond.can_focus_nudge(self._owner_bond):
+            last_d = int(getattr(self, "_bond_distract_ms", 0) or 0)
+            if last_d <= 0:
+                self._bond_distract_ms = now_ms
+            elif now_ms - last_d >= 20 * 60 * 1000:
+                self._owner_bond = owner_bond.note_focus_nudge(self._owner_bond)
+                self._bond_distract_ms = now_ms
+                self._persist_owner_bond()
+                self._show_toast("要不要回来做一会儿正事？", "#c8b898", duration_ms=2200)
+        else:
+            self._bond_distract_ms = 0
+
+    def _start_focus_contract(self) -> None:
+        self._hide_main_menu()
+        scene = str(getattr(self, "app_scene", "") or "none")
+        if scene in ("none", "hold", "idle"):
+            scene = "office"
+        if scene in ("game", "video", "chat", "music"):
+            # 契约更偏向生产力场景
+            scene = "office"
+        self._owner_bond = owner_bond.start_focus_contract(self._owner_bond, scene, target_sec=25 * 60)
+        self._persist_owner_bond()
+        label = owner_bond.SCENE_LABELS.get(scene, scene)
+        self._play_bond_reaction("contract_focus", force_emote=True)
+        self._show_toast(f"专注契约开始 · 陪你{label} 25 分钟", "#88ccff", duration_ms=2600)
+
+    def _cancel_focus_contract(self) -> None:
+        self._hide_main_menu()
+        self._owner_bond = owner_bond.cancel_focus_contract(self._owner_bond)
+        self._persist_owner_bond()
+        self._show_toast("已取消专注契约", "#8899aa")
+
+    def _open_date_invite(self) -> None:
+        self._hide_main_menu()
+        st = owner_bond.stats(self._owner_bond)
+        script = character_profile.load_date_script(DATE_SCRIPTS_DIR, "park_evening")
+        ok, reason = character_profile.can_start_date(
+            bond_level=int(st.get("level") or 1),
+            script=script,
+            weekend_evening=False,
+        )
+        if not ok:
+            self._show_toast(reason, "#ff8866")
+            return
+        if not script:
+            self._show_toast("没有约会脚本", "#ff8866")
+            return
+        self._run_date_script(script)
+
+    def _run_date_script(self, script: dict) -> None:
+        """离线约会小剧场：简单选项窗。"""
+        nodes = script.get("nodes") if isinstance(script.get("nodes"), list) else []
+        if not nodes:
+            self._show_toast(str(script.get("intro") or "……"), "#e8a0b8")
+            return
+        intro = str(script.get("intro") or script.get("title") or "邀约")
+        self._show_toast(intro, "#e8a0b8", duration_ms=2400)
+        node = nodes[0] if isinstance(nodes[0], dict) else {}
+        choices = node.get("choices") if isinstance(node.get("choices"), list) else []
+        win = tk.Toplevel(self.root)
+        win.title(str(script.get("title") or "邀约"))
+        self._apply_window_layer(win)
+        paper = OWNER_THEME["bg"]
+        win.configure(bg=paper)
+        frame = tk.Frame(win, bg=paper, padx=12, pady=10)
+        frame.pack()
+        tk.Label(
+            frame,
+            text=str(node.get("line") or intro),
+            font=_ui_body_font(10),
+            fg=OWNER_THEME["ink"],
+            bg=paper,
+            wraplength=320,
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(0, 8))
+
+        def pick(ch: dict) -> None:
+            delta = float(ch.get("delta") or 1.0)
+            self._grant_owner_bond(owner_bond.CH_MENU, amount=delta, toast=False)
+            reply = str(ch.get("reply") or "")
+            emote = str(ch.get("emote") or script.get("fallback_emote") or "happy")
+            try:
+                if emote in emote_registry.REACT_REGISTRY:
+                    self._play_bond_reaction(emote, force_emote=True)
+                else:
+                    self._trigger_mood_action(emote if emote != "blush" else "shy")
+            except Exception:
+                pass
+            outcome = str(ch.get("outcome") or "")
+            if outcome:
+                self._append_bond_diary_note(f"约会：{outcome}")
+            self._show_toast(reply or "嗯。", "#e8a0b8", duration_ms=2800)
+            try:
+                win.destroy()
+            except Exception:
+                pass
+
+        for ch in choices:
+            if not isinstance(ch, dict):
+                continue
+            tk.Button(
+                frame,
+                text=str(ch.get("label") or "……"),
+                font=_ui_hint_font(9),
+                bg=OWNER_THEME["accent"],
+                fg="#ffffff",
+                relief=tk.FLAT,
+                command=lambda c=ch: pick(c),
+            ).pack(fill=tk.X, pady=2)
+        tk.Button(frame, text="下次再说", font=_ui_hint_font(8), bg=paper, fg=OWNER_THEME["muted"], relief=tk.FLAT, command=win.destroy).pack(
+            pady=(8, 0)
+        )
+        self._place_panel_popup(win)
     def _ask_simple_name(
         self,
         *,
@@ -29295,7 +31229,7 @@ class DesktopPet:
         max_len: int = 16,
         confirm_text: str = "确定",
     ) -> str | None:
-        parent = self.home_win if (self.home_win and self.home_win.winfo_exists()) else self.root
+        parent = self._prefer_dialog_parent()
         result: dict[str, str | None] = {"name": None}
         win = tk.Toplevel(parent)
         win.title(title)
@@ -29306,6 +31240,7 @@ class DesktopPet:
             win.transient(parent)
             win.grab_set()
             win.attributes("-topmost", True)
+            win.lift()
         except Exception:
             pass
         frame = tk.Frame(win, bg=MENU_BG, padx=14, pady=12)
@@ -29349,6 +31284,16 @@ class DesktopPet:
         win.protocol("WM_DELETE_WINDOW", cancel)
         entry.focus_set()
         try:
+            win.update_idletasks()
+            # 贴在父窗附近，避免落到屏幕外/被装扮盖住
+            px = int(parent.winfo_rootx()) + 40
+            py = int(parent.winfo_rooty()) + 80
+            win.geometry(f"+{max(8, px)}+{max(8, py)}")
+            win.lift()
+            win.focus_force()
+        except Exception:
+            pass
+        try:
             win.wait_window()
         except Exception:
             return None
@@ -29365,31 +31310,40 @@ class DesktopPet:
             default=cur or "我的小屋",
             confirm_text="确定放到桌面",
         )
-    def _place_home_on_desktop(self) -> None:
-        """把当前搭好的小屋贴到桌面（无边框可拖动）；先命名房屋。"""
+    def _place_home_on_desktop(self, *, restore: bool = False) -> None:
+        """把当前搭好的小屋贴到桌面（无边框可拖动）；手动放置时先命名，默认静音 BGM。"""
         if self._home_layout is None:
             self._home_setup_assets()
             self._home_layout = home_room.load_layout(HOME_LAYOUT_FILE)
         home_room.sync_active_zone(self._home_layout)
 
-        name = self._ask_home_house_name()
-        if name is None:
-            return
-        self._home_layout["house_name"] = name
-        try:
-            home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
-        except Exception:
-            pass
+        if not restore:
+            name = self._ask_home_house_name()
+            if name is None:
+                return
+            self._home_layout["house_name"] = name
+            # 放到桌面：默认暂停家园 BGM（可点「音」再开）
+            self._home_layout["bgm_muted"] = True
+            try:
+                home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
+            except Exception:
+                pass
 
         if self.home_desktop_win and self.home_desktop_win.winfo_exists():
             if self._home_desktop_title and self._home_desktop_title.winfo_exists():
                 self._home_desktop_title.config(text=self._home_display_name())
+            self._refresh_home_desktop_bar_btns()
             self._home_redraw()
             try:
                 self.home_desktop_win.lift()
             except Exception:
                 pass
-            self._show_toast(f"已更新屋名：{self._home_display_name()}", "#88ccff")
+            if not restore:
+                self._show_toast(f"已更新屋名：{self._home_display_name()}", "#88ccff")
+            try:
+                self._sync_home_bgm()
+            except Exception:
+                pass
             return
 
         cols = int(self._home_layout["cols"])
@@ -29398,7 +31352,7 @@ class DesktopPet:
         wall = home_room.home_sky_wall(self._home_layout.get("zone"))
         room_w = cols * tile
         room_h = rows * tile + wall
-        bar_h = 22
+        bar_h = 26
 
         win = tk.Toplevel(self.root)
         self.home_desktop_win = win
@@ -29408,7 +31362,6 @@ class DesktopPet:
         try:
             setattr(win, "_vpet_no_glass", True)
             setattr(win, "_vpet_panel_glass", False)
-            # 明确不透明：清掉可能残留的色键
             win.wm_attributes("-transparentcolor", "")
         except Exception:
             pass
@@ -29429,10 +31382,52 @@ class DesktopPet:
         )
         title_lbl.pack(side=tk.LEFT, padx=6)
         self._home_desktop_title = title_lbl
+        self._home_bgm_mute_flag = bool(self._home_layout.get("bgm_muted"))
+
         close_lbl = tk.Label(bar, text="×", font=_ui_title_font(12), fg="#ff8899", bg=MENU_ACTIVE, cursor="hand2")
-        close_lbl.pack(side=tk.RIGHT, padx=6)
+        close_lbl.pack(side=tk.RIGHT, padx=4)
         close_lbl.bind("<Button-1>", lambda _e: self._close_home_desktop())
-        # 双击标题可改名
+
+        invite_lbl = tk.Label(
+            bar,
+            text="客",
+            font=_ui_body_font(9),
+            fg=MENU_FG,
+            bg=MENU_ACTIVE,
+            cursor="hand2",
+            padx=4,
+        )
+        invite_lbl.pack(side=tk.RIGHT, padx=2)
+        invite_lbl.bind("<Button-1>", lambda _e: self._home_toggle_aoba_guest())
+        self._home_desktop_invite_lbl = invite_lbl
+
+        mode_lbl = tk.Label(
+            bar,
+            text="⇄",
+            font=_ui_body_font(10),
+            fg=MENU_FG,
+            bg=MENU_ACTIVE,
+            cursor="hand2",
+            padx=4,
+        )
+        mode_lbl.pack(side=tk.RIGHT, padx=2)
+        mode_lbl.bind("<Button-1>", lambda _e: self._home_toggle_move_mode())
+        self._home_desktop_mode_lbl = mode_lbl
+
+        mute_lbl = tk.Label(
+            bar,
+            text="静" if self._home_bgm_mute_flag else "音",
+            font=_ui_body_font(9),
+            fg="#ff8899" if self._home_bgm_mute_flag else MENU_FG,
+            bg=MENU_ACTIVE,
+            cursor="hand2",
+            padx=4,
+        )
+        mute_lbl.pack(side=tk.RIGHT, padx=2)
+        mute_lbl.bind("<Button-1>", lambda _e: self._toggle_home_bgm_mute())
+        self._home_desktop_mute_lbl = mute_lbl
+        self._refresh_home_desktop_bar_btns()
+
         def rename_house(_event=None) -> None:
             new_name = self._ask_home_house_name()
             if new_name is None or not self._home_layout:
@@ -29548,9 +31543,9 @@ class DesktopPet:
         except Exception:
             pass
         self._show_toast(
-            f"「{self._home_display_name()}」已放到桌面 · 可拖动 · 双击标题改名",
+            f"「{self._home_display_name()}」已放到桌面 · 音/静 · ⇄自由/🖐操控 · 客=邀请苍叶",
             "#88ccff",
-            duration_ms=3200,
+            duration_ms=3600,
             at=self._home_tip_anchor(),
             allow_center=False,
         )
@@ -29561,6 +31556,7 @@ class DesktopPet:
         self._hide_main_menu()
         if self.home_win and self.home_win.winfo_exists():
             try:
+                self._home_apply_offline_farm_growth()
                 self.home_win.lift()
                 self.home_win.focus_force()
             except Exception:
@@ -29582,8 +31578,29 @@ class DesktopPet:
 
         self._home_setup_assets()
         self.wallet = home_farm.load_wallet(WALLET_FILE)
+        try:
+            home_farm.ensure_farm_day(self.wallet)
+        except Exception:
+            pass
         self._home_layout = home_room.load_layout(HOME_LAYOUT_FILE)
         self._note_achievement_flag("home_visit")
+        try:
+            self._ensure_home_farm_grid()
+            farm = self._home_layout.get("farm")
+            if isinstance(farm, list):
+                hours = home_farm.apply_offline_growth(farm)
+                if hours >= 0.4:
+                    home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
+                    self.root.after(
+                        400,
+                        lambda h=hours: self._show_toast(
+                            f"离线田园微成长约 {h:.1f} 小时（有上限，不催肝）",
+                            "#a8e878",
+                            duration_ms=2400,
+                        ),
+                    )
+        except Exception:
+            pass
         zone = str(self._home_layout.get("zone") or "indoor")
         self._home_brush = "plant" if zone == "indoor" else "flower"
         self._home_photos = []
@@ -29901,6 +31918,7 @@ class DesktopPet:
             self._schedule_home_tick()
             self._home_redraw()
             self._home_update_status()
+            self._refresh_home_desktop_bar_btns()
             try:
                 home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
             except Exception:
@@ -29929,6 +31947,15 @@ class DesktopPet:
             relief=tk.FLAT,
             command=self._place_home_on_desktop,
         ).pack(side=tk.LEFT, padx=(8, 4))
+        tk.Button(
+            mode_row,
+            text="客",
+            font=_ui_body_font(10),
+            bg=MENU_ACTIVE,
+            fg=MENU_FG,
+            relief=tk.FLAT,
+            command=self._home_toggle_aoba_guest,
+        ).pack(side=tk.LEFT, padx=(0, 4))
         tk.Button(
             mode_row,
             text="↺",
@@ -30087,6 +32114,410 @@ class DesktopPet:
             self._show_toast(f"{tip}（持有 {total}）", "#ffcc66", duration_ms=2200)
         self._home_update_status()
         return total
+
+    def _foreground_drop_anchor(self) -> tuple[int, int]:
+        """尽量落在前台窗口右下角旁；失败则落在桌宠右侧。"""
+        try:
+            user32 = ctypes.windll.user32
+            hwnd = user32.GetForegroundWindow()
+            rect = wintypes.RECT()
+            if hwnd and user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+                # 避开桌宠自身窗
+                pet_hwnd = int(self.root.winfo_id())
+                if int(hwnd) != pet_hwnd:
+                    ax = int(rect.right) - 36
+                    ay = int(rect.bottom) - 48
+                    sw, sh = self._screen_wh()
+                    ax = max(8, min(sw - 40, ax))
+                    ay = max(8, min(sh - 40, ay))
+                    # 若几乎全屏，改落到窗口中下偏右
+                    if (rect.right - rect.left) > sw * 0.85 and (rect.bottom - rect.top) > sh * 0.85:
+                        ax = int(rect.left + (rect.right - rect.left) * 0.72)
+                        ay = int(rect.top + (rect.bottom - rect.top) * 0.78)
+                    return ax, ay
+        except Exception:
+            pass
+        return self.x + self.display_size + 12, self.y + self.display_size // 3
+
+    def _spawn_reward_coin_drop(
+        self,
+        amount: int = 1,
+        *,
+        reason: str = "",
+        near: str = "fg",
+    ) -> None:
+        """完成某事后在图标/窗口旁掉落金币，桌宠会走过去拾取。"""
+        if self._closing:
+            return
+        amount = max(1, min(5, int(amount)))
+        # 同时最多 6 枚，满了先清最早的
+        while len(self._world_coins) >= 6:
+            old = self._world_coins.pop(0)
+            self._destroy_world_coin(old, collect=False)
+        if near == "pet":
+            ax = self.x + self.display_size + 10 + random.randint(0, 24)
+            ay = self.y + max(8, self.display_size // 4) + random.randint(-10, 20)
+        else:
+            ax, ay = self._foreground_drop_anchor()
+            ax += random.randint(-18, 18)
+            ay += random.randint(-12, 12)
+        sw, sh = self._screen_wh()
+        size = 32
+        ax = max(4, min(sw - size - 4, ax))
+        ay = max(4, min(sh - size - 4, ay))
+        land_y = ay
+        start_y = max(4, land_y - 70 - random.randint(0, 30))
+
+        win = tk.Toplevel(self.root)
+        win.overrideredirect(True)
+        self._apply_window_layer(win)
+        win.configure(bg="magenta")
+        try:
+            win.wm_attributes("-transparentcolor", "magenta")
+            win.attributes("-topmost", True)
+        except Exception:
+            pass
+        canvas = tk.Canvas(win, width=size, height=size, bg="magenta", highlightthickness=0)
+        canvas.pack()
+        # 像素金币
+        canvas.create_oval(4, 4, 28, 28, fill="#f0c040", outline="#c89020", width=2)
+        canvas.create_oval(8, 8, 24, 24, fill="#ffe066", outline="#e8b030", width=1)
+        canvas.create_text(16, 16, text="金", fill="#8a5010", font=("Microsoft YaHei UI", 8, "bold"))
+        win.geometry(f"+{ax}+{start_y}")
+        try:
+            win.lift()
+        except Exception:
+            pass
+
+        cid = f"c{int(time.time() * 1000)}_{random.randint(100, 999)}"
+        entry = {
+            "id": cid,
+            "win": win,
+            "canvas": canvas,
+            "x": ax,
+            "y": start_y,
+            "land_y": land_y,
+            "amount": amount,
+            "reason": reason or "完成奖励",
+            "phase": "fall",  # fall | idle | suck
+            "born_ms": int(time.time() * 1000),
+            "bob": 0.0,
+        }
+        self._world_coins.append(entry)
+        try:
+            _play_ui_sfx("money", volume=0.35)
+        except Exception:
+            pass
+        self._ensure_world_coin_tick()
+        # 若空闲则立刻朝金币走
+        self._begin_coin_seek_if_idle()
+
+    def _destroy_world_coin(self, entry: dict, *, collect: bool) -> None:
+        win = entry.get("win")
+        try:
+            if win is not None and win.winfo_exists():
+                win.destroy()
+        except Exception:
+            pass
+        if not collect:
+            return
+        amt = int(entry.get("amount") or 1)
+        reason = str(entry.get("reason") or "拾取金币")
+        kind = str(entry.get("kind") or "coin")
+        if kind == "chest":
+            quote = str(entry.get("quote") or companion_quotes.pick_surprise_quote())
+            self.grant_coins(amt, reason=f"{reason} · 开箱 +{amt}", toast=True)
+            try:
+                self._show_speech_dialog(f"📦 {quote}", auto_hide_ms=6500, color="#ffe8b0")
+            except Exception:
+                self._show_toast(quote[:40], "#ffe8b0", duration_ms=3600)
+            try:
+                self._play_bond_reaction("bond_milestone", force_emote=False)
+            except Exception:
+                pass
+            return
+        self.grant_coins(amt, reason=f"{reason} · 拾取 +{amt}", toast=True)
+        try:
+            self._play_bond_reaction("contract_done", force_emote=False)
+        except Exception:
+            pass
+        if self.mode in ("free", "stroll") and self.state in ("stand", "walk") and not self.dragging:
+            try:
+                self._trigger_mood_action("happy")
+            except Exception:
+                pass
+
+    def _ensure_world_coin_tick(self) -> None:
+        if self._world_coin_job or self._closing:
+            return
+        self._world_coin_job = self.root.after(40, self._world_coin_tick)
+
+    def _world_coin_tick(self) -> None:
+        self._world_coin_job = None
+        if self._closing:
+            return
+        now = int(time.time() * 1000)
+        alive: list[dict] = []
+        pet_cx = self.x + self.display_size // 2
+        pet_cy = self.y + self.display_size // 2
+        for entry in list(self._world_coins):
+            win = entry.get("win")
+            try:
+                if win is None or not win.winfo_exists():
+                    continue
+            except Exception:
+                continue
+            phase = str(entry.get("phase") or "idle")
+            age = now - int(entry.get("born_ms") or now)
+            if phase == "fall":
+                t = min(1.0, age / 520.0)
+                ease = 1.0 - (1.0 - t) ** 3
+                bounce = abs(math.sin(t * math.pi * 2.2)) * (1.0 - t) * 10
+                start_y = int(entry["land_y"]) - 70
+                y = int(start_y + (entry["land_y"] - start_y) * ease - bounce)
+                entry["y"] = y
+                try:
+                    win.geometry(f"+{int(entry['x'])}+{y}")
+                except Exception:
+                    pass
+                if t >= 1.0:
+                    entry["phase"] = "idle"
+                    entry["y"] = int(entry["land_y"])
+            elif phase == "idle":
+                entry["bob"] = float(entry.get("bob") or 0) + 0.18
+                bob = int(math.sin(entry["bob"]) * 3)
+                try:
+                    win.geometry(f"+{int(entry['x'])}+{int(entry['land_y']) + bob}")
+                except Exception:
+                    pass
+                # 超时未拾取：自动吸到宠旁再入账（避免永久残留）
+                if age > 55_000:
+                    entry["phase"] = "suck"
+                    entry["suck_ms"] = now
+            elif phase == "suck":
+                sx = int(entry.get("x") or 0)
+                sy = int(entry.get("land_y") or entry.get("y") or 0)
+                t0 = int(entry.get("suck_ms") or now)
+                t = min(1.0, (now - t0) / 380.0)
+                nx = int(sx + (pet_cx - 16 - sx) * t)
+                ny = int(sy + (pet_cy - 16 - sy) * t)
+                try:
+                    win.geometry(f"+{nx}+{ny}")
+                except Exception:
+                    pass
+                if t >= 1.0:
+                    self._destroy_world_coin(entry, collect=True)
+                    continue
+
+            # 拾取判定：宠靠近金币/宝箱
+            if phase in ("idle", "fall") and self._can_seek_world_coins():
+                half = int(entry.get("size") or 32) // 2
+                cx = int(entry["x"]) + half
+                cy = int(entry.get("land_y") if phase == "idle" else entry.get("y") or entry["land_y"]) + half
+                reach = max(40, self.display_size * 0.45)
+                if math.hypot(pet_cx - cx, pet_cy - cy) <= reach:
+                    self._destroy_world_coin(entry, collect=True)
+                    if self._world_coin_seek_id == entry.get("id"):
+                        self._world_coin_seek_id = None
+                    continue
+            alive.append(entry)
+
+        self._world_coins = alive
+        if self._world_coins:
+            self._nudge_walk_toward_coins()
+            self._world_coin_job = self.root.after(40, self._world_coin_tick)
+        else:
+            self._world_coin_seek_id = None
+
+    def _can_seek_world_coins(self) -> bool:
+        if self.dragging or self._closing:
+            return False
+        if self.mode not in ("free", "stroll"):
+            return False
+        if self.state in ("action", "work", "scene_rest", "rest", "drag", "game"):
+            return False
+        if getattr(self, "_holding_allmate", False):
+            return False
+        if getattr(self, "_crossover_stroll_active", False):
+            return False
+        if self._app_scene_blocks_actions():
+            return False
+        return True
+
+    def _nearest_world_coin(self) -> dict | None:
+        if not self._world_coins:
+            return None
+        pet_cx = self.x + self.display_size // 2
+        pet_cy = self.y + self.display_size // 2
+        best = None
+        best_d = 1e18
+        for e in self._world_coins:
+            if str(e.get("phase")) == "suck":
+                continue
+            half = int(e.get("size") or 32) // 2
+            cx = int(e.get("x") or 0) + half
+            cy = int(e.get("land_y") or e.get("y") or 0) + half
+            d = math.hypot(pet_cx - cx, pet_cy - cy)
+            if d < best_d:
+                best_d = d
+                best = e
+        return best
+
+    def _begin_coin_seek_if_idle(self) -> None:
+        if not self._can_seek_world_coins():
+            return
+        coin = self._nearest_world_coin()
+        if not coin:
+            return
+        self._world_coin_seek_id = str(coin.get("id") or "")
+        # 打断站立，进入走路朝向金币
+        if self.state == "stand":
+            try:
+                self.state = "walk"
+                self.walk_steps_left = max(int(getattr(self, "walk_steps_left", 0) or 0), 80)
+                self._set_image(self._walk_sprites[self.direction][0])
+                self._walk_animate()
+                self._walk_move()
+            except Exception:
+                pass
+
+    def _nudge_walk_toward_coins(self) -> None:
+        if not self._can_seek_world_coins():
+            return
+        coin = self._nearest_world_coin()
+        if not coin:
+            return
+        self._world_coin_seek_id = str(coin.get("id") or "")
+        half = int(coin.get("size") or 32) // 2
+        cx = int(coin.get("x") or 0) + half
+        cy = int(coin.get("land_y") or coin.get("y") or 0) + half
+        pet_cx = self.x + self.display_size // 2
+        pet_cy = self.y + self.display_size // 2
+        dx = cx - pet_cx
+        dy = cy - pet_cy
+        if abs(dx) < 8 and abs(dy) < 8:
+            return
+        # 选主方向（front=下 / back=上）
+        if abs(dx) >= abs(dy):
+            want = "right" if dx > 0 else "left"
+        else:
+            want = "front" if dy > 0 else "back"
+        if want in getattr(self, "DIRECTIONS", ()):
+            try:
+                self._apply_walk_direction(want)
+            except Exception:
+                self.direction = want
+        if self.state != "walk":
+            self._begin_coin_seek_if_idle()
+        else:
+            self.walk_steps_left = max(int(getattr(self, "walk_steps_left", 0) or 0), 24)
+
+    def _reward_drop_for_event(self, kind: str) -> None:
+        """完成类事件：掉落可拾取金币（不直接入账）。"""
+        table = {
+            "pomodoro": (2, "番茄完成"),
+            "todo": (1, "待办完成"),
+            "schedule": (2, "日程兑现"),
+            "focus": (3, "专注契约"),
+            "coexist": (1, "同屏共在"),
+        }
+        amount, reason = table.get(kind, (1, "完成奖励"))
+        self._spawn_reward_coin_drop(amount, reason=reason, near="fg")
+
+    def _tick_desktop_surprise(self, scene: str, *, now_ms: int) -> None:
+        """陪伴一段时间后，在桌面随机刷宝箱（低概率、有冷却）。"""
+        # 任意「一起待着」的场景都累积；none/hold 不累积
+        if scene in ("", "none", "hold", "idle"):
+            return
+        poll = float(globals().get("APP_SCENE_POLL_MS", 1200) or 1200) / 1000.0
+        self._surprise_session_sec = float(getattr(self, "_surprise_session_sec", 0) or 0) + poll
+        # 至少陪伴 8 分钟才开始有机会
+        if self._surprise_session_sec < 8 * 60:
+            return
+        last = int(getattr(self, "_surprise_last_spawn_ms", 0) or 0)
+        if last and (now_ms - last) < 6 * 60 * 1000:
+            return
+        # 已有宝箱则不再刷
+        if any(str(e.get("kind") or "") == "chest" for e in (self._world_coins or [])):
+            return
+        # 每 tick 约 0.35%（~12 分钟期望一次，带冷却）
+        if random.random() > 0.0035:
+            return
+        self._surprise_last_spawn_ms = now_ms
+        self._spawn_surprise_chest()
+
+    def _random_desktop_drop_xy(self, size: int = 40) -> tuple[int, int]:
+        sw, sh = self._screen_wh()
+        # 避开屏幕边缘与桌宠脚下附近
+        margin = 48
+        pet_pad = max(80, self.display_size)
+        for _ in range(12):
+            ax = random.randint(margin, max(margin + 1, sw - size - margin))
+            ay = random.randint(margin + 40, max(margin + 41, sh - size - margin - 40))
+            if abs(ax - self.x) < pet_pad and abs(ay - self.y) < pet_pad:
+                continue
+            return ax, ay
+        return max(margin, sw // 2), max(margin, sh // 2)
+
+    def _spawn_surprise_chest(self) -> None:
+        """桌面随机宝箱：捡到后给金币 + 抽象生活语录。"""
+        if self._closing:
+            return
+        while len(self._world_coins) >= 6:
+            old = self._world_coins.pop(0)
+            self._destroy_world_coin(old, collect=False)
+        size = 40
+        ax, ay = self._random_desktop_drop_xy(size)
+        land_y = ay
+        start_y = max(4, land_y - 90)
+        win = tk.Toplevel(self.root)
+        win.overrideredirect(True)
+        self._apply_window_layer(win)
+        win.configure(bg="magenta")
+        try:
+            win.wm_attributes("-transparentcolor", "magenta")
+            win.attributes("-topmost", True)
+        except Exception:
+            pass
+        canvas = tk.Canvas(win, width=size, height=size, bg="magenta", highlightthickness=0)
+        canvas.pack()
+        # 简易像素宝箱
+        canvas.create_rectangle(6, 16, 34, 36, fill="#c87828", outline="#8a4a10", width=2)
+        canvas.create_rectangle(6, 10, 34, 20, fill="#e09840", outline="#8a4a10", width=2)
+        canvas.create_rectangle(17, 20, 23, 28, fill="#ffd060", outline="#b08020", width=1)
+        canvas.create_oval(18, 18, 22, 22, fill="#fff0a0", outline="")
+        win.geometry(f"+{ax}+{start_y}")
+        try:
+            win.lift()
+        except Exception:
+            pass
+        quote = companion_quotes.pick_surprise_quote(avoid=str(getattr(self, "_surprise_last_quote", "") or ""))
+        self._surprise_last_quote = quote
+        cid = f"chest{int(time.time() * 1000)}_{random.randint(100, 999)}"
+        entry = {
+            "id": cid,
+            "kind": "chest",
+            "win": win,
+            "canvas": canvas,
+            "x": ax,
+            "y": start_y,
+            "land_y": land_y,
+            "amount": random.randint(2, 5),
+            "reason": "桌面小惊喜",
+            "quote": quote,
+            "phase": "fall",
+            "born_ms": int(time.time() * 1000),
+            "bob": 0.0,
+            "size": size,
+        }
+        self._world_coins.append(entry)
+        self._show_toast("桌面出现了一只小宝箱…", "#ffcc88", duration_ms=2200)
+        try:
+            _play_ui_sfx("money", volume=0.3)
+        except Exception:
+            pass
+        self._ensure_world_coin_tick()
+        self._begin_coin_seek_if_idle()
 
     def _note_work_box_delivered(self) -> None:
         """生涯累计送达一箱；每满 25 发工作宝箱。"""
@@ -30258,6 +32689,11 @@ class DesktopPet:
         self._home_rebuild_farm_panel()
         self._home_rebuild_brushes()
         if mode == "farm":
+            try:
+                home_farm.ensure_farm_day(self.wallet)
+            except Exception:
+                pass
+            self._home_apply_offline_farm_growth()
             self._maybe_show_home_farm_hint()
             self._schedule_home_farm_tick()
             self._home_farm_tool = getattr(self, "_home_farm_tool", "plant")
@@ -30435,6 +32871,7 @@ class DesktopPet:
             ("chop", "砍", "5", "#6a4a28"),
             ("fish", "钓", "6", "#2a6a9a"),
             ("pick", "采", "7", "#9a4a78"),
+            ("fert", "肥", "8", "#6a8a3a"),
         )
         for tool, mark, key, accent in tool_meta:
             cell = tk.Frame(row_tools, bg=cell_bg, padx=1, pady=2)
@@ -30476,6 +32913,73 @@ class DesktopPet:
                 relief=tk.FLAT,
                 command=cmd,
             ).grid(row=0, column=col, sticky="ew", padx=(0, 3 if col < 3 else 0))
+        # 订单 / 团子
+        row_side = tk.Frame(panel, bg=chrome)
+        row_side.pack(fill=tk.X, pady=(2, 2))
+        for col in range(2):
+            row_side.columnconfigure(col, weight=1, uniform="farm_side")
+        for col, (text, cmd) in enumerate(
+            (
+                ("📋 订单", self._open_home_farm_orders),
+                ("🐑 团子", self._open_home_ranch_pet),
+            )
+        ):
+            tk.Button(
+                row_side,
+                text=text,
+                font=_ui_hint_font(9),
+                bg=HOME_THEME["chrome_btn2"],
+                fg=MENU_FG,
+                relief=tk.FLAT,
+                command=cmd,
+            ).grid(row=0, column=col, sticky="ew", padx=(0, 3 if col < 1 else 0))
+        # 批量：全浇 / 全收 / 全种 / 露水（逻辑对齐苍叶，色块用家园薄荷 chrome）
+        row_batch = tk.Frame(panel, bg=chrome)
+        row_batch.pack(fill=tk.X, pady=(2, 2))
+        for col in range(4):
+            row_batch.columnconfigure(col, weight=1, uniform="farm_batch")
+        for col, (text, cmd) in enumerate(
+            (
+                ("全浇", self._home_farm_batch_water),
+                ("全收", self._home_farm_batch_harvest),
+                ("全种", self._home_farm_batch_plant),
+                ("露水", self._home_farm_use_dew),
+            )
+        ):
+            tk.Button(
+                row_batch,
+                text=text,
+                font=_ui_hint_font(9),
+                bg=HOME_THEME["chrome_btn"],
+                fg=MENU_FG,
+                relief=tk.FLAT,
+                command=cmd,
+            ).grid(row=0, column=col, sticky="ew", padx=(0, 3 if col < 3 else 0))
+        # 今日小事板 + 今日推荐
+        try:
+            home_farm.ensure_farm_day(self.wallet)
+            farm_grid = self._ensure_home_farm_grid()
+            quest = home_farm.daily_quest_summary(self.wallet)
+            tip_quest = home_farm.today_farm_quest(farm_grid, self.wallet)
+            _, budget = home_farm.can_spend_farm_action(self.wallet)
+            dew = int((self.wallet.get("items") or {}).get("dew", 0)) + int(
+                (self.wallet.get("items") or {}).get("dew_drop", 0)
+            )
+            fert = int((self.wallet.get("items") or {}).get("fertilizer", 0))
+            compost = int((self.wallet.get("items") or {}).get("compost", 0))
+            banner = tk.Label(
+                panel,
+                text=f"{tip_quest}\n{quest}\n{budget} · 露水{dew} · 肥料{fert} · 堆肥{compost}",
+                font=_ui_hint_font(8),
+                fg=MENU_MUTED,
+                bg=chrome,
+                justify=tk.LEFT,
+                wraplength=220,
+            )
+            banner.pack(anchor=tk.W, pady=(2, 0))
+            self._home_farm_banner = banner
+        except Exception:
+            pass
         row_seeds = tk.Frame(panel, bg=chrome)
         row_seeds.pack(fill=tk.X)
         items = self.wallet.get("items") or {}
@@ -30518,11 +33022,193 @@ class DesktopPet:
         self._home_update_status()
         self._home_redraw()
 
+    def _home_farm_batch_water(self) -> None:
+        if not self._home_layout:
+            return
+        self._ensure_home_farm_grid()
+        farm = self._home_layout.get("farm")
+        if not isinstance(farm, list):
+            return
+        n, msg = home_farm.batch_water(farm, self.wallet)
+        self._persist_wallet()
+        try:
+            home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
+        except Exception:
+            pass
+        self._home_rebuild_farm_panel()
+        self._home_redraw()
+        self._show_toast(msg, "#88ffcc" if n else "#ff8866", duration_ms=1800)
+
+    def _home_farm_batch_harvest(self) -> None:
+        if not self._home_layout:
+            return
+        self._ensure_home_farm_grid()
+        farm = self._home_layout.get("farm")
+        if not isinstance(farm, list):
+            return
+        n, msg = home_farm.batch_harvest(farm, self.wallet)
+        self._persist_wallet()
+        try:
+            home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
+        except Exception:
+            pass
+        self._home_rebuild_farm_panel()
+        self._home_redraw()
+        if n:
+            self._note_achievement_flag("farm_harvest")
+        self._show_toast(msg, "#88ffcc" if n else "#ff8866", duration_ms=1800)
+
+    def _home_farm_batch_plant(self) -> None:
+        if not self._home_layout:
+            return
+        self._ensure_home_farm_grid()
+        farm = self._home_layout.get("farm")
+        tiles = self._home_layout.get("tiles")
+        if not isinstance(farm, list) or not isinstance(tiles, list):
+            return
+        seed = getattr(self, "_home_farm_seed", "seed_wheat")
+        n, msg = home_farm.batch_plant(
+            farm, self.wallet, tiles, seed, cell_kind=home_room.cell_kind
+        )
+        self._persist_wallet()
+        try:
+            home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
+        except Exception:
+            pass
+        self._home_rebuild_farm_panel()
+        self._home_redraw()
+        if n:
+            self._note_achievement_flag("farm_plant")
+        card = home_farm.crop_card(home_farm.SEED_TO_CROP.get(seed, ""))
+        extra = f" · {card['label']}约{card['days']}天 · 卖{card['sell']}金" if card.get("label") else ""
+        self._show_toast(msg + extra, "#88ffcc" if n else "#ff8866", duration_ms=2200)
+
+    def _home_farm_use_dew(self) -> None:
+        if not self._home_layout:
+            return
+        self._ensure_home_farm_grid()
+        farm = self._home_layout.get("farm")
+        if not isinstance(farm, list):
+            return
+        ok, msg = home_farm.try_use_dew_drop(farm, self.wallet)
+        self._persist_wallet()
+        if ok:
+            try:
+                home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
+            except Exception:
+                pass
+            self._home_rebuild_farm_panel()
+            self._home_redraw()
+        self._show_toast(msg, "#88ffcc" if ok else "#ff8866", duration_ms=1800)
+
+    def _home_apply_offline_farm_growth(self) -> None:
+        if not self._home_layout:
+            return
+        self._ensure_home_farm_grid()
+        farm = self._home_layout.get("farm")
+        if not isinstance(farm, list):
+            return
+        try:
+            ok, tip = home_farm.claim_offline_garden(farm, self.wallet)
+            self._persist_wallet()
+            if ok and tip:
+                try:
+                    home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
+                except Exception:
+                    pass
+                self._show_toast(tip, "#a8e878", duration_ms=2400)
+        except Exception:
+            hours = home_farm.apply_offline_growth(farm)
+            if hours >= 0.4:
+                try:
+                    home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
+                except Exception:
+                    pass
+                self._show_toast(
+                    f"离线田园微成长约 {hours:.1f} 小时（有上限，不催肝）",
+                    "#a8e878",
+                    duration_ms=2400,
+                )
+        self._home_maybe_friend_async_help()
+
+    def _home_maybe_friend_async_help(self) -> None:
+        """好友阶段：客人在时模拟离线帮浇几格，并写入友情记忆。"""
+        if not self._home_layout:
+            return
+        if str(self._home_layout.get("guest_kind") or "") != "aoba":
+            return
+        if str(self._home_layout.get("zone") or "") != "outdoor":
+            return
+        try:
+            fri = peer_friendship.load(PEER_PRESENCE_DIR)
+            peer_friendship.ensure_daily(fri)
+            used = int(fri.get("async_help_today") or 0)
+            room = max(0, int(getattr(peer_friendship, "ASYNC_HELP_DAILY_MAX", 3)) - used)
+            if room <= 0:
+                return
+            st = peer_friendship.stats(float(fri.get("points") or 0), fri)
+            if int(st.get("level") or 1) < int(getattr(peer_friendship, "FARM_HELP_ASYNC_LEVEL", 3)):
+                return
+            farm = self._home_layout.get("farm")
+            if not isinstance(farm, list):
+                return
+            watered = 0
+            for y, row in enumerate(farm):
+                if not isinstance(row, list):
+                    continue
+                for x, plot in enumerate(row):
+                    if not isinstance(plot, dict):
+                        continue
+                    if home_farm.plot_ready(plot) or plot.get("wilted"):
+                        continue
+                    ok, _ = home_farm.try_water(farm, x, y, wallet=self.wallet, allow_dew=False)
+                    if ok:
+                        watered += 1
+                    if watered >= min(2, room):
+                        break
+                if watered >= min(2, room):
+                    break
+            if watered <= 0:
+                return
+            result = peer_friendship.record_async_farm_help(PEER_PRESENCE_DIR, plots=watered)
+            helped = int(result.get("helped") or watered)
+            try:
+                home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
+                self._persist_wallet()
+            except Exception:
+                pass
+            self._show_toast(
+                f"苍叶帮你浇了 {helped} 格水",
+                "#88ccff",
+                duration_ms=2600,
+                at=self._home_tip_anchor(),
+                allow_center=False,
+            )
+            try:
+                self._show_speech_dialog(
+                    "我顺手浇了点水，别累着～",
+                    auto_hide_ms=2400,
+                    use_border5=False,
+                    instant=True,
+                )
+            except Exception:
+                pass
+            self._refresh_panel_friendship()
+        except Exception:
+            pass
+
     def _home_set_farm_seed(self, seed: str) -> None:
         self._home_farm_seed = seed
         self._home_farm_tool = "plant"
         self._home_sync_farm_tool_highlight()
         self._home_update_status()
+        card = home_farm.crop_card(home_farm.SEED_TO_CROP.get(seed, ""))
+        if card.get("label"):
+            self._show_toast(
+                f"{card['label']} · 约{card['days']}天 · 卖{card['sell']}金 · {card.get('use') or '—'}",
+                "#c8e8a0",
+                duration_ms=2000,
+            )
 
     def _home_sync_farm_tool_highlight(self) -> None:
         tool = getattr(self, "_home_farm_tool", "plant")
@@ -30594,6 +33280,7 @@ class DesktopPet:
                             home_farm.plot_stage(plot),
                             1 if home_farm.plot_ready(plot) else 0,
                             1 if home_farm.plot_boost_active(plot) else 0,
+                            home_farm.plot_moisture(plot),
                         )
                     )
         parts.append(len(layout.get("tree_regrow") or []))
@@ -30701,9 +33388,20 @@ class DesktopPet:
                 cell_kind=home_room.cell_kind,
             )
         elif tool == "water":
-            ok, msg = home_farm.try_water(farm, gx, gy)
+            ok, msg = home_farm.try_water(farm, gx, gy, wallet=self.wallet, allow_dew=True)
         elif tool == "harvest":
-            ok, msg = home_farm.try_harvest(farm, self.wallet, gx, gy)
+            extra = 0.0
+            try:
+                if str(self._home_layout.get("guest_kind") or "") == "aoba":
+                    fri = peer_friendship.load(PEER_PRESENCE_DIR)
+                    lv = int(peer_friendship.stats(float(fri.get("points") or 0), fri).get("level") or 1)
+                    mul = peer_friendship.bond_yield_multiplier(fri, lv)
+                    extra = max(0.0, mul - 1.0)
+            except Exception:
+                extra = 0.0
+            ok, msg = home_farm.try_harvest(farm, self.wallet, gx, gy, extra_chance=extra)
+        elif tool == "fert":
+            ok, msg = home_farm.try_fertilize(farm, self.wallet, gx, gy)
         elif tool == "chop":
             chop_jobs = self._home_layout.setdefault("chop_jobs", {})
             tree_regrow = self._home_layout.setdefault("tree_regrow", [])
@@ -30777,6 +33475,14 @@ class DesktopPet:
                 )
         if ok:
             self._persist_wallet()
+            if tool in ("water", "harvest", "plant"):
+                try:
+                    _, tip = home_farm.note_farm_action(self.wallet, tool, count=1)
+                    self._persist_wallet()
+                    if "歇啦" in tip or "小事" in tip:
+                        self.root.after(900, lambda t=tip: self._show_toast(t, "#88ccff", duration_ms=2200))
+                except Exception:
+                    pass
             self._home_rebuild_farm_panel()
             self._home_play_farm_tool_fx(tool, gx, gy)
             try:
@@ -31055,6 +33761,140 @@ class DesktopPet:
         self._chrome_icon_btn(frame, "close", win.destroy).pack(pady=(8, 0), anchor=tk.E)
         self._place_panel_popup(win)
 
+    def _open_home_farm_orders(self) -> None:
+        _play_ui_sfx("window", volume=0.5)
+        parent = self.home_win if (self.home_win and self.home_win.winfo_exists()) else self.root
+        win = tk.Toplevel(parent)
+        win.title("每日订单")
+        self._apply_window_layer(win)
+        win.configure(bg=MENU_BG)
+        frame = tk.Frame(win, bg=MENU_BG, padx=12, pady=10)
+        frame.pack()
+        tk.Label(frame, text="茶会订单 · 每天两单", font=_ui_title_font(11), fg=MENU_FG, bg=MENU_BG).pack(
+            anchor=tk.W
+        )
+        tip = tk.Label(frame, text="", font=_ui_body_font(9), fg="#88ffcc", bg=MENU_BG)
+        tip.pack(anchor=tk.W, pady=(2, 6))
+        orders = home_farm.ensure_daily_orders(self.wallet)
+        self._persist_wallet()
+
+        def refresh() -> None:
+            self._open_home_farm_orders()
+            try:
+                win.destroy()
+            except Exception:
+                pass
+
+        for o in orders:
+            oid = str(o.get("id") or "")
+            done = bool(o.get("done"))
+            card = tk.Frame(frame, bg="#f3f3f3", padx=8, pady=6, highlightbackground="#4a6070", highlightthickness=1)
+            card.pack(fill=tk.X, pady=3)
+            need = int(o.get("need") or 1)
+            item = str(o.get("item") or "")
+            pay = int(o.get("pay") or 0)
+            label = str(o.get("label") or oid)
+            have = int((self.wallet.get("items") or {}).get(item, 0))
+            tk.Label(
+                card,
+                text=f"{'✓ ' if done else ''}{label}",
+                font=PIXEL_FONT,
+                fg="#88aa88" if done else MENU_FG,
+                bg="#f3f3f3",
+            ).pack(anchor=tk.W)
+            tk.Label(
+                card,
+                text=f"需要 {home_farm.ITEM_LABELS.get(item, item)}×{need}（持有 {have}）· 报酬 {pay} 币",
+                font=_ui_hint_font(8),
+                fg="#99aabb",
+                bg="#f3f3f3",
+            ).pack(anchor=tk.W)
+
+            def do_fulfill(order_id=oid, card_ref=card) -> None:
+                ok, msg = home_farm.try_fulfill_order(self.wallet, order_id)
+                if not ok:
+                    tip.config(text=msg, fg="#ff8866")
+                    self._show_toast(msg, "#ff8866")
+                    return
+                self._persist_wallet()
+                self._home_rebuild_farm_panel()
+                tip.config(text=msg, fg="#88ffcc")
+                self._show_toast(msg, "#88ffcc")
+                try:
+                    win.destroy()
+                except Exception:
+                    pass
+                self._open_home_farm_orders()
+
+            tk.Button(
+                card,
+                text="已完成" if done else "交付",
+                font=_ui_hint_font(9),
+                bg="#d0ddd4" if done else MENU_ACTIVE,
+                fg=MENU_FG,
+                state=tk.DISABLED if done else tk.NORMAL,
+                command=do_fulfill,
+            ).pack(anchor=tk.E, pady=(4, 0))
+        self._chrome_icon_btn(frame, "close", win.destroy).pack(pady=(8, 0), anchor=tk.E)
+        self._place_panel_popup(win)
+
+    def _open_home_ranch_pet(self) -> None:
+        _play_ui_sfx("window", volume=0.5)
+        parent = self.home_win if (self.home_win and self.home_win.winfo_exists()) else self.root
+        win = tk.Toplevel(parent)
+        win.title("小团子")
+        self._apply_window_layer(win)
+        win.configure(bg=MENU_BG)
+        frame = tk.Frame(win, bg=MENU_BG, padx=12, pady=10)
+        frame.pack()
+        deco = tk.Canvas(frame, width=280, height=64, bg=MENU_BG, highlightthickness=0)
+        deco.pack(anchor=tk.W, pady=(0, 6))
+        deco.create_oval(100, 18, 180, 58, fill="#f0e8d8", outline="#c8b898")
+        deco.create_oval(118, 28, 130, 40, fill="#4a4038")
+        deco.create_oval(150, 28, 162, 40, fill="#4a4038")
+        deco.create_oval(132, 40, 148, 48, fill="#e8a0b0", outline="")
+        status = home_farm.ranch_pet_status(self.wallet)
+        tip = tk.Label(frame, text=status, font=_ui_title_font(10), fg=MENU_FG, bg=MENU_BG)
+        tip.pack(anchor=tk.W, pady=(0, 6))
+        hint = tk.Label(
+            frame,
+            text="每天可摸摸一次、喂食一次（优先消耗作物/果酱）",
+            font=_ui_hint_font(8),
+            fg=HOME_THEME["muted"],
+            bg=MENU_BG,
+        )
+        hint.pack(anchor=tk.W, pady=(0, 8))
+
+        def do_pet() -> None:
+            ok, msg = home_farm.pet_ranch_animal(self.wallet)
+            tip.config(text=home_farm.ranch_pet_status(self.wallet))
+            if ok:
+                self._persist_wallet()
+                self._show_toast(msg, "#88ffcc")
+            else:
+                self._show_toast(msg, "#ff8866")
+
+        def do_feed() -> None:
+            ok, msg = home_farm.feed_ranch_animal(self.wallet)
+            tip.config(text=home_farm.ranch_pet_status(self.wallet))
+            if ok:
+                self._persist_wallet()
+                self._home_rebuild_farm_panel()
+                self._show_toast(msg, "#88ffcc")
+            else:
+                self._show_toast(msg, "#ff8866")
+
+        row = tk.Frame(frame, bg=MENU_BG)
+        row.pack(fill=tk.X)
+        tk.Button(row, text="摸摸", font=_ui_hint_font(9), bg=MENU_ACTIVE, fg=MENU_FG, command=do_pet).pack(
+            side=tk.LEFT, padx=(0, 6)
+        )
+        tk.Button(row, text="喂食", font=_ui_hint_font(9), bg=HOME_THEME["chrome_btn"], fg=MENU_FG, command=do_feed).pack(
+            side=tk.LEFT
+        )
+        self._chrome_icon_btn(frame, "close", win.destroy).pack(pady=(8, 0), anchor=tk.E)
+        self._place_panel_popup(win)
+
     def _open_home_craft(self) -> None:
         _play_ui_sfx("window", volume=0.5)
         parent = self.home_win if (self.home_win and self.home_win.winfo_exists()) else self.root
@@ -31090,9 +33930,15 @@ class DesktopPet:
             already = recipe["result"][0] == "furniture" and recipe["result"][1] in crafted
             card = tk.Frame(frame, bg="#f3f3f3", padx=8, pady=6, highlightbackground="#4a6070", highlightthickness=1)
             card.pack(fill=tk.X, pady=3)
-            mark = {"bread": "面", "berry_snack": "莓", "corn_food": "玉", "juice": "汁", "sofa": "沙", "shelf": "柜"}.get(
-                rid, "合"
-            )
+            mark = {
+                "bread": "面",
+                "berry_snack": "莓",
+                "corn_food": "玉",
+                "juice": "汁",
+                "jam_berry": "酱",
+                "sofa": "沙",
+                "shelf": "柜",
+            }.get(rid, "合")
             left = tk.Frame(card, bg="#f3f3f3")
             left.pack(side=tk.LEFT, fill=tk.X, expand=True)
             head = tk.Frame(left, bg="#f3f3f3")
@@ -31874,47 +34720,59 @@ class DesktopPet:
                 _play_ui_sfx("replace", volume=0.5)
 
         items = list(home_room.furniture_for_zone(zone))
-        # 「删除」置顶：先清上层素材，再清背景；地砖棋盘底保留
-        items.sort(key=lambda it: 0 if it[0] == "erase" else 1)
+        by_kind = {it[0]: it for it in items}
         crafted = list((self._home_layout or {}).get("crafted_furniture") or [])
-        col = 0
-        row = 0
-        cols_per_row = 8
-        for kind, label, _s, w, h, _z in items:
+        icon_map = {
+            "erase": "⌫",
+            "partition": "▮",
+            "floor_wood": "🪵",
+            "floor_tile": "▦",
+            "bed": "🛏",
+            "table": "▤",
+            "chair": "🪑",
+            "sofa": "🛋",
+            "tv": "📺",
+            "coffee": "☕",
+            "wardrobe": "👔",
+            "nightstand": "🗄",
+            "stove": "🔥",
+            "sink": "🚰",
+            "fridge": "🧊",
+            "counter": "🍱",
+            "toilet": "🚽",
+            "bathtub": "🛁",
+            "basin": "🧼",
+            "plant": "🪴",
+            "carpet": "▭",
+            "shelf": "🗄",
+            "lamp": "💡",
+            "window": "🪟",
+            "vase": "🏺",
+            "door": "🚪",
+            "gift_art": "🎁",
+            "user_paint": "🖼",
+            "grass": "🌿",
+            "land": "🟫",
+            "water": "💧",
+            "brick": "🧱",
+            "tree": "🌳",
+            "tree_pine": "🌲",
+            "tree_fruit": "🍎",
+            "tree_blossom": "🌸",
+            "rock": "🪨",
+            "flower": "🌸",
+            "fence": "▥",
+            "bush": "🍀",
+            "path": "··",
+        }
+
+        def add_btn(parent: tk.Misc, kind: str, label: str, w: int, *, grid_row: int, grid_col: int) -> None:
             if kind == "gift_art" and not (HOME_PROPS_DIR / "gift_art.png").is_file():
-                continue
+                return
             if kind == "user_paint" and not (HOME_PROPS_DIR / "user_paint.png").is_file():
-                # 无活跃槽时仍可通过命名素材栏放置；不占「最新自创」空位
-                continue
+                return
             if not home_farm.furniture_unlocked(kind, crafted):
-                continue
-            # 图标优先；自创素材截短名
-            icon_map = {
-                "erase": "⌫",
-                "bed": "🛏",
-                "table": "▦",
-                "chair": "🪑",
-                "sofa": "🛋",
-                "plant": "🪴",
-                "carpet": "▭",
-                "shelf": "🗄",
-                "lamp": "💡",
-                "window": "🪟",
-                "vase": "🏺",
-                "door": "🚪",
-                "gift_art": "🎁",
-                "user_paint": "🖼",
-                "grass": "🌿",
-                "land": "🟫",
-                "water": "💧",
-                "brick": "🧱",
-                "tree": "🌳",
-                "rock": "🪨",
-                "flower": "🌸",
-                "fence": "▥",
-                "bush": "🍀",
-                "path": "··",
-            }
+                return
             btn_text = icon_map.get(kind)
             if not btn_text:
                 if home_room.is_custom_material_kind(kind):
@@ -31924,7 +34782,7 @@ class DesktopPet:
                 else:
                     btn_text = (label or "?")[:1]
             btn = tk.Button(
-                host,
+                parent,
                 text=btn_text,
                 font=("Segoe UI Emoji", 10) if kind in icon_map else _ui_hint_font(8),
                 bg="#553333" if kind == "erase" else MENU_BG,
@@ -31933,12 +34791,67 @@ class DesktopPet:
                 padx=3,
                 command=lambda k=kind: set_brush(k),
             )
-            btn.grid(row=row, column=col, padx=1, pady=1, sticky=tk.W)
+            btn.grid(row=grid_row, column=grid_col, padx=1, pady=1, sticky=tk.W)
             self._home_brush_btns[kind] = btn
-            col += 1
-            if col >= cols_per_row:
+
+        if zone == "indoor":
+            ui_row = 0
+            placed: set[str] = set()
+            for group_name, kinds in home_room.INDOOR_BRUSH_GROUPS:
+                tk.Label(
+                    host,
+                    text=group_name,
+                    font=_ui_hint_font(8),
+                    fg=HOME_THEME["muted"],
+                    bg=HOME_THEME.get("card", MENU_BG),
+                ).grid(row=ui_row, column=0, columnspan=8, sticky=tk.W, pady=(4 if ui_row else 0, 0))
+                ui_row += 1
                 col = 0
-                row += 1
+                for kind in kinds:
+                    meta = by_kind.get(kind)
+                    if not meta:
+                        continue
+                    add_btn(host, kind, meta[1], meta[3], grid_row=ui_row, grid_col=col)
+                    if kind in self._home_brush_btns:
+                        placed.add(kind)
+                        col += 1
+                        if col >= 8:
+                            col = 0
+                            ui_row += 1
+                if col > 0:
+                    ui_row += 1
+            extras = [it for it in items if it[0] not in placed and it[0] != "erase"]
+            if extras:
+                tk.Label(
+                    host,
+                    text="其它",
+                    font=_ui_hint_font(8),
+                    fg=HOME_THEME["muted"],
+                    bg=HOME_THEME.get("card", MENU_BG),
+                ).grid(row=ui_row, column=0, columnspan=8, sticky=tk.W, pady=(4, 0))
+                ui_row += 1
+                col = 0
+                for kind, label, _s, w, h, _z in extras:
+                    add_btn(host, kind, label, w, grid_row=ui_row, grid_col=col)
+                    if kind in self._home_brush_btns:
+                        col += 1
+                        if col >= 8:
+                            col = 0
+                            ui_row += 1
+        else:
+            # 室外：删除置顶，其余按栏位排布
+            items.sort(key=lambda it: 0 if it[0] == "erase" else 1)
+            col = 0
+            row = 0
+            cols_per_row = 8
+            for kind, label, _s, w, h, _z in items:
+                add_btn(host, kind, label, w, grid_row=row, grid_col=col)
+                if kind not in self._home_brush_btns:
+                    continue
+                col += 1
+                if col >= cols_per_row:
+                    col = 0
+                    row += 1
         if self._home_brush not in self._home_brush_btns and self._home_brush not in home_room.BG_MATERIAL_KINDS:
             self._home_brush = next(iter(self._home_brush_btns), "erase")
         self._home_sync_brush_highlight()
@@ -31950,7 +34863,7 @@ class DesktopPet:
         """
         if on_library_changed is not None:
             self._home_paint_on_library_changed = on_library_changed
-        parent = self.home_win if (self.home_win and self.home_win.winfo_exists()) else self.root
+        parent = self._prefer_dialog_parent()
         old = getattr(self, "home_paint_win", None)
         if old and old.winfo_exists():
             try:
@@ -31960,6 +34873,15 @@ class DesktopPet:
                 pass
             return
 
+        # 打开画板时先站住，避免走动/烘烤和画板抢主线程
+        try:
+            self._cancel_idle_chain()
+            if self.state == "walk":
+                self.state = "stand"
+                self._set_image(self._current_stand_sprite())
+        except Exception:
+            pass
+
         win = tk.Toplevel(parent)
         self.home_paint_win = win
         win.title("画素材 · 命名后加入素材栏")
@@ -31968,6 +34890,11 @@ class DesktopPet:
         win.resizable(True, True)
         # 按内容自适应，避免被通用面板 400×480 裁掉色板/取色
         setattr(win, "_panel_full_size", True)
+        try:
+            win.attributes("-topmost", True)
+            win.lift()
+        except Exception:
+            pass
         frame = tk.Frame(win, bg=MENU_BG, padx=12, pady=10)
         frame.pack(fill=tk.BOTH, expand=True)
         tk.Label(frame, text="画素材", font=PIXEL_FONT, fg=MENU_FG, bg=MENU_BG).pack(anchor=tk.W)
@@ -32233,13 +35160,28 @@ class DesktopPet:
                 span_var.set(home_room.material_span_of(entry))
                 sync_span_hint()
                 draft_path.write_text(json.dumps(list(cells)), encoding="utf-8")
-                self._home_setup_assets()
-                self._sync_materials_to_rpg_userdata()
-                self._home_rebuild_brushes()
-                kind = home_room.custom_kind(str(entry["id"]))
-                self._home_brush = kind
-                self._home_sync_brush_highlight()
-                self._home_redraw()
+                try:
+                    self._home_setup_assets()
+                except Exception:
+                    pass
+                try:
+                    self._sync_materials_to_rpg_userdata()
+                except Exception:
+                    pass
+                # 家园窗未开时不要刷家园 UI（装扮里画素材最常见）
+                home_open = bool(
+                    getattr(self, "home_win", None)
+                    and self.home_win.winfo_exists()
+                )
+                if home_open:
+                    try:
+                        self._home_rebuild_brushes()
+                        kind = home_room.custom_kind(str(entry["id"]))
+                        self._home_brush = kind
+                        self._home_sync_brush_highlight()
+                        self._home_redraw()
+                    except Exception:
+                        pass
                 rebuild_library()
                 tip.config(
                     text=f"已保存：「{entry['name']}」· 占格 {span_n}×{span_n} · 素材栏可放置",
@@ -32787,7 +35729,36 @@ class DesktopPet:
                 self._home_redraw()
             else:
                 self._home_pose = "stand"
+        # 客人自由散步（不影响操控模式）
+        try:
+            self._home_guest_free_step()
+        except Exception:
+            pass
         self._schedule_home_tick()
+
+    def _home_guest_free_step(self) -> None:
+        if not self._home_layout:
+            return
+        if str(self._home_layout.get("guest_kind") or "") != "aoba":
+            return
+        tiles = self._home_layout.get("tiles") or []
+        gx = int(self._home_layout.get("guest_x") or 0)
+        gy = int(self._home_layout.get("guest_y") or 0)
+        dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        random.shuffle(dirs)
+        for dx, dy in dirs:
+            nx, ny = gx + dx, gy + dy
+            if home_room.cell_blocks(tiles, nx, ny):
+                continue
+            # 不踩到伊得脚下
+            if nx == int(self._home_layout.get("pet_x") or -1) and ny == int(self._home_layout.get("pet_y") or -1):
+                continue
+            self._home_layout["guest_x"] = nx
+            self._home_layout["guest_y"] = ny
+            self._home_guest_dir = self._home_dir_from_delta(dx, dy)
+            self._home_guest_walk_frame = 1 - int(self._home_guest_walk_frame)
+            self._home_redraw(pet_only=True)
+            return
 
     def _home_pet_sprite_name(self) -> tuple[str, bool, str | None]:
         """返回 (文件名, 是否水平翻转, 贴纸 kind|None)。"""
@@ -32858,6 +35829,9 @@ class DesktopPet:
             brush_name = "删除"
         brush_col = str(self._home_layout.get("furn_color") or home_room.HOME_FURN_DEFAULT)
         desk = " · 已放桌面" if (self.home_desktop_win and self.home_desktop_win.winfo_exists()) else ""
+        guest = ""
+        if str(self._home_layout.get("guest_kind") or "") == "aoba":
+            guest = " · 苍叶做客中"
         coins = int(self.wallet.get("coins") or 0)
         if getattr(self, "_home_edit_mode", "decorate") == "farm" and self._home_layout.get("zone") == "outdoor":
             tool = getattr(self, "_home_farm_tool", "plant")
@@ -32865,12 +35839,12 @@ class DesktopPet:
             seed = home_farm.ITEM_LABELS.get(getattr(self, "_home_farm_seed", ""), "")
             bag = home_farm.item_summary(self.wallet, limit=4)
             self._home_status.config(
-                text=f"经营 · 金币{coins} · {tlabel} · 种子:{seed} · 1–7选工具 → 确定/Enter执行 · {bag}{desk}"
+                text=f"经营 · 金币{coins} · {tlabel} · 种子:{seed} · 1–8选工具 → 确定/Enter执行 · {bag}{desk}{guest}"
             )
         else:
             day_lbl = home_room.home_day_period_label()
             self._home_status.config(
-                text=f"{zone} · {day_lbl} · {tip} · 金币{coins} · 笔刷：{brush_name} · 画笔色：{brush_col} · 门可进出{desk}"
+                text=f"{zone} · {day_lbl} · {tip} · 金币{coins} · 笔刷：{brush_name} · 画笔色：{brush_col} · 门可进出{desk}{guest}"
             )
 
     def _home_sync_desktop_geometry(self) -> None:
@@ -32887,7 +35861,7 @@ class DesktopPet:
         wall = home_room.home_sky_wall(layout.get("zone"))
         room_w = cols * tile
         room_h = rows * tile + wall
-        bar_h = 22
+        bar_h = 26
         canvas.config(width=room_w, height=room_h)
         try:
             x = int(win.winfo_x())
@@ -32913,9 +35887,68 @@ class DesktopPet:
             return GAME_BGM_HOME_NIGHT
         return GAME_BGM_HOME_DAY
 
+    def _home_editor_open(self) -> bool:
+        """家园编辑窗是否打开。"""
+        try:
+            return bool(self.home_win and self.home_win.winfo_exists())
+        except Exception:
+            return False
+
+    def _home_bgm_view_open(self) -> bool:
+        """编辑窗或桌面贴窗打开时均可播家园 BGM（受静音/让路约束）。"""
+        return self._home_any_view_open()
+
+    def _home_bgm_muted(self) -> bool:
+        if self._home_layout is not None:
+            return bool(self._home_layout.get("bgm_muted"))
+        return bool(getattr(self, "_home_bgm_mute_flag", False))
+
+    def _home_bgm_should_yield(self) -> bool:
+        """其它内部 BGM / 音乐模式 / 试听占用通道时，家园曲让路（语音/音效不挡）。"""
+        if self._overlay_bgm_blocked_by_other_music():
+            return True
+        cur = str(getattr(self, "_overlay_bgm_reason", "") or "")
+        if cur and cur != "home":
+            return True
+        try:
+            if self.phonograph_win and self.phonograph_win.winfo_exists() and cur == "phonograph":
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _maybe_resume_home_bgm_after_other(self) -> None:
+        """其它 BGM 播完后：家园仍开着且未静音则可再次打开家园曲。"""
+        if not self._home_bgm_view_open():
+            return
+        if self._home_bgm_muted():
+            return
+        if self._home_bgm_should_yield():
+            return
+        try:
+            self._sync_home_bgm()
+        except Exception:
+            pass
+
     def _sync_home_bgm(self) -> None:
-        if not self._home_any_view_open():
+        # 编辑窗或桌面贴窗均可播；静音或其它音乐占用时不播
+        if not self._home_bgm_view_open():
             self._stop_overlay_bgm(reason="home")
+            return
+        if self._home_bgm_muted():
+            if str(getattr(self, "_overlay_bgm_reason", "") or "") == "home":
+                try:
+                    self._stop_overlay_bgm(reason="home", resume=False)
+                except Exception:
+                    pass
+            return
+        # 其它音乐占用时暂停家园曲，不抢播
+        if self._home_bgm_should_yield():
+            if str(getattr(self, "_overlay_bgm_reason", "") or "") == "home":
+                try:
+                    self._stop_overlay_bgm(reason="home", resume=False)
+                except Exception:
+                    pass
             return
         # 留声厅占用通道时不抢播
         if getattr(self, "phonograph_playing_id", None):
@@ -32925,7 +35958,221 @@ class DesktopPet:
                 return
         except Exception:
             pass
-        self._start_overlay_bgm(self._home_bgm_track_id(), reason="home")
+        tid = self._home_bgm_track_id()
+        if (
+            bool(getattr(self, "_overlay_bgm_active", False))
+            and str(getattr(self, "_overlay_bgm_reason", "") or "") == "home"
+            and str(getattr(self, "_overlay_bgm_track", "") or "") == tid
+        ):
+            self._start_overlay_bgm(tid, reason="home")
+            return
+        self._defer_start_overlay_bgm(tid, reason="home", delay_ms=280)
+
+    def _set_home_bgm_muted(self, muted: bool, *, toast: bool = True) -> None:
+        muted = bool(muted)
+        self._home_bgm_mute_flag = muted
+        if self._home_layout is not None:
+            self._home_layout["bgm_muted"] = muted
+            try:
+                self._home_schedule_save(delay_ms=200)
+            except Exception:
+                pass
+        self._refresh_home_desktop_mute_btn()
+        self._refresh_home_desktop_bar_btns()
+        if muted:
+            if str(getattr(self, "_overlay_bgm_reason", "") or "") == "home":
+                try:
+                    self._stop_overlay_bgm(reason="home", resume=False)
+                except Exception:
+                    pass
+            if toast:
+                self._show_toast("家园 BGM 已静音", "#88ccff", duration_ms=1600)
+            return
+        if self._home_bgm_should_yield():
+            if toast:
+                self._show_toast(
+                    "已有其它音乐在播（非语音/音效），家园曲暂不可开",
+                    "#ffcc66",
+                    duration_ms=2600,
+                )
+            # 标记为未静音，待其它曲结束后自动续
+            try:
+                self._sync_home_bgm()
+            except Exception:
+                pass
+            return
+        if toast:
+            self._show_toast("家园 BGM 已开启", "#88ccff", duration_ms=1600)
+        try:
+            self._sync_home_bgm()
+        except Exception:
+            pass
+
+    def _toggle_home_bgm_mute(self) -> None:
+        self._set_home_bgm_muted(not self._home_bgm_muted())
+
+    def _refresh_home_desktop_mute_btn(self) -> None:
+        lbl = getattr(self, "_home_desktop_mute_lbl", None)
+        if not lbl:
+            return
+        try:
+            if not lbl.winfo_exists():
+                return
+        except Exception:
+            return
+        muted = self._home_bgm_muted()
+        try:
+            lbl.config(
+                text="静" if muted else "音",
+                fg="#ff8899" if muted else MENU_FG,
+            )
+        except Exception:
+            pass
+
+    def _refresh_home_desktop_bar_btns(self) -> None:
+        """刷新桌面家园顶栏：音/静、自由/操控、邀请。"""
+        self._refresh_home_desktop_mute_btn()
+        mode_lbl = getattr(self, "_home_desktop_mode_lbl", None)
+        if mode_lbl is not None:
+            try:
+                if mode_lbl.winfo_exists() and self._home_layout:
+                    mode = str(self._home_layout.get("move_mode") or "free")
+                    mode_lbl.config(
+                        text="🖐" if mode == "control" else "⇄",
+                        fg=MENU_ACTIVE if mode == "control" else MENU_FG,
+                    )
+            except Exception:
+                pass
+        invite_lbl = getattr(self, "_home_desktop_invite_lbl", None)
+        if invite_lbl is not None:
+            try:
+                if invite_lbl.winfo_exists() and self._home_layout:
+                    guest = str(self._home_layout.get("guest_kind") or "")
+                    lv = self._home_friendship_level()
+                    if guest == "aoba":
+                        invite_lbl.config(text="送", fg="#88ffaa")
+                    elif lv >= int(
+                        getattr(
+                            peer_friendship,
+                            "HOME_GUEST_UNLOCK_LEVEL",
+                            getattr(peer_friendship, "HOME_GUEST_INVITE_LEVEL", 2),
+                        )
+                    ):
+                        invite_lbl.config(text="客", fg=MENU_FG)
+                    else:
+                        invite_lbl.config(text="客", fg=MENU_MUTED)
+            except Exception:
+                pass
+
+    def _home_toggle_move_mode(self) -> None:
+        if not self._home_layout:
+            return
+        cur = str(self._home_layout.get("move_mode") or "free")
+        nxt = "control" if cur != "control" else "free"
+        setter = getattr(self, "_home_set_mode", None)
+        if callable(setter):
+            setter(nxt)
+        else:
+            if self._home_pose not in ("stand", "walk"):
+                self._home_pose = "stand"
+                self._home_pose_until_ms = 0
+            self._home_layout["move_mode"] = nxt
+            try:
+                home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
+            except Exception:
+                pass
+            self._schedule_home_tick()
+            self._home_redraw()
+        self._refresh_home_desktop_bar_btns()
+        tip = "操控中（方向键/WASD）" if nxt == "control" else "自由行走中"
+        self._show_toast(tip, "#88ccff", duration_ms=1600, at=self._home_tip_anchor(), allow_center=False)
+
+    def _home_friendship_level(self) -> int:
+        try:
+            fri = peer_friendship.load(PEER_PRESENCE_DIR)
+            st = peer_friendship.stats(float(fri.get("points") or 0))
+            return int(st.get("level") or 1)
+        except Exception:
+            return 1
+
+    def _home_toggle_aoba_guest(self) -> None:
+        """熟人阶段可邀请苍叶来家园做客；再点送客。"""
+        if not self._home_layout:
+            self._show_toast("请先打开家园", "#ffcc66")
+            return
+        guest = str(self._home_layout.get("guest_kind") or "")
+        if guest == "aoba":
+            self._home_layout["guest_kind"] = ""
+            self._home_layout.pop("guest_x", None)
+            self._home_layout.pop("guest_y", None)
+            try:
+                home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
+            except Exception:
+                pass
+            self._refresh_home_desktop_bar_btns()
+            self._home_redraw()
+            self._show_toast("苍叶回去了", "#88ccff", duration_ms=2000, at=self._home_tip_anchor(), allow_center=False)
+            return
+        need = int(
+            getattr(
+                peer_friendship,
+                "HOME_GUEST_UNLOCK_LEVEL",
+                getattr(peer_friendship, "HOME_GUEST_INVITE_LEVEL", 2),
+            )
+        )
+        lv = self._home_friendship_level()
+        if lv < need:
+            stage = peer_friendship.stage_name(need)
+            cur = peer_friendship.stage_name(lv)
+            self._show_toast(
+                f"需「{stage}」才能邀请做客（当前 {cur}）",
+                "#ffcc66",
+                duration_ms=2800,
+                at=self._home_tip_anchor(),
+                allow_center=False,
+            )
+            return
+        # 放在伊得旁边空格
+        px = int(self._home_layout.get("pet_x") or 1)
+        py = int(self._home_layout.get("pet_y") or 1)
+        tiles = self._home_layout.get("tiles") or []
+        gx, gy = px + 1, py
+        if home_room.cell_blocks(tiles, gx, gy):
+            for dx, dy in ((-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1)):
+                tx, ty = px + dx, py + dy
+                if not home_room.cell_blocks(tiles, tx, ty):
+                    gx, gy = tx, ty
+                    break
+        self._home_layout["guest_kind"] = "aoba"
+        self._home_layout["guest_x"] = gx
+        self._home_layout["guest_y"] = gy
+        self._home_guest_dir = "front"
+        try:
+            home_room.save_layout(HOME_LAYOUT_FILE, self._home_layout)
+        except Exception:
+            pass
+        try:
+            peer_friendship.note_milestone(PEER_PRESENCE_DIR, "first_home_guest", xp=4.0)
+            peer_friendship.grant_xp(
+                PEER_PRESENCE_DIR,
+                1.5,
+                channel=peer_friendship.XP_CHANNEL_VISIT,
+                note="苍叶来家里做客",
+            )
+            self._refresh_panel_friendship()
+        except Exception:
+            pass
+        self._refresh_home_desktop_bar_btns()
+        self._home_redraw()
+        self._show_toast(
+            "苍叶来家里做客了",
+            "#88ffaa",
+            duration_ms=2600,
+            at=self._home_tip_anchor(),
+            allow_center=False,
+        )
+        self._home_float_tip = "苍叶来做客"
+        self._home_float_tip_until_ms = int(time.time() * 1000) + 2200
 
     def _schedule_home_day_cycle(self) -> None:
         """家园打开时按昼夜阶段刷新天空（黎明/黄昏更密，便于看升落）。"""
@@ -32971,7 +36218,7 @@ class DesktopPet:
         if self._home_layout:
             self._home_redraw()
             self._home_update_status()
-        # 昼夜切换时换家园 BGM
+        # 昼夜切换时换家园 BGM；其它音乐占用时不抢播，播完后再由 resume 打开
         dayish = period in ("dawn", "day")
         prev_dayish = prev in ("dawn", "day") if prev else dayish
         if prev != period and (dayish != prev_dayish or not prev):
@@ -32979,7 +36226,11 @@ class DesktopPet:
                 self._sync_home_bgm()
             except Exception:
                 pass
-        elif str(getattr(self, "_overlay_bgm_reason", "") or "") != "home":
+        elif (
+            str(getattr(self, "_overlay_bgm_reason", "") or "") != "home"
+            and not self._home_bgm_muted()
+            and not self._home_bgm_should_yield()
+        ):
             try:
                 self._sync_home_bgm()
             except Exception:
@@ -33260,6 +36511,22 @@ class DesktopPet:
                             px + 4, bar_y0, px + 4 + bar_w, bar_y0 + 4,
                             fill=bar_col, outline="",
                         )
+                        moist = home_farm.plot_moisture(plot)
+                        if moist == "wilt":
+                            canvas.create_text(
+                                px + 6, py + 6,
+                                text="枯", fill="#a08060", font=_ui_hint_font(7),
+                            )
+                        elif moist == "dry":
+                            canvas.create_oval(
+                                px + 3, py + 3, px + 9, py + 9,
+                                fill="#c4a070", outline="#8a6848",
+                            )
+                        elif moist == "wet":
+                            canvas.create_oval(
+                                px + 3, py + 3, px + 9, py + 9,
+                                fill="#5ab0e8", outline="#2a7098",
+                            )
                         if home_farm.plot_ready(plot):
                             canvas.create_text(
                                 px + tile // 2, py + tile // 2 - 2,
@@ -33269,6 +36536,12 @@ class DesktopPet:
                             canvas.create_oval(
                                 px + tile - 10, py + 4, px + tile - 4, py + 10,
                                 fill="#66aadd", outline="",
+                            )
+                        elif moist == "wet" and not home_farm.plot_ready(plot):
+                            # 角落小蓝点：一眼湿土
+                            canvas.create_oval(
+                                px + tile - 9, py + 3, px + tile - 4, py + 8,
+                                fill="#88ddff", outline="",
                             )
             # 工具动作特效
             fx = getattr(self, "_home_farm_fx", None)
@@ -33314,6 +36587,12 @@ class DesktopPet:
                 elif tool == "pick":
                     canvas.create_oval(cx - 3, cy - 6 - phase, cx + 3, cy - phase, fill="#ff88aa", outline="")
                     canvas.create_text(cx, cy + 8, text="采", fill="#ff99bb", font=_ui_title_font(8))
+                elif tool == "fert":
+                    canvas.create_oval(
+                        cx - 5, cy - 2 - phase, cx + 5, cy + 6 - phase,
+                        fill="#88aa44", outline="",
+                    )
+                    canvas.create_text(cx, cy - 10, text="肥", fill="#c8e878", font=_ui_title_font(8))
 
         # 室外夜晚薄暗罩（在宠物之下）
         if zone == "outdoor":
@@ -33424,6 +36703,80 @@ class DesktopPet:
                     font=_ui_title_font(8),
                     tags=("home_pet",),
                 )
+        # 客人：苍叶（友情邀请）
+        try:
+            self._home_draw_guest_layer(canvas, photos, layout, tile=tile, wall=wall, pet_size=pet_size)
+        except Exception:
+            pass
+
+    def _home_aoba_guest_photo(self, pet_size: int) -> ImageTk.PhotoImage:
+        """尽量从本机苍叶资源取站立图；找不到则画占位小人。"""
+        cache = getattr(self, "_home_aoba_photo_cache", None)
+        if isinstance(cache, dict) and cache.get("size") == pet_size and cache.get("photo"):
+            return cache["photo"]
+        candidates = [
+            Path.home() / "Desktop" / "VpetAOBA" / "VpetPNG" / "1.0" / "assets" / "sprites" / "stand.png",
+            Path.home() / "Desktop" / "VpetAOBA" / "VpetPNG" / "1.0" / "assets" / "sprites" / "stand.jpg",
+            Path.home() / "Desktop" / "VpetAOBA" / "sprites" / "stand.png",
+            Path.home() / "Desktop" / "VpetAoba" / "sprites" / "stand.png",
+        ]
+        img = None
+        for p in candidates:
+            try:
+                if p.is_file():
+                    img = Image.open(p).convert("RGBA")
+                    break
+            except Exception:
+                continue
+        if img is None:
+            img = Image.new("RGBA", (pet_size, pet_size), (0, 0, 0, 0))
+            from PIL import ImageDraw
+
+            dr = ImageDraw.Draw(img)
+            # 简易剪影占位
+            dr.ellipse((pet_size // 3, pet_size // 8, pet_size * 2 // 3, pet_size // 3), fill=(120, 170, 220, 230))
+            dr.rounded_rectangle(
+                (pet_size // 4, pet_size // 3, pet_size * 3 // 4, pet_size * 7 // 8),
+                radius=6,
+                fill=(90, 140, 200, 230),
+            )
+        else:
+            try:
+                resample = Image.Resampling.NEAREST
+            except Exception:
+                resample = Image.NEAREST
+            img = img.resize((pet_size, pet_size), resample)
+        photo = ImageTk.PhotoImage(img)
+        self._home_aoba_photo_cache = {"size": pet_size, "photo": photo}
+        return photo
+
+    def _home_draw_guest_layer(
+        self,
+        canvas: tk.Canvas,
+        photos: list[ImageTk.PhotoImage],
+        layout: dict,
+        *,
+        tile: int,
+        wall: int,
+        pet_size: int,
+    ) -> None:
+        if str(layout.get("guest_kind") or "") != "aoba":
+            return
+        gx = int(layout.get("guest_x") or 0)
+        gy = int(layout.get("guest_y") or 0)
+        photo = self._home_aoba_guest_photo(pet_size)
+        photos.append(photo)
+        px = gx * tile + tile // 2
+        py = wall + gy * tile + tile - 2
+        canvas.create_image(px, py, image=photo, anchor=tk.S, tags=("home_pet", "home_guest"))
+        canvas.create_text(
+            px,
+            wall + gy * tile - max(10, pet_size // 5),
+            text="苍叶",
+            fill="#a8d8ff",
+            font=_ui_title_font(7),
+            tags=("home_pet", "home_guest"),
+        )
 
     def _home_redraw(self, *, pet_only: bool = False) -> None:
         layout = self._home_layout
@@ -33830,6 +37183,76 @@ class DesktopPet:
             bg=paper,
         ).pack(anchor=tk.W, pady=(4, 0))
 
+        # 所属人羁绊进度
+        try:
+            self._owner_bond = owner_bond.load(OWNER_BOND_FILE)
+            bst = owner_bond.stats(self._owner_bond)
+        except Exception:
+            bst = owner_bond.stats(None)
+        bond_box = tk.Frame(frame, bg=OWNER_THEME["card"], padx=8, pady=6, highlightbackground=OWNER_THEME["line"], highlightthickness=1)
+        bond_box.pack(fill=tk.X, pady=(10, 4))
+        tk.Label(
+            bond_box,
+            text=f"羁绊「{bst.get('stage_name')}」· {bst.get('stage_title')}",
+            font=PIXEL_FONT,
+            fg=accent,
+            bg=OWNER_THEME["card"],
+        ).pack(anchor=tk.W)
+        tk.Label(
+            bond_box,
+            text=f"Lv{bst.get('level')}  进度 {bst.get('bar_cur')}/{bst.get('bar_need')}  ·  今日 {bst.get('daily_xp'):.0f}/{owner_bond.DAILY_XP_CAP:.0f}",
+            font=_ui_hint_font(8),
+            fg=muted,
+            bg=OWNER_THEME["card"],
+        ).pack(anchor=tk.W, pady=(2, 4))
+        bar_bg = tk.Frame(bond_box, bg=OWNER_THEME["line"], height=8)
+        bar_bg.pack(fill=tk.X)
+        bar_bg.pack_propagate(False)
+        fill_w = max(2, int(3.0 * float(bst.get("bar_pct") or 0)))
+        tk.Frame(bar_bg, bg=accent, width=fill_w, height=8).pack(side=tk.LEFT, fill=tk.Y)
+        tk.Label(
+            bond_box,
+            text=str(bst.get("next_focus") or ""),
+            font=_ui_hint_font(8),
+            fg=muted,
+            bg=OWNER_THEME["card"],
+        ).pack(anchor=tk.W, pady=(4, 0))
+        quiet = bool((self._owner_bond or {}).get("quiet_scene_mode", True))
+        nudge = bool((self._owner_bond or {}).get("focus_nudge_enabled", False))
+
+        def toggle_quiet() -> None:
+            self._owner_bond["quiet_scene_mode"] = not bool(self._owner_bond.get("quiet_scene_mode", True))
+            self._persist_owner_bond()
+            close()
+            self._show_owner_info()
+
+        def toggle_nudge() -> None:
+            self._owner_bond["focus_nudge_enabled"] = not bool(self._owner_bond.get("focus_nudge_enabled", False))
+            self._persist_owner_bond()
+            close()
+            self._show_owner_info()
+
+        opt = tk.Frame(bond_box, bg=OWNER_THEME["card"])
+        opt.pack(fill=tk.X, pady=(6, 0))
+        tk.Button(
+            opt,
+            text=f"场景安静模式：{'开' if quiet else '关'}",
+            font=_ui_hint_font(8),
+            bg=paper,
+            fg=ink,
+            relief=tk.FLAT,
+            command=toggle_quiet,
+        ).pack(side=tk.LEFT)
+        tk.Button(
+            opt,
+            text=f"分心轻提醒：{'开' if nudge else '关'}",
+            font=_ui_hint_font(8),
+            bg=paper,
+            fg=ink,
+            relief=tk.FLAT,
+            command=toggle_nudge,
+        ).pack(side=tk.LEFT, padx=(8, 0))
+
         # 相伴日历：未到日白底；认主日起每多一天亮一格淡彩虹（循环）
         start_dt = self._parse_profile_time(set_at) or self._parse_profile_time(
             str(self.pet_profile.get("created") or "")
@@ -34010,7 +37433,7 @@ class DesktopPet:
 
     def _start_birthday_bgm(self) -> None:
         try:
-            self._start_overlay_bgm(GAME_BGM_BIRTHDAY, reason="birthday")
+            self._defer_start_overlay_bgm(GAME_BGM_BIRTHDAY, reason="birthday", delay_ms=360)
         except Exception:
             pass
 
@@ -35104,7 +38527,7 @@ class DesktopPet:
         except Exception:
             pass
         try:
-            self._start_overlay_bgm(GAME_BGM_DIARY, reason="diary")
+            self._defer_start_overlay_bgm(GAME_BGM_DIARY, reason="diary", force=True, delay_ms=420)
         except Exception:
             pass
         _, frame = _pack_fixed_scroll_panel(
@@ -35455,6 +38878,10 @@ class DesktopPet:
                     )
                 else:
                     mid()
+                try:
+                    self._reassert_panel_overlay_bgm()
+                except Exception:
+                    pass
 
             try:
                 self._open_diary_page_studio(
@@ -35464,6 +38891,10 @@ class DesktopPet:
                     mood_face=pick["mood_face"],
                     on_saved=on_saved,
                 )
+                try:
+                    self._reassert_panel_overlay_bgm()
+                except Exception:
+                    pass
             except Exception as exc:
                 tip = str(exc).strip().replace("\n", " ")[:80] or type(exc).__name__
                 self._show_toast(f"打开日记页失败：{tip}", "#ff8866", duration_ms=3200)
@@ -35495,7 +38926,16 @@ class DesktopPet:
         self.diary_win = None
         self.diary_photos = []
         try:
+            self._cancel_panel_overlay_bgm_watch()
+        except Exception:
+            pass
+        try:
             self._stop_overlay_bgm(reason="diary")
+        except Exception:
+            pass
+        # 若装扮仍开着，把场景曲拉回装扮
+        try:
+            self._reassert_panel_overlay_bgm()
         except Exception:
             pass
 
@@ -36066,7 +39506,7 @@ class DesktopPet:
             pass
         self._note_achievement_flag("memory_open")
         try:
-            self._start_overlay_bgm(GAME_BGM_GALLERY, reason="gallery")
+            self._defer_start_overlay_bgm(GAME_BGM_GALLERY, reason="gallery", delay_ms=360)
         except Exception:
             pass
         gh = GALLERY_PREVIEW_SIZE + GALLERY_SCROLL_H + 190
@@ -36309,7 +39749,7 @@ class DesktopPet:
             # 仍开着留声窗则拉回厅内 BGM
             try:
                 if self.phonograph_win and self.phonograph_win.winfo_exists():
-                    self._start_overlay_bgm(GAME_BGM_PHONOGRAPH, reason="phonograph")
+                    self._defer_start_overlay_bgm(GAME_BGM_PHONOGRAPH, reason="phonograph", delay_ms=200)
             except Exception:
                 pass
         try:
@@ -36321,13 +39761,21 @@ class DesktopPet:
         """留声占用 music 通道：停掉叠层 BGM / 音乐模式，避免抢播。"""
         self._cancel_bg_music_watch()
         setattr(self, "_phonograph_overlay_resume", None)
+        try:
+            self._capture_music_playback_pos(mark_pending=True)
+        except Exception:
+            pass
         if bool(getattr(self, "_overlay_bgm_active", False)):
+            resume = getattr(self, "_overlay_bgm_resume", None)
+            snap = dict(resume) if isinstance(resume, dict) else {}
             setattr(
                 self,
                 "_phonograph_overlay_resume",
                 {
                     "reason": str(getattr(self, "_overlay_bgm_reason", "") or ""),
-                    "snap": dict(getattr(self, "_overlay_bgm_resume", None) or {}),
+                    "track": str(getattr(self, "_overlay_bgm_track", "") or ""),
+                    "pos_sec": float(getattr(self, "_overlay_bgm_pos_sec", 0.0) or 0.0),
+                    "snap": snap,
                 },
             )
             self.phonograph_paused_music = True
@@ -36363,12 +39811,20 @@ class DesktopPet:
             snap = ov.get("snap")
             if isinstance(snap, dict):
                 self._overlay_bgm_resume = snap
+            try:
+                pos = float(ov.get("pos_sec") or 0.0)
+                track = str(ov.get("track") or "")
+                if track:
+                    self._music_resume_track = track
+                    self._music_resume_pos_sec = pos
+                    self._overlay_bgm_pos_sec = pos
+                    self._music_resume_pending = True
+            except Exception:
+                pass
             reason = str(ov.get("reason") or "")
             if reason == "chest_wait":
-                try:
-                    self._maybe_start_chest_wait_bgm()
-                except Exception:
-                    pass
+                # bgm008 已停用，不恢复待开箱配乐
+                self._overlay_bgm_resume = None
                 return
             if reason == "home":
                 try:
@@ -36379,7 +39835,7 @@ class DesktopPet:
             if reason == "phonograph":
                 try:
                     if self.phonograph_win and self.phonograph_win.winfo_exists():
-                        self._start_overlay_bgm(GAME_BGM_PHONOGRAPH, reason="phonograph")
+                        self._defer_start_overlay_bgm(GAME_BGM_PHONOGRAPH, reason="phonograph", delay_ms=200)
                 except Exception:
                     pass
                 return
@@ -36387,21 +39843,21 @@ class DesktopPet:
                 try:
                     ow = getattr(self, "outfit_editor_win", None)
                     if ow is not None and ow.winfo_exists():
-                        self._start_overlay_bgm(GAME_BGM_OUTFIT, reason="outfit")
+                        self._defer_start_overlay_bgm(GAME_BGM_OUTFIT, reason="outfit", force=True, delay_ms=200)
                 except Exception:
                     pass
                 return
             if reason == "diary":
                 try:
                     if self.diary_win and self.diary_win.winfo_exists():
-                        self._start_overlay_bgm(GAME_BGM_DIARY, reason="diary")
+                        self._defer_start_overlay_bgm(GAME_BGM_DIARY, reason="diary", force=True, delay_ms=200)
                 except Exception:
                     pass
                 return
             if reason == "birthday":
                 try:
                     if self._birthday_ui_open():
-                        self._start_overlay_bgm(GAME_BGM_BIRTHDAY, reason="birthday")
+                        self._defer_start_overlay_bgm(GAME_BGM_BIRTHDAY, reason="birthday", delay_ms=200)
                 except Exception:
                     pass
                 return
@@ -36418,7 +39874,9 @@ class DesktopPet:
                 # 对应界面若已关，不自动续播
                 self._overlay_bgm_resume = None
                 return
-        if paused and getattr(self, "music_sprite_mode", False):
+        if paused and getattr(self, "music_sprite_mode", False) and not bool(
+            getattr(self, "music_ambient_only", False)
+        ):
             try:
                 self._start_bg_music()
             except Exception:
@@ -36437,7 +39895,10 @@ class DesktopPet:
         if not self.phonograph_win or not self.phonograph_win.winfo_exists():
             return
         playing = self.phonograph_playing_id
-        for eid, btn in list(getattr(self, "_phonograph_play_btns", {}) or {}).items():
+        play_btns = getattr(self, "_phonograph_play_btns", None)
+        if not isinstance(play_btns, dict):
+            play_btns = {}
+        for eid, btn in list(play_btns.items()):
             try:
                 if not btn.winfo_exists():
                     continue
@@ -36458,7 +39919,10 @@ class DesktopPet:
                     )
                 except Exception:
                     pass
-        for eid, lbl in list(getattr(self, "_phonograph_title_lbls", {}) or {}).items():
+        title_lbls = getattr(self, "_phonograph_title_lbls", None)
+        if not isinstance(title_lbls, dict):
+            title_lbls = {}
+        for eid, lbl in list(title_lbls.items()):
             try:
                 if not lbl.winfo_exists():
                     continue
@@ -36562,24 +40026,26 @@ class DesktopPet:
 
         if kind == "file":
             path = entry.get("path")
-            if path is None or not Path(path).exists():
-                self._show_toast("找不到音频文件", "#ff8844")
-                self._stop_phonograph_playback()
-                return
-            play_path = Path(path)
+            play_path = Path(path) if path else None
             # 内置曲：走与音乐模式相同的可播路径（cache / 源文件）
-            if entry_id.startswith("builtin:music:"):
+            tid = str(entry.get("track_id") or "").strip()
+            if not tid and entry_id.startswith("builtin:music:"):
                 tid = entry_id.split(":", 2)[-1]
+            if tid:
                 resolved = _music_playable_path(tid)
                 if resolved is not None and resolved.exists():
                     play_path = resolved
-            elif play_path.suffix.lower() not in (".wav", ".wave", ".ogg", ".mp3"):
+            if play_path is None or not play_path.exists():
+                self._show_toast("找不到音频文件", "#ff8844")
+                self._stop_phonograph_playback()
+                return
+            if (not tid) and play_path.suffix.lower() not in (".wav", ".wave", ".ogg", ".mp3"):
                 converted = _ensure_audio_wav(play_path, play_path.with_suffix(".wav"))
                 if converted is not None:
                     play_path = converted
             duration_ms = _get_audio_duration_ms(play_path)
             try:
-                _load_and_play(play_path, category)
+                _load_and_play(play_path, "music" if tid else category)
             except Exception as exc:
                 tip = str(exc).strip().replace("\n", " ")[:60] or type(exc).__name__
                 self._show_toast(f"播放失败：{tip}", "#ff6666")
@@ -36724,7 +40190,17 @@ class DesktopPet:
     def _format_phonograph_duration(self, entry: dict) -> str:
         kind = str(entry.get("kind", "file"))
         if kind == "file":
-            path = entry.get("path")
+            tid = str(entry.get("track_id") or "").strip()
+            eid = str(entry.get("id") or "")
+            if not tid and eid.startswith("builtin:music:"):
+                tid = eid.split(":", 2)[-1]
+            path = None
+            if tid:
+                path = _music_playable_path(tid) or _peek_music_track_audio(tid)
+            if path is None:
+                raw = entry.get("path")
+                if raw and Path(raw).exists():
+                    path = Path(raw)
             if path and Path(path).exists():
                 ms = _get_audio_duration_ms(Path(path))
                 if ms > 0:
@@ -36812,7 +40288,7 @@ class DesktopPet:
         except Exception:
             pass
         try:
-            self._start_overlay_bgm(GAME_BGM_PHONOGRAPH, reason="phonograph")
+            self._defer_start_overlay_bgm(GAME_BGM_PHONOGRAPH, reason="phonograph", delay_ms=360)
         except Exception:
             pass
 
@@ -37261,6 +40737,90 @@ class DesktopPet:
             wraplength=320,
             justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(0, 6))
+
+        office_cfg = self._office_cfg()
+        net_row = tk.Frame(frame, bg=MENU_BG)
+        net_row.pack(fill=tk.X, pady=(4, 2))
+        tk.Label(net_row, text="允许联网增强", font=PIXEL_FONT, fg=MENU_FG, bg=MENU_BG).pack(side=tk.LEFT)
+        net_on = bool(office_cfg.get("allow_network"))
+
+        def toggle_net() -> None:
+            c = self._office_cfg()
+            c["allow_network"] = not bool(c.get("allow_network"))
+            self.app_config["office"] = c
+            _save_app_config(self.app_config)
+            self._sync_panel_settings_ui()
+            self._show_toast(
+                "联网增强已开（AI/天气等可选用）" if c["allow_network"] else "已切离线优先",
+                "#88ccff",
+                duration_ms=2000,
+            )
+
+        net_btn = tk.Button(
+            net_row,
+            text=f"{'开 ✓' if net_on else '关'}",
+            command=toggle_net,
+            font=PIXEL_FONT,
+            bg=MENU_ACTIVE if net_on else MENU_BG,
+            fg=MENU_FG,
+        )
+        net_btn.pack(side=tk.RIGHT)
+        ui["office_net_btn"] = net_btn
+        tk.Label(
+            frame,
+            text="关：核心办公功能全离线；开：允许可选的 AI/天气等（默认不上传剪贴板）",
+            font=_ui_hint_font(8),
+            fg=MENU_MUTED,
+            bg=MENU_BG,
+            wraplength=320,
+            justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(0, 4))
+
+        clip_row = tk.Frame(frame, bg=MENU_BG)
+        clip_row.pack(fill=tk.X, pady=(2, 2))
+        tk.Label(clip_row, text="剪贴板历史", font=PIXEL_FONT, fg=MENU_FG, bg=MENU_BG).pack(side=tk.LEFT)
+        clip_on = bool(office_cfg.get("clipboard_history", True))
+
+        def toggle_clip() -> None:
+            c = self._office_cfg()
+            c["clipboard_history"] = not bool(c.get("clipboard_history", True))
+            self.app_config["office"] = c
+            _save_app_config(self.app_config)
+            self._sync_panel_settings_ui()
+
+        clip_btn = tk.Button(
+            clip_row,
+            text=f"{'开 ✓' if clip_on else '关'}",
+            command=toggle_clip,
+            font=PIXEL_FONT,
+            bg=MENU_ACTIVE if clip_on else MENU_BG,
+            fg=MENU_FG,
+        )
+        clip_btn.pack(side=tk.RIGHT)
+        ui["office_clip_btn"] = clip_btn
+
+        habit_row = tk.Frame(frame, bg=MENU_BG)
+        habit_row.pack(fill=tk.X, pady=(2, 2))
+        tk.Label(habit_row, text="久坐/喝水提醒", font=PIXEL_FONT, fg=MENU_FG, bg=MENU_BG).pack(side=tk.LEFT)
+        habit_on = bool(office_cfg.get("habit_reminders", True))
+
+        def toggle_habit() -> None:
+            c = self._office_cfg()
+            c["habit_reminders"] = not bool(c.get("habit_reminders", True))
+            self.app_config["office"] = c
+            _save_app_config(self.app_config)
+            self._sync_panel_settings_ui()
+
+        habit_btn = tk.Button(
+            habit_row,
+            text=f"{'开 ✓' if habit_on else '关'}",
+            command=toggle_habit,
+            font=PIXEL_FONT,
+            bg=MENU_ACTIVE if habit_on else MENU_BG,
+            fg=MENU_FG,
+        )
+        habit_btn.pack(side=tk.RIGHT)
+        ui["office_habit_btn"] = habit_btn
 
         tk.Label(frame, text="声音设置", font=PIXEL_FONT, fg=PIXEL_COLOR, bg=MENU_BG).pack(anchor=tk.W, pady=(4, 0))
         tk.Button(
@@ -38270,14 +41830,8 @@ class DesktopPet:
             win_grade = grade not in ("D", "C")
             fanfare_ms = 0.0
             if win_grade:
-                _play_ui_sfx("game_success", volume=0.58)
                 try:
-                    fanfare_ms = float(
-                        self._play_short_bgm_clip(
-                            GAME_BGM_RHYTHM_WIN, clip_sec=GAME_BGM_RHYTHM_WIN_SEC
-                        )
-                        or 0
-                    )
+                    fanfare_ms = float(self._play_game_victory_fanfare() or 0)
                 except Exception:
                     fanfare_ms = 0.0
             else:
@@ -39754,7 +43308,7 @@ class DesktopPet:
             self._place_panel_popup(self.vocab_game_win)
             self.vocab_game_win.lift()
             try:
-                self._start_overlay_bgm(GAME_BGM_VOCAB, reason="vocab")
+                self._defer_start_overlay_bgm(GAME_BGM_VOCAB, reason="vocab", delay_ms=300)
             except Exception:
                 pass
             return
@@ -39779,7 +43333,7 @@ class DesktopPet:
         self.vocab_options_frame.pack(fill=tk.X)
         self._place_panel_popup(win)
         try:
-            self._start_overlay_bgm(GAME_BGM_VOCAB, reason="vocab")
+            self._defer_start_overlay_bgm(GAME_BGM_VOCAB, reason="vocab", delay_ms=360)
         except Exception:
             pass
 
@@ -40323,15 +43877,35 @@ class DesktopPet:
         pomo_on = bool(getattr(self, "_pomodoro_active", False))
         self._show_sub_menu(
             [
+                ("办公助手 ▶", self._open_office_menu),
                 (f"秒表{' ✓' if sw_on else ''}", self._toggle_tool_stopwatch),
                 ("计时器 ▶", self._open_tool_timer_dialog),
                 (f"番茄钟{' ✓' if pomo_on else ''} ▶", self._open_pomodoro_dialog),
+                ("陪我专注（契约）", self._start_focus_contract),
+                ("取消专注契约", self._cancel_focus_contract),
+                ("邀约小剧场", self._open_date_invite),
                 ("日程提醒", self._open_schedule_manager),
                 ("天气预报", self._open_weather_forecast),
                 ("生日祝福 ▶", self._open_birthday_menu),
             ],
             offset_x=240,
         )
+
+    def _open_office_menu(self) -> None:
+        tops = self.office.top_open_todos(3)
+        tip = " · ".join(str(t.get("text") or "")[:12] for t in tops) if tops else "暂无待办"
+        self._show_sub_menu(
+            [
+                ("今日待办 ▶", self._open_office_todos),
+                ("剪贴板历史 ▶", self._open_office_clipboard),
+                ("常用语 ▶", self._open_office_phrases),
+                ("快捷启动 ▶", self._open_office_launchers),
+                ("番茄钟", self._open_pomodoro_dialog),
+                ("日程提醒", self._open_schedule_manager),
+            ],
+            offset_x=280,
+        )
+        self._show_toast(f"待办：{tip}", "#88ccff", duration_ms=2200)
 
     def _close_panel(self) -> None:
         self._cancel_timer_job("panel_hide_job")
@@ -40617,7 +44191,7 @@ class DesktopPet:
         fri_head.pack(anchor=tk.W, fill=tk.X)
         tk.Label(fri_head, text="友情", font=PIXEL_FONT, fg=MENU_FG, bg=PANEL_ITEM_BG).pack(side=tk.LEFT)
         self.panel_friendship_lv = tk.Label(
-            fri_head, text="Lv.1", font=PIXEL_FONT, fg=THEME_PINK, bg=PANEL_ITEM_BG,
+            fri_head, text="初识", font=PIXEL_FONT, fg=THEME_PINK, bg=PANEL_ITEM_BG,
         )
         self.panel_friendship_lv.pack(side=tk.LEFT, padx=(8, 0))
         fri_body = tk.Frame(self.panel_friendship_section, bg=panel_bg)
@@ -40894,7 +44468,7 @@ class DesktopPet:
         return
 
     def _refresh_panel_friendship(self) -> None:
-        """面板「友情」：苍叶↔伊得等级、进度、解锁说明（仅已实装档；更高先锁）。"""
+        """面板「友情」：阶段名 / 称号 / 日上限 / 下一解锁 / 今日可维护。"""
         lv_lbl = getattr(self, "panel_friendship_lv", None)
         bar = getattr(self, "panel_friendship_bar", None)
         detail = getattr(self, "panel_friendship_detail", None)
@@ -40907,50 +44481,64 @@ class DesktopPet:
             return
         try:
             fri = peer_friendship.load(PEER_PRESENCE_DIR)
-            # 旧存档若超过已实装档，读盘时压回上限
             raw_pts = float(fri.get("points") or 0)
             capped_pts = peer_friendship.clamp_points(raw_pts)
             if capped_pts + 1e-6 < raw_pts:
                 fri["points"] = capped_pts
                 peer_friendship.save(PEER_PRESENCE_DIR, fri)
-            st = peer_friendship.stats(capped_pts)
+            st = peer_friendship.stats(capped_pts, fri)
             n = int(fri.get("meet_count") or 0)
             level = int(st.get("level") or 1)
             max_lv = int(st.get("max_implemented_level") or peer_friendship.MAX_IMPLEMENTED_LEVEL)
             pct = int(st.get("bar_pct") or 0)
             cur = float(st.get("bar_cur") or 0)
             need = float(st.get("bar_need") or 1)
+            stage_name = str(st.get("stage_name") or peer_friendship.stage_name(level))
+            title = str(st.get("title") or "")
             phase = peer_friendship.meet_phase_label(n)
             unlocked = peer_friendship.unlocked_actions(level)
-            unlock_txt = "、".join(peer_friendship.action_label(a) for a in unlocked) if unlocked else "暂无"
-            act_ok = peer_friendship.actions_available(level, n)
-            if act_ok:
-                tip = "已可点热区「动」：并肩散步"
-            elif n < 11:
-                tip = f"再完成「遇」至第 11 次（现 {n}）可出「话/动」"
+            unlock_txt = "、".join(peer_friendship.action_label(a) for a in unlocked) if unlocked else "暂无动作"
+            privs = [peer_friendship.PRIVILEGE_LABELS.get(p, p) for p in (st.get("privileges") or [])[-3:]]
+            priv_txt = "、".join(privs) if privs else "—"
+            daily_left = float(st.get("daily_xp_left") if st.get("daily_xp_left") is not None else peer_friendship.daily_xp_left(fri))
+            daily_cap = float(st.get("daily_xp_cap") or peer_friendship.DAILY_XP_CAP)
+            nxt_raw = st.get("next_unlock")
+            if isinstance(nxt_raw, dict):
+                nxt_label = str(nxt_raw.get("label") or "下一阶")
+                nxt_lines = " / ".join(str(x) for x in (nxt_raw.get("lines") or [])[:2])
+                nxt_focus = str(nxt_raw.get("focus") or "")
             else:
-                tip = "继续「遇」攒本级进度"
+                nxt_label = "下一解锁"
+                nxt_lines = str(nxt_raw or st.get("next_unlock_detail") or "")
+                nxt_focus = str(st.get("next_unlock_detail") or "")
+            maintain = st.get("maintain_hints") if isinstance(st.get("maintain_hints"), list) else peer_friendship.today_maintain_hints(fri, level)
+            cool = " · 活跃冷却中" if st.get("activity_cool") else ""
             if level >= max_lv:
-                tip = f"{tip}\nLv.{max_lv + 1}+：暂未开放（先锁）"
-                lv_txt = f"Lv.{level}·满"
+                lv_txt = f"{stage_name}·满"
             else:
-                hint = peer_friendship.next_unlock_hint(level)
-                if hint:
-                    tip = f"{tip}\n下一级：{hint}"
-                lv_txt = f"Lv.{level}"
+                lv_txt = f"{stage_name}"
             lv_lbl.config(text=lv_txt)
             _draw_panel_bar(bar, pct, THEME_PINK)
+            maintain_txt = "；".join(str(x) for x in maintain[:2])
+            mems = st.get("memories") if isinstance(st.get("memories"), list) else []
+            mem_txt = ""
+            if mems:
+                last = mems[-1] if isinstance(mems[-1], dict) else {}
+                mem_txt = f"\n近忆：{str(last.get('text') or '')[:18]}"
             detail.config(
                 text=(
-                    f"{phase} · 相遇 {n} 次\n"
-                    f"进度 {cur:.1f}/{need:.0f}\n"
-                    f"已解锁：{unlock_txt}\n"
-                    f"{tip}"
+                    f"{title} · {phase} · 遇{n}次{cool}\n"
+                    f"进度 {cur:.1f}/{need:.0f} · 今日经验剩 {daily_left:.0f}/{daily_cap:.0f}\n"
+                    f"已解锁：{unlock_txt} · {priv_txt}\n"
+                    f"{nxt_label}：{nxt_lines}\n"
+                    f"今日可维护：{maintain_txt}"
+                    f"{mem_txt}"
+                    + (f"\n提示：{nxt_focus}" if nxt_focus and level < max_lv and nxt_focus not in nxt_lines else "")
                 ),
             )
         except Exception:
             try:
-                lv_lbl.config(text="Lv.?")
+                lv_lbl.config(text="？")
                 detail.config(text="友情数据读取失败")
             except Exception:
                 pass
@@ -41729,13 +45317,7 @@ class DesktopPet:
             self._show_interact_fx(action)
         if not banter or action not in INTERACT_BANTER:
             return
-        voice_cat = self._ACTION_VOICE_CATEGORY.get(action)
-        # 互动→动作专用目录（kick/eat/sleep/work）：有资源则强制播，不被 50/50 打字框「看起来像没语音」
-        if voice_cat and self._vpet_voice_category_ready(voice_cat):
-            if self._addon_voice_vpet(voice_cat, chain=False, interrupt_busy=True):
-                return
-            self._show_interact_banter_dialog(action)
-            return
+        # Eiden：互动→动作无对应语音（现有为 Aoba 目录），一律只出文本框
         self._show_interact_banter_dialog(action)
 
     def _companion_kind_on(self, kind: str) -> bool:
@@ -43199,7 +46781,7 @@ class DesktopPet:
         self._finish_expression()
 
     def _play_expression_pop(self, *, times: int = 1) -> None:
-        """表情轻弹（click_bounce_offset）。默认 1 次；伤心/生气传 times=3；无语传 0 跳过。"""
+        """表情轻弹（click_bounce_offset）。默认 1 次；伤心/生气传 times=3。"""
         times = int(times)
         if times <= 0:
             return
@@ -43218,14 +46800,43 @@ class DesktopPet:
         self._expression_bounce_tok = self.interaction_token
         self._expression_bounce_up()
 
+    def _schedule_expression_bounce(self, name: str, *, delay_ms: int = 20) -> None:
+        """切图/特效后再弹，避免完整 place/lift 冲掉首帧。"""
+        times = self._expression_bounce_times(name)
+        if times <= 0:
+            return
+        tok = self.interaction_token
+
+        def _go(expected: int = tok, n: int = times) -> None:
+            if expected != self.interaction_token:
+                return
+            self._play_expression_pop(times=n)
+
+        try:
+            self.root.after(max(0, int(delay_ms)), _go)
+        except Exception:
+            self._play_expression_pop(times=times)
+
     def _expression_bounce_times(self, name: str) -> int:
-        """按表情名返回弹动次数：无语 0；开心/伤心/生气 3；其余 1。"""
+        """按表情名返回弹动次数：开心/伤心/生气 3；其余一律 1。"""
         key = str(name or "").strip().lower()
         if key in EXPRESSION_BOUNCE_SKIP:
             return 0
         if key in EXPRESSION_BOUNCE_TRIPLE:
             return 3
         return 1
+
+    def _place_expression_bounce_frame(self) -> None:
+        """只移立绘（同开心）；旁效不跟、也不 lift，避免冲掉弹动观感。"""
+        self._place_window(light=True)
+        try:
+            self._place_sleep_zzz()
+        except Exception:
+            pass
+        try:
+            self._place_ai_chat()
+        except Exception:
+            pass
 
     def _expression_bounce_up(self) -> None:
         if int(getattr(self, "_expression_bounce_tok", 0) or 0) != self.interaction_token:
@@ -43236,9 +46847,7 @@ class DesktopPet:
             return
         self.click_bouncing = True
         self.click_bounce_offset = -EXPRESSION_BOUNCE_PX
-        self._place_window()
-        self._place_sleep_zzz()
-        self._place_ai_chat()
+        self._place_expression_bounce_frame()
         tok = self._expression_bounce_tok
         self.expression_bounce_job = self.root.after(
             EXPRESSION_BOUNCE_MS, lambda t=tok: self._expression_bounce_down_guarded(t)
@@ -43254,9 +46863,7 @@ class DesktopPet:
         if int(getattr(self, "_expression_bounce_tok", 0) or 0) != self.interaction_token:
             return
         self.click_bounce_offset = 0
-        self._place_window()
-        self._place_sleep_zzz()
-        self._place_ai_chat()
+        self._place_expression_bounce_frame()
         left = int(getattr(self, "_expression_bounce_left", 0) or 0) - 1
         self._expression_bounce_left = left
         if left <= 0:
@@ -43292,8 +46899,8 @@ class DesktopPet:
         def play_kick_voice(expected: int = tok) -> None:
             if expected != self.interaction_token or self.action_name != "kick":
                 return
-            if self._trigger_kick_banter() != "voice":
-                self._try_voice_collision()
+            # Eiden：侧踢只出文本，不播 Aoba kick/collision 语音
+            self._trigger_kick_banter()
 
         self.root.after(60, play_kick_voice)
         self._set_image(self.sprites.kick)
@@ -43401,7 +47008,7 @@ class DesktopPet:
             )
 
     def _play_expression_shy(self) -> None:
-        if self.dragging or self.state == "work" or self._app_scene_blocks_actions():
+        if self.dragging or self.state == "work":
             return
         # 睡眠中可被点红：先打断睡眠链路，结束后若仍是睡眠模式会回到 rest
         was_quiet = self.mode == "quiet"
@@ -43468,16 +47075,16 @@ class DesktopPet:
 
     def _play_expression_bixin(self) -> None:
         """站姿比心：胸口涌出爱心并不断放大，传向屏幕前的使用者。"""
-        if self.dragging or self.state == "work" or self._app_scene_blocks_actions():
+        if self.dragging or self.state == "work":
             return
         self._interrupt_current_interaction()
         self.state = "action"
         self.action_name = "bixin"
         self.bixin_fx_started_ms = int(time.time() * 1000)
         self._interact_flair("bixin", banter=True)
-        self._play_expression_pop()
         self._set_image(self.sprites.stand)
         self._show_bixin_fx()
+        self._schedule_expression_bounce("bixin")
         self._schedule_action_end(
             action="bixin",
             duration_ms=BIXIN_DURATION_MS,
@@ -43493,7 +47100,7 @@ class DesktopPet:
         self._play_like_or_wink("wink", self.sprites.wink)
 
     def _play_like_or_wink(self, name: str, sprite: ImageTk.PhotoImage) -> None:
-        if self.dragging or self.state == "work" or self._app_scene_blocks_actions():
+        if self.dragging or self.state == "work":
             return
         self._interrupt_current_interaction()
         self.state = "action"
@@ -43508,8 +47115,8 @@ class DesktopPet:
             self._play_wink_bounce()
             self._show_wink_fx()
         else:
-            self._play_expression_pop(times=self._expression_bounce_times("like"))
             self._show_like_fx()
+            self._schedule_expression_bounce("like")
         self._schedule_action_end(
             action=name,
             duration_ms=WINK_DURATION_MS,
@@ -43572,14 +47179,14 @@ class DesktopPet:
         self._after_wink_or_like()
 
     def _play_expression_sprite(self, name: str, sprite: ImageTk.PhotoImage, *, banter: bool = True) -> None:
-        if self.dragging or self.state == "work" or self._app_scene_blocks_actions():
+        if self.dragging or self.state == "work":
             return
         self._interrupt_current_interaction()
         self.state = "action"
         self.action_name = name
         self._interact_flair(name, banter=banter)
-        self._play_expression_pop()
         self._set_image(sprite)
+        self._schedule_expression_bounce(name)
         self._schedule_action_end(action=name, callback=self._after_simple_expression)
 
     def _play_yesno_judge(self) -> None:
@@ -43656,7 +47263,7 @@ class DesktopPet:
         self.angry_lift_offset = 0
         self.angry_walk_phase = False
         self._interact_flair("angry", banter=True)
-        self._play_expression_pop(times=self._expression_bounce_times("angry"))
+        self._schedule_expression_bounce("angry")
         self._angry_anim_step(0)
 
     def _angry_anim_step(self, step: int) -> None:
@@ -44429,8 +48036,8 @@ class DesktopPet:
         self.sad_phase = "squat"
         self._interact_flair("sad", banter=True)
         self._set_image(self.sprites.actions["squat"][0])
-        self._play_expression_pop(times=self._expression_bounce_times("sad"))
         self._show_rain_fx()
+        self._schedule_expression_bounce("sad")
         tok = self.interaction_token
         self.root.after(SAD_SQUAT_MS, lambda t=tok: self._sad_phase_sad1(t))
         self._schedule_action_end(
@@ -44471,7 +48078,7 @@ class DesktopPet:
         self._interact_flair("idea", banter=False)
         self._set_image(self.sprites.stand)
         self._show_bulb_fx()
-        self._play_expression_pop(times=self._expression_bounce_times("idea"))
+        self._schedule_expression_bounce("idea")
         self.root.after(IDEA_STAND_MS, self._idea_to_eat2)
 
     def _idea_to_eat2(self) -> None:
@@ -44505,7 +48112,7 @@ class DesktopPet:
         return photo
 
     def _play_expression(self, name: str) -> None:
-        if self.dragging or self._app_scene_blocks_actions():
+        if self.dragging:
             return
         sticker_kinds = {
             "angry": "angry",
@@ -44529,8 +48136,8 @@ class DesktopPet:
             self._show_sweat_fx()
         else:
             self._set_image(self._stand_with_sticker(sticker_kinds[name]))
-        # 无语不弹；尴尬/疑惑等弹一下（须在切图/特效之后，避免被 place 冲掉观感）
-        self._play_expression_pop(times=self._expression_bounce_times(name))
+        # 开心走专用弹；生气/伤心=3；其余（疑惑/无语/尴尬等）弹 1
+        self._schedule_expression_bounce(name)
         self._schedule_action_end(action=name, callback=self._after_expression)
 
     def _finish_expression(self) -> None:
@@ -45414,7 +49021,7 @@ class DesktopPet:
 
     def _open_preset_dialog_menu(self) -> None:
         self._cancel_preset_dialog_return()
-        self._start_overlay_bgm(GAME_BGM_PRESET_DIALOG, reason="preset_dialog")
+        # 普通对话不切 BGM：仅指定模式（装扮/家园/音乐等）才播叠层曲
         setattr(self, "_preset_dialog_session", False)
         # self_close：先点子菜单再播，避免 hide_main_menu 把配乐掐掉再重开
         items = [
@@ -45426,7 +49033,6 @@ class DesktopPet:
     def _play_preset_dialog(self, question: str, answers: tuple[str, ...]) -> None:
         self._cancel_preset_dialog_return()
         setattr(self, "_preset_dialog_session", True)
-        self._start_overlay_bgm(GAME_BGM_PRESET_DIALOG, reason="preset_dialog")
         self._hide_main_menu()
         if self.preset_dialog_job:
             try:
@@ -46116,6 +49722,21 @@ class DesktopPet:
                     text=f"{'开 ✓' if boot_on else '关'}",
                     bg=MENU_ACTIVE if boot_on else MENU_BG,
                 )
+        except Exception:
+            pass
+        try:
+            oc = self._office_cfg()
+            for key, flag in (
+                ("office_net_btn", bool(oc.get("allow_network"))),
+                ("office_clip_btn", bool(oc.get("clipboard_history", True))),
+                ("office_habit_btn", bool(oc.get("habit_reminders", True))),
+            ):
+                btn = ui.get(key)
+                if btn and btn.winfo_exists():
+                    btn.configure(
+                        text=f"{'开 ✓' if flag else '关'}",
+                        bg=MENU_ACTIVE if flag else MENU_BG,
+                    )
         except Exception:
             pass
 
@@ -47609,12 +51230,14 @@ class DesktopPet:
             use_border5 = getattr(self, "speech_use_border5", False)
         if not use_border5:
             self.speech_border_photo = None
+            self.speech_text_item = None
             self._paint_flat_text_box(
                 self.speech_canvas,
                 self.speech_label,
                 text,
                 color,
                 self._speech_label_content_size,
+                paint_text_on_canvas=True,
                 tone=getattr(self, "speech_bubble_tone", None),
             )
             if self.speech_dialog and self.speech_dialog.winfo_exists():
@@ -47722,8 +51345,21 @@ class DesktopPet:
         bubble_tone: str | None = None,
         chat_role: str | None = None,
     ) -> None:
-        # 相遇模式：禁普通文本；未点开「话」前也不要相遇短句；点开后的 from_meet 对话框才放行
-        if self._in_crossover_meet_mode() or self._meet_priority_active():
+        # 装扮编辑中：不弹对话边框（与预览/立绘烘烤叠在一起会卡死主线程）
+        if self._outfit_editor_is_open():
+            if callable(on_complete):
+                try:
+                    on_complete()
+                except Exception:
+                    pass
+            return
+        role_hint = (chat_role or "").strip().lower()
+        is_chat_bubble = role_hint in ("owner", "eiden", "pet")
+        # 相遇模式：禁普通闲聊；互动气泡（chat_role）始终放行；点「话」后的 from_meet 才放行相遇气泡
+        if (
+            (self._in_crossover_meet_mode() or self._meet_priority_active())
+            and not is_chat_bubble
+        ):
             allow_meet_dialog = bool(from_meet) and bool(
                 getattr(self, "_meet_mode_allow_dialog_text", False)
             )
@@ -47758,6 +51394,7 @@ class DesktopPet:
             self._voice_subtitle_active = True
             self._speech_from_voice = True
         else:
+            # 其它文本优先：先停语音文本框，再开本对话框
             self._hide_voice_subtitle()
             self._hide_speech_dialog()
             self._speech_from_voice = False
@@ -47799,6 +51436,7 @@ class DesktopPet:
         )
         self.speech_canvas.pack()
         self.speech_text_window = None
+        self.speech_text_item = None
 
         self.speech_label = tk.Label(
             self.speech_dialog,
@@ -47853,9 +51491,12 @@ class DesktopPet:
             if use_border5 or self.speech_chat_role:
                 self._layout_speech_dialog("", color)
             else:
-                # 扁平框：保持全文尺寸，只清空文字，避免打字过程反复重绘边框
+                # 扁平框：保持全文尺寸，只清空画布文字（色键窗上 Label 嵌入不可靠）
                 try:
-                    if self.speech_label and self.speech_label.winfo_exists():
+                    item = getattr(self, "speech_text_item", None)
+                    if item is not None and self.speech_canvas and self.speech_canvas.winfo_exists():
+                        self.speech_canvas.itemconfigure(item, text="")
+                    elif self.speech_label and self.speech_label.winfo_exists():
                         self.speech_label.config(text="")
                 except Exception:
                     self._layout_speech_dialog("", color)
@@ -47894,6 +51535,20 @@ class DesktopPet:
         ):
             try:
                 self.speech_canvas.itemconfigure(self.speech_text_item, text=shown, fill=color)
+            except Exception:
+                self._layout_speech_dialog(shown, color)
+        elif (
+            not getattr(self, "speech_use_border5", False)
+            and not getattr(self, "speech_chat_role", None)
+            and getattr(self, "speech_text_item", None) is not None
+            and self.speech_canvas
+            and self.speech_canvas.winfo_exists()
+        ):
+            try:
+                fg = color
+                if str(getattr(self, "speech_bubble_tone", "") or "").lower() == "cyan":
+                    fg = SPEECH_MEET_BUBBLE_FG
+                self.speech_canvas.itemconfigure(self.speech_text_item, text=shown, fill=fg)
             except Exception:
                 self._layout_speech_dialog(shown, color)
         elif (
@@ -48326,6 +51981,12 @@ class DesktopPet:
     def _open_outfit_editor(self) -> None:
         """面板 → 装扮：选素材、拖预览定位、换素材；保存后全模式随身。"""
         self._hide_main_menu()
+        # 打开前清掉台词/语音框，避免与预览烘烤抢主线程
+        try:
+            self._hide_speech_dialog()
+            self._hide_voice_subtitle()
+        except Exception:
+            pass
         # 打开前刷新图库（家园/RPG 刚保存的自创画）
         try:
             self._home_setup_assets()
@@ -48352,12 +52013,12 @@ class DesktopPet:
         # 编辑时仍显示已烘焙的佩戴（在立绘上）
         self._sync_outfit_layer(force_redraw=False)
         try:
-            self._start_overlay_bgm(GAME_BGM_OUTFIT, reason="outfit")
+            self._defer_start_overlay_bgm(GAME_BGM_OUTFIT, reason="outfit", force=True, delay_ms=420)
         except Exception:
             pass
 
         # 素材区固定在底部并可滚动（不进主 Canvas），否则 Win32 上点不到 / 素材被裁切
-        pw, ph = _fit_panel_wh(win, 420, 620)
+        pw, ph = _fit_panel_wh(win, 460, 700)
         shell = tk.Frame(win, bg=paper, padx=10, pady=8)
         shell.pack(fill=tk.BOTH, expand=True)
         pack_panel_accent_bar(shell, bg=paper, signs_dir=resolve_signs_dir(BUNDLE_DIR))
@@ -48422,8 +52083,15 @@ class DesktopPet:
         thumbs: list[ImageTk.PhotoImage] = []
         add_btn_holder: dict[str, tk.Button | None] = {"btn": None}
         asset_btns: dict[str, tk.Misc] = {}
-        preview_size = 200
+        preview_size = 280
         thumb_px = 52
+        # 预览框内 stand 略小，上下留边，头饰才画得全
+        preview_layout = {"box": preview_size - 8, "char": 0, "ox": 0, "oy": 0}
+        _box0 = preview_layout["box"]
+        _char0 = max(168, int(_box0 * 0.78))
+        preview_layout["char"] = _char0
+        preview_layout["ox"] = (_box0 - _char0) // 2
+        preview_layout["oy"] = max(6, int((_box0 - _char0) * 0.58))
 
         scale_var = tk.DoubleVar(
             value=float(draft[0]["scale"]) if draft else float(pending["scale"])
@@ -48474,21 +52142,25 @@ class DesktopPet:
             refresh_preview()
 
         def event_to_norm(event) -> tuple[float, float]:
-            w = max(1, preview_label.winfo_width())
-            h = max(1, preview_label.winfo_height())
-            nx = pet_outfit.clamp_norm(((event.x / w) - 0.5) * 1.1)
-            ny = pet_outfit.clamp_norm(((event.y / h) - 0.5) * 1.1)
+            char = max(1, int(preview_layout.get("char") or 1))
+            ox = int(preview_layout.get("ox") or 0)
+            oy = int(preview_layout.get("oy") or 0)
+            nx = pet_outfit.clamp_norm((((event.x - ox) / char) - 0.5) * 1.1)
+            ny = pet_outfit.clamp_norm((((event.y - oy) / char) - 0.5) * 1.1)
             return nx, ny
 
         def refresh_preview() -> None:
-            size = preview_size - 8
-            base = Image.new("RGBA", (size, size), preview_pad)
+            box = max(64, int(preview_layout["box"]))
+            char = max(64, int(preview_layout["char"]))
+            ox = int(preview_layout["ox"])
+            oy = int(preview_layout["oy"])
+            base = Image.new("RGBA", (box, box), preview_pad)
             try:
                 # 装扮预览固定用普通图组 stand（不受当前黑框开关影响）
                 with _sprite_pack_override(SPRITE_PACK_NORMAL):
-                    stand = _sprite_rgba_image("stand.jpg", size)
+                    stand = _sprite_rgba_image("stand.jpg", char)
                 if stand.getbbox():
-                    base.alpha_composite(stand, (0, 0))
+                    base.alpha_composite(stand, (ox, oy))
             except Exception:
                 pass
             view_decors = list(draft)
@@ -48505,11 +52177,12 @@ class DesktopPet:
                     )
                 ]
             layer = pet_outfit.compose_outfit_layer(
-                size,
+                char,
                 view_decors,
                 materials_dir=HOME_MATERIALS_DIR,
                 materials_index=HOME_MATERIALS_INDEX,
                 props_dir=HOME_PROPS_DIR,
+                canvas_size=box,
             )
             base.alpha_composite(layer)
             photo = ImageTk.PhotoImage(base)
@@ -48973,8 +52646,9 @@ class DesktopPet:
                 except Exception:
                     pass
 
-            self._open_home_pixel_painter(on_library_changed=_on_lib)
-            self._show_toast("已打开自创素材画板", "#d8c8e8", duration_ms=1400)
+            # 延后一拍再开，避免与装扮预览刷新叠在同一事件里卡死
+            self.root.after(30, lambda: self._open_home_pixel_painter(on_library_changed=_on_lib))
+            self.root.after(80, lambda: self._show_toast("已打开自创素材画板", "#d8c8e8", duration_ms=1400))
 
         refresh_assets()
 
@@ -49049,6 +52723,11 @@ class DesktopPet:
             )
             # 立刻贴到身上（编辑窗仍开着也可看）
             self._sync_outfit_layer(force_redraw=True)
+            # 窗未关：装扮 BGM 必须继续循环，保存佩戴不得掐断
+            try:
+                self._reassert_panel_overlay_bgm()
+            except Exception:
+                pass
             try:
                 self.root.after(50, self._resume_idle)
             except Exception:
@@ -49068,15 +52747,40 @@ class DesktopPet:
             self._save_outfit_decors([])
             self._show_toast("已清空装扮", "#ffcc66", duration_ms=1400)
             try:
+                self._reassert_panel_overlay_bgm()
+            except Exception:
+                pass
+            try:
                 self.root.after(50, self._resume_idle)
             except Exception:
                 self._resume_idle()
 
         def close_editor() -> None:
+            # 装扮结束：停掉叠层曲，绝不自动续播歌单 / 宝箱曲（含 bgm008）
             try:
-                self._stop_overlay_bgm(reason="outfit")
+                self._cancel_panel_overlay_bgm_watch()
             except Exception:
                 pass
+            try:
+                self._stop_overlay_bgm(reason="outfit", resume=False)
+            except Exception:
+                pass
+            try:
+                self._overlay_bgm_resume = None
+            except Exception:
+                pass
+            try:
+                self._clear_music_resume_pos()
+            except Exception:
+                pass
+            try:
+                import pygame
+
+                if pygame.mixer.get_init():
+                    pygame.mixer.music.stop()
+            except Exception:
+                pass
+            self.bg_music_playing = False
             try:
                 win.destroy()
             except Exception:
@@ -49207,26 +52911,25 @@ class DesktopPet:
         self.happy_fx_win.geometry(f"+{self.x - pad}+{display_y - pad}")
 
     def _show_hi_dialog(self) -> str:
-        """打招呼：关语音=HI_TEXT 打字框；开语音且有「你好」资源时强制播（与 eat 同源）。"""
-
-        def dialog() -> None:
-            self._show_speech_dialog(
-                HI_TEXT,
-                auto_hide_ms=max(2800, HI_TYPEWRITER_MS * max(8, len(HI_TEXT)) + 1200),
-                typewriter_ms=HI_TYPEWRITER_MS,
-                use_border5=True,
-            )
-
-        if self._hi_voice_ready():
-            self._hide_voice_subtitle()
-            if self._try_voice_hi(ignore_cooldown=True):
-                return "voice"
-        dialog()
+        """打招呼：Eiden 无对应「你好」语音，只出 HI_TEXT 打字框。"""
+        self._show_speech_dialog(
+            HI_TEXT,
+            auto_hide_ms=max(2800, HI_TYPEWRITER_MS * max(8, len(HI_TEXT)) + 1200),
+            typewriter_ms=HI_TYPEWRITER_MS,
+            use_border5=True,
+        )
         return "dialog"
 
     def _pause_bg_music_for_call(self) -> None:
-        if self.bg_music_playing:
+        overlay_on = bool(getattr(self, "_overlay_bgm_active", False))
+        if self.bg_music_playing or overlay_on:
+            try:
+                self._capture_music_playback_pos(mark_pending=True)
+            except Exception:
+                pass
             self.bg_music_paused_for_call = True
+            if overlay_on:
+                setattr(self, "_overlay_bgm_paused_for_call", True)
             self._cancel_affinity_tick()
             try:
                 import pygame
@@ -49238,32 +52941,14 @@ class DesktopPet:
             self.bg_music_playing = False
 
     def _show_call_dialog(self, *, call_sequence: list | None = None) -> str:
-        """打电话：有 call 资源时一律先 ring，再随机播一条非 ring 台词+标题文本框；否则走旧 CALL_TEXT。"""
-
-        def dialog() -> None:
-            self._show_speech_dialog(
-                CALL_TEXT,
-                auto_hide_ms=max(3200, TYPEWRITER_MS * max(8, len(CALL_TEXT)) + 1400),
-                typewriter_ms=TYPEWRITER_MS,
-                use_border5=True,
-            )
-            self._play_call_audio()
-
-        def voice() -> bool:
-            self._pause_bg_music_for_call()
-            self._hide_voice_subtitle()
-            self._ensure_call_catalog()
-            # 不传固定 seq：每次 ring → 非 ring 随机一条
-            ok = self._try_voice_call(sequence=None, ignore_cooldown=True)
-            if ok:
-                self._last_call_seq = list(getattr(self.voice_player, "_last_call_seq", []) or [])
-            return ok
-
-        # 能播语音就固定「ring → 随机台词」；不在 voice/dialog 之间再抽签
-        if self._call_voice_ready():
-            if voice():
-                return "voice"
-        dialog()
+        """打电话：Eiden 无对应 call 语音，只出 CALL_TEXT 打字框。"""
+        self._show_speech_dialog(
+            CALL_TEXT,
+            auto_hide_ms=max(3200, TYPEWRITER_MS * max(8, len(CALL_TEXT)) + 1400),
+            typewriter_ms=TYPEWRITER_MS,
+            use_border5=True,
+        )
+        self._last_call_seq = None
         return "dialog"
 
     def _play_call_audio(self) -> None:
@@ -49293,8 +52978,21 @@ class DesktopPet:
                 pygame.mixer.music.stop()
         except Exception:
             pass
+        if self.bg_music_paused_for_call and getattr(self, "_overlay_bgm_paused_for_call", False):
+            self.bg_music_paused_for_call = False
+            setattr(self, "_overlay_bgm_paused_for_call", False)
+            tid = str(getattr(self, "_overlay_bgm_track", "") or "")
+            if tid and bool(getattr(self, "_overlay_bgm_active", False)):
+                try:
+                    self._music_resume_pending = True
+                    self._music_resume_track = tid
+                    self._bg_music_play_track(tid, single_loop=True, force=True)
+                except Exception:
+                    pass
+            return
         if self.bg_music_paused_for_call and self.music_sprite_mode:
             self.bg_music_paused_for_call = False
+            self._music_resume_pending = True
             self._start_bg_music()
         else:
             self.bg_music_paused_for_call = False
@@ -49317,8 +53015,21 @@ class DesktopPet:
                 pygame.mixer.music.stop()
         except Exception:
             pass
+        if self.bg_music_paused_for_call and getattr(self, "_overlay_bgm_paused_for_call", False):
+            self.bg_music_paused_for_call = False
+            setattr(self, "_overlay_bgm_paused_for_call", False)
+            tid = str(getattr(self, "_overlay_bgm_track", "") or "")
+            if tid and bool(getattr(self, "_overlay_bgm_active", False)):
+                try:
+                    self._music_resume_pending = True
+                    self._music_resume_track = tid
+                    self._bg_music_play_track(tid, single_loop=True, force=True)
+                except Exception:
+                    pass
+            return
         if self.bg_music_paused_for_call and self.music_sprite_mode:
             self.bg_music_paused_for_call = False
+            self._music_resume_pending = True
             self._start_bg_music()
         else:
             self.bg_music_paused_for_call = False
@@ -50193,7 +53904,7 @@ class DesktopPet:
             if self._supports_walk_idle() and self.state == "stand" and not self.dragging:
                 self._schedule_stand_idle(min_delay=300, max_delay=800)
             return
-        if self._menus_are_open():
+        if self._menus_are_open() or self._edit_panels_open():
             self._stand_tick()
             return
         self._start_walk()
@@ -50206,7 +53917,7 @@ class DesktopPet:
             return
         if getattr(self, "_crossover_stroll_active", False):
             return
-        if self._menus_are_open():
+        if self._menus_are_open() or self._edit_panels_open():
             self._stand_tick()
             return
 
@@ -50280,6 +53991,25 @@ class DesktopPet:
         """走一步；成功 True，需结束本段走路 False。"""
         if self.walk_steps_left <= 0:
             return False
+        # 有可拾取金币时优先朝它走
+        if self._can_seek_world_coins() and self._world_coins:
+            coin = self._nearest_world_coin()
+            if coin is not None:
+                cx = int(coin.get("x") or 0) + 16
+                cy = int(coin.get("land_y") or coin.get("y") or 0) + 16
+                pet_cx = self.x + self.display_size // 2
+                pet_cy = self.y + self.display_size // 2
+                dx0 = cx - pet_cx
+                dy0 = cy - pet_cy
+                if abs(dx0) >= abs(dy0):
+                    want = "right" if dx0 > 0 else "left"
+                else:
+                    want = "front" if dy0 > 0 else "back"
+                if want in self.DIRECTIONS and want != self.direction:
+                    try:
+                        self._apply_walk_direction(want)
+                    except Exception:
+                        self.direction = want
         dx, dy = self.DELTAS[self.direction]
         next_x = self.x + dx
         next_y = self.y + dy
@@ -52259,7 +55989,8 @@ class DesktopPet:
         pad = 20
         display_y = self.y + self.click_bounce_offset
         self.sweat_fx_win.geometry(f"+{self.x - pad}+{display_y - pad}")
-        self._lift_pet_above_bg_fx()
+        if not getattr(self, "click_bouncing", False):
+            self._lift_pet_above_bg_fx()
 
     def _show_sweat_fx(self) -> None:
         self._hide_sweat_fx()
@@ -52481,8 +56212,403 @@ class DesktopPet:
                 auto_hide_ms=10000,
                 color=REMINDER_COLOR,
             )
+            # 轻量兑现入口：完成 / 推迟
+            try:
+                self._offer_schedule_fulfill(str(rid), str(text))
+            except Exception:
+                pass
         self._reminder_last_hm = now_hm
         self._safe_after(REMINDER_CHECK_MS, self._reminder_tick)
+
+    def _offer_schedule_fulfill(self, schedule_id: str, text: str) -> None:
+        win = tk.Toplevel(self.root)
+        win.title("日程兑现")
+        self._apply_window_layer(win)
+        paper = SCHEDULE_THEME["bg"]
+        win.configure(bg=paper)
+        frame = tk.Frame(win, bg=paper, padx=10, pady=8)
+        frame.pack()
+        tk.Label(
+            frame,
+            text=f"「{text[:40]}」做好了吗？",
+            font=_ui_body_font(9),
+            fg=SCHEDULE_THEME["ink"],
+            bg=paper,
+            wraplength=280,
+        ).pack(anchor=tk.W)
+
+        def done() -> None:
+            self._grant_owner_bond(owner_bond.CH_SCHEDULE, toast=True)
+            self._append_bond_diary_note(f"完成了日程：{text[:40]}")
+            try:
+                self._reward_drop_for_event("schedule")
+            except Exception:
+                pass
+            try:
+                win.destroy()
+            except Exception:
+                pass
+
+        def snooze() -> None:
+            self._show_toast("好，晚点再提醒自己一声", "#8899aa", duration_ms=1800)
+            try:
+                win.destroy()
+            except Exception:
+                pass
+
+        row = tk.Frame(frame, bg=paper)
+        row.pack(fill=tk.X, pady=(8, 0))
+        tk.Button(row, text="完成", font=_ui_hint_font(9), bg=SCHEDULE_THEME["accent"], fg="#ffffff", command=done).pack(
+            side=tk.LEFT
+        )
+        tk.Button(row, text="推迟", font=_ui_hint_font(9), bg=paper, fg=SCHEDULE_THEME["muted"], command=snooze).pack(
+            side=tk.LEFT, padx=(8, 0)
+        )
+        self.root.after(12000, lambda: win.destroy() if win.winfo_exists() else None)
+        self._place_panel_popup(win)
+
+    def _office_cfg(self) -> dict:
+        cfg = dict(self.app_config.get("office") or {})
+        cfg.setdefault("allow_network", False)
+        cfg.setdefault("clipboard_history", True)
+        cfg.setdefault("habit_reminders", True)
+        cfg.setdefault("sit_minutes", 50)
+        cfg.setdefault("water_minutes", 45)
+        self.app_config["office"] = cfg
+        return cfg
+
+    def _office_start_services(self) -> None:
+        if self._closing:
+            return
+        self._office_poll_clipboard()
+        self._office_habit_tick()
+
+    def _office_poll_clipboard(self) -> None:
+        self._office_clip_job = None
+        if self._closing:
+            return
+        cfg = self._office_cfg()
+        delay = 900
+        if cfg.get("clipboard_history", True):
+            try:
+                text = self.root.clipboard_get()
+                if isinstance(text, str) and text.strip():
+                    self.office.push_clipboard(text)
+            except Exception:
+                pass
+        try:
+            self._office_clip_job = self.root.after(delay, self._office_poll_clipboard)
+        except Exception:
+            self._office_clip_job = None
+
+    def _office_habit_tick(self) -> None:
+        self._office_habit_job = None
+        if self._closing:
+            return
+        cfg = self._office_cfg()
+        now = int(time.time() * 1000)
+        if cfg.get("habit_reminders", True):
+            sit_ms = max(15, int(cfg.get("sit_minutes") or 50)) * 60_000
+            water_ms = max(15, int(cfg.get("water_minutes") or 45)) * 60_000
+            if now - int(self._office_last_sit_ms) >= sit_ms:
+                self._office_last_sit_ms = now
+                self._office_soft_nudge("该起来活动一下了～", pose="awkward")
+            elif now - int(self._office_last_water_ms) >= water_ms:
+                self._office_last_water_ms = now
+                self._office_soft_nudge("喝口水再忙吧。", pose="hi")
+        try:
+            self._office_habit_job = self.root.after(30_000, self._office_habit_tick)
+        except Exception:
+            self._office_habit_job = None
+
+    def _office_soft_nudge(self, text: str, *, pose: str = "stand") -> None:
+        """少打扰：气泡/toast，不抢独占模式。"""
+        self._show_toast(text, "#88ccff", duration_ms=2800)
+        if self.mode not in ("free", "stroll", "follow", "music"):
+            return
+        try:
+            # 轻提示表情（若当前可切）
+            if pose and self.state in ("stand", "walk"):
+                pass
+        except Exception:
+            pass
+
+    def _office_copy_text(self, text: str, *, toast: str = "已复制，Ctrl+V 粘贴") -> None:
+        text = text or ""
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(text)
+            self.root.update_idletasks()
+        except Exception:
+            self._show_toast("复制失败", "#ff8899")
+            return
+        self._show_toast(toast, "#88ffcc", duration_ms=1800)
+
+    def _office_run_launcher(self, target: str) -> None:
+        target = (target or "").strip()
+        if not target:
+            return
+        try:
+            if target.startswith(("http://", "https://")):
+                import webbrowser
+
+                webbrowser.open(target)
+            else:
+                os.startfile(target)  # type: ignore[attr-defined]
+            self._show_toast("已启动", "#88ffcc", duration_ms=1400)
+        except Exception:
+            self._show_toast("启动失败，请检查路径", "#ff8899", duration_ms=2200)
+
+    def _open_office_todos(self) -> None:
+        self._hide_main_menu()
+        if self._office_todo_win and self._office_todo_win.winfo_exists():
+            self._office_todo_win.lift()
+            return
+        win = tk.Toplevel(self.root)
+        self._office_todo_win = win
+        win.title("今日待办")
+        self._apply_window_layer(win)
+        win.configure(bg=MENU_BG)
+        frame = tk.Frame(win, bg=MENU_BG, padx=10, pady=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+        tk.Label(frame, text="今日待办", font=PIXEL_FONT, fg=MENU_FG, bg=MENU_BG).pack(anchor=tk.W)
+        row = tk.Frame(frame, bg=MENU_BG)
+        row.pack(fill=tk.X, pady=6)
+        entry = tk.Entry(row, font=PIXEL_FONT, width=22)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        list_box = tk.Frame(frame, bg=MENU_BG)
+        list_box.pack(fill=tk.BOTH, expand=True)
+
+        def refresh() -> None:
+            for w in list_box.winfo_children():
+                w.destroy()
+            items = self.office.today_todos(include_done=True)[:30]
+            if not items:
+                tk.Label(list_box, text="还没有任务，加点今天要做的吧", font=HINT_FONT, fg=MENU_MUTED, bg=MENU_BG).pack(
+                    anchor=tk.W
+                )
+                return
+            for item in items:
+                line = tk.Frame(list_box, bg=MENU_BG)
+                line.pack(fill=tk.X, pady=1)
+                done = bool(item.get("done"))
+                mark = "✓" if done else "○"
+                txt = str(item.get("text") or "")
+                btn = tk.Button(
+                    line,
+                    text=f"{mark} {txt}",
+                    anchor=tk.W,
+                    font=PIXEL_FONT,
+                    bg=MENU_ACTIVE if done else MENU_BG,
+                    fg=MENU_MUTED if done else MENU_FG,
+                    relief=tk.FLAT,
+                    command=lambda i=item["id"], was_done=done: self._office_toggle_todo_bonded(i, was_done, refresh),
+                )
+                btn.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                tk.Button(
+                    line,
+                    text="×",
+                    font=PIXEL_FONT,
+                    fg="#ff8899",
+                    bg=MENU_BG,
+                    relief=tk.FLAT,
+                    command=lambda i=item["id"]: (self.office.remove_todo(i), refresh()),
+                ).pack(side=tk.RIGHT)
+
+        def add() -> None:
+            try:
+                self.office.add_todo(entry.get())
+            except Exception:
+                return
+            entry.delete(0, tk.END)
+            refresh()
+            tops = self.office.top_open_todos(3)
+            if tops:
+                self._show_toast(" · ".join(t["text"][:10] for t in tops), "#88ccff", duration_ms=2000)
+
+        tk.Button(row, text="添加", font=PIXEL_FONT, bg=MENU_ACTIVE, fg=MENU_FG, command=add).pack(side=tk.LEFT, padx=4)
+        entry.bind("<Return>", lambda _e: add())
+        refresh()
+        self._place_panel_popup(win)
+
+    def _office_toggle_todo_bonded(self, todo_id: str, was_done: bool, refresh) -> None:
+        self.office.toggle_todo(todo_id)
+        # 从未完成 → 完成才加羁绊
+        if not was_done:
+            try:
+                self._grant_owner_bond(owner_bond.CH_TODO, toast=True)
+                self._reward_drop_for_event("todo")
+            except Exception:
+                pass
+        refresh()
+
+    def _open_office_clipboard(self) -> None:
+        self._hide_main_menu()
+        if self._office_clip_win and self._office_clip_win.winfo_exists():
+            self._office_clip_win.lift()
+            return
+        win = tk.Toplevel(self.root)
+        self._office_clip_win = win
+        win.title("剪贴板历史")
+        self._apply_window_layer(win)
+        win.configure(bg=MENU_BG)
+        frame = tk.Frame(win, bg=MENU_BG, padx=10, pady=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+        top = tk.Frame(frame, bg=MENU_BG)
+        top.pack(fill=tk.X)
+        tk.Label(top, text="剪贴板历史（本地）", font=PIXEL_FONT, fg=MENU_FG, bg=MENU_BG).pack(side=tk.LEFT)
+        tk.Button(
+            top,
+            text="清空",
+            font=PIXEL_FONT,
+            bg=MENU_BG,
+            fg="#ff8899",
+            relief=tk.FLAT,
+            command=lambda: (self.office.clear_clipboard(), refresh()),
+        ).pack(side=tk.RIGHT)
+        list_box = tk.Frame(frame, bg=MENU_BG)
+        list_box.pack(fill=tk.BOTH, expand=True, pady=6)
+
+        def refresh() -> None:
+            for w in list_box.winfo_children():
+                w.destroy()
+            items = self.office.clipboard[:30]
+            if not items:
+                tk.Label(list_box, text="复制任意文字后会出现在这里", font=HINT_FONT, fg=MENU_MUTED, bg=MENU_BG).pack(
+                    anchor=tk.W
+                )
+                return
+            for item in items:
+                prev = str(item.get("preview") or item.get("text") or "")[:60]
+                tk.Button(
+                    list_box,
+                    text=prev,
+                    anchor=tk.W,
+                    font=PIXEL_FONT,
+                    bg=MENU_BG,
+                    fg=MENU_FG,
+                    relief=tk.FLAT,
+                    command=lambda t=item.get("text") or "": self._office_copy_text(t),
+                ).pack(fill=tk.X, pady=1)
+
+        refresh()
+        self._place_panel_popup(win)
+
+    def _open_office_phrases(self) -> None:
+        self._hide_main_menu()
+        if self._office_phrase_win and self._office_phrase_win.winfo_exists():
+            self._office_phrase_win.lift()
+            return
+        win = tk.Toplevel(self.root)
+        self._office_phrase_win = win
+        win.title("常用语")
+        self._apply_window_layer(win)
+        win.configure(bg=MENU_BG)
+        frame = tk.Frame(win, bg=MENU_BG, padx=10, pady=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+        tk.Label(frame, text="常用语 / 话术库", font=PIXEL_FONT, fg=MENU_FG, bg=MENU_BG).pack(anchor=tk.W)
+        form = tk.Frame(frame, bg=MENU_BG)
+        form.pack(fill=tk.X, pady=4)
+        title_e = tk.Entry(form, width=10, font=PIXEL_FONT)
+        title_e.pack(side=tk.LEFT)
+        title_e.insert(0, "标题")
+        text_e = tk.Entry(form, width=18, font=PIXEL_FONT)
+        text_e.pack(side=tk.LEFT, padx=4)
+        text_e.insert(0, "内容")
+        list_box = tk.Frame(frame, bg=MENU_BG)
+        list_box.pack(fill=tk.BOTH, expand=True)
+
+        def refresh() -> None:
+            for w in list_box.winfo_children():
+                w.destroy()
+            for item in self.office.phrases:
+                line = tk.Frame(list_box, bg=MENU_BG)
+                line.pack(fill=tk.X, pady=1)
+                tk.Button(
+                    line,
+                    text=str(item.get("title") or "话术"),
+                    anchor=tk.W,
+                    font=PIXEL_FONT,
+                    bg=MENU_ACTIVE,
+                    fg=MENU_FG,
+                    relief=tk.FLAT,
+                    command=lambda t=item.get("text") or "": self._office_copy_text(t, toast="话术已复制"),
+                ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+                tk.Button(
+                    line,
+                    text="×",
+                    font=PIXEL_FONT,
+                    fg="#ff8899",
+                    bg=MENU_BG,
+                    relief=tk.FLAT,
+                    command=lambda i=item["id"]: (self.office.remove_phrase(i), refresh()),
+                ).pack(side=tk.RIGHT)
+
+        def add() -> None:
+            self.office.add_phrase(title_e.get(), text_e.get())
+            refresh()
+
+        tk.Button(form, text="添加", font=PIXEL_FONT, bg=MENU_ACTIVE, fg=MENU_FG, command=add).pack(side=tk.LEFT)
+        refresh()
+        self._place_panel_popup(win)
+
+    def _open_office_launchers(self) -> None:
+        self._hide_main_menu()
+        if self._office_launch_win and self._office_launch_win.winfo_exists():
+            self._office_launch_win.lift()
+            return
+        win = tk.Toplevel(self.root)
+        self._office_launch_win = win
+        win.title("快捷启动")
+        self._apply_window_layer(win)
+        win.configure(bg=MENU_BG)
+        frame = tk.Frame(win, bg=MENU_BG, padx=10, pady=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+        tk.Label(frame, text="快捷启动（路径 / 网址）", font=PIXEL_FONT, fg=MENU_FG, bg=MENU_BG).pack(anchor=tk.W)
+        form = tk.Frame(frame, bg=MENU_BG)
+        form.pack(fill=tk.X, pady=4)
+        title_e = tk.Entry(form, width=8, font=PIXEL_FONT)
+        title_e.insert(0, "名称")
+        title_e.pack(side=tk.LEFT)
+        path_e = tk.Entry(form, width=20, font=PIXEL_FONT)
+        path_e.insert(0, "C:\\ 或 https://")
+        path_e.pack(side=tk.LEFT, padx=4)
+        list_box = tk.Frame(frame, bg=MENU_BG)
+        list_box.pack(fill=tk.BOTH, expand=True)
+
+        def refresh() -> None:
+            for w in list_box.winfo_children():
+                w.destroy()
+            for item in self.office.launchers:
+                line = tk.Frame(list_box, bg=MENU_BG)
+                line.pack(fill=tk.X, pady=1)
+                tk.Button(
+                    line,
+                    text=str(item.get("title") or "启动"),
+                    anchor=tk.W,
+                    font=PIXEL_FONT,
+                    bg=MENU_ACTIVE,
+                    fg=MENU_FG,
+                    relief=tk.FLAT,
+                    command=lambda t=item.get("target") or "": self._office_run_launcher(t),
+                ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+                tk.Button(
+                    line,
+                    text="×",
+                    font=PIXEL_FONT,
+                    fg="#ff8899",
+                    bg=MENU_BG,
+                    relief=tk.FLAT,
+                    command=lambda i=item["id"]: (self.office.remove_launcher(i), refresh()),
+                ).pack(side=tk.RIGHT)
+
+        def add() -> None:
+            self.office.add_launcher(title_e.get(), path_e.get())
+            refresh()
+
+        tk.Button(form, text="添加", font=PIXEL_FONT, bg=MENU_ACTIVE, fg=MENU_FG, command=add).pack(side=tk.LEFT)
+        refresh()
+        self._place_panel_popup(win)
 
     def _open_schedule_manager(self) -> None:
         self._hide_main_menu()
@@ -52580,6 +56706,18 @@ class DesktopPet:
                     _save_schedules(self.schedules)
                     refresh_list()
 
+                def mark_done(r=rid, txt=str(item.get("text") or "")) -> None:
+                    self._grant_owner_bond(owner_bond.CH_SCHEDULE, toast=True)
+                    self._append_bond_diary_note(f"完成了日程：{txt[:40]}")
+                    try:
+                        self._reward_drop_for_event("schedule")
+                    except Exception:
+                        pass
+                    self._show_toast("记下了，辛苦啦", "#88ccff")
+
+                tk.Button(line, text="完成", command=mark_done, font=PIXEL_FONT, bg=SCHEDULE_THEME["accent"], fg="#ffffff").pack(
+                    side=tk.RIGHT, padx=(0, 4)
+                )
                 tk.Button(line, text="删", command=delete, font=PIXEL_FONT, bg=SCHEDULE_THEME["card"], fg="#cc4455").pack(
                     side=tk.RIGHT
                 )

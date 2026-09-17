@@ -1,0 +1,46 @@
+{
+  "id": "park_evening",
+  "title": "傍晚公园散步",
+  "min_bond_level": 3,
+  "require_weekend_evening": false,
+  "emote": "date_park",
+  "fallback_emote": "happy",
+  "intro": "要不要去楼下公园走走？风有点软。",
+  "nodes": [
+    {
+      "id": "start",
+      "line": "路上有人遛狗，有人跑步。你想……",
+      "choices": [
+        {
+          "id": "quiet",
+          "label": "安静并肩走",
+          "delta": 1.5,
+          "reply": "嗯。这样就很好。不用说话也行。",
+          "emote": "blush",
+          "outcome": "安静地走完一圈"
+        },
+        {
+          "id": "talk",
+          "label": "聊聊今天的事",
+          "delta": 1.2,
+          "reply": "我听着。你慢慢说，我不急。",
+          "emote": "like",
+          "outcome": "把今天说完了"
+        },
+        {
+          "id": "joke",
+          "label": "讲个冷笑话",
+          "delta": 0.8,
+          "reply": "……噗。好冷，但我笑了。",
+          "emote": "happy",
+          "outcome": "气氛被逗松了"
+        }
+      ]
+    },
+    {
+      "id": "end",
+      "line": "回去吧。下次还想和你出来。",
+      "choices": []
+    }
+  ]
+}

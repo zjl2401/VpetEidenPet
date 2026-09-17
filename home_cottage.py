@@ -145,18 +145,39 @@ BG_COLOR_PRESETS: dict[str, tuple[tuple[str, str], ...]] = {
 }
 
 # kind, label, solid, w, h, zone("indoor"|"outdoor"|"both")
+# kind, label, solid, w, h, zone("indoor"|"outdoor"|"both")
 HOME_FURNITURE: tuple[tuple[str, str, bool, int, int, str], ...] = (
-    ("bed", "床", False, 2, 1, "indoor"),
+    # —— 结构 ——
+    ("partition", "隔板", True, 1, 1, "indoor"),
+    ("floor_wood", "木地板", False, 1, 1, "indoor"),
+    ("floor_tile", "瓷砖", False, 1, 1, "indoor"),
+    ("door", "门", False, 1, 1, "both"),
+    ("window", "窗户", False, 2, 1, "indoor"),
+    # —— 客厅 ——
+    ("sofa", "沙发", True, 2, 1, "indoor"),
+    ("tv", "电视柜", True, 2, 1, "indoor"),
+    ("coffee", "茶几", True, 1, 1, "indoor"),
     ("table", "桌子", True, 1, 1, "indoor"),
     ("chair", "椅子", False, 1, 1, "indoor"),
-    ("sofa", "沙发", True, 2, 1, "indoor"),
-    ("plant", "盆栽", False, 1, 1, "both"),
     ("carpet", "地毯", False, 2, 2, "indoor"),
-    ("shelf", "柜子", True, 1, 2, "indoor"),
     ("lamp", "台灯", True, 1, 1, "indoor"),
-    ("window", "窗户", False, 2, 1, "indoor"),
+    ("plant", "盆栽", False, 1, 1, "both"),
     ("vase", "花瓶", False, 1, 1, "indoor"),
-    ("door", "门", False, 1, 1, "both"),
+    # —— 卧室 ——
+    ("bed", "床", False, 2, 1, "indoor"),
+    ("wardrobe", "衣柜", True, 1, 2, "indoor"),
+    ("nightstand", "床头柜", True, 1, 1, "indoor"),
+    ("shelf", "柜子", True, 1, 2, "indoor"),
+    # —— 厨房 ——
+    ("stove", "灶台", True, 1, 1, "indoor"),
+    ("sink", "水槽", True, 1, 1, "indoor"),
+    ("fridge", "冰箱", True, 1, 2, "indoor"),
+    ("counter", "料理台", True, 2, 1, "indoor"),
+    # —— 卫浴 ——
+    ("toilet", "马桶", True, 1, 1, "indoor"),
+    ("bathtub", "浴缸", True, 2, 1, "indoor"),
+    ("basin", "洗手台", True, 1, 1, "indoor"),
+    # —— 其它 / 室外 ——
     ("gift_art", "最新礼物", False, 1, 1, "both"),
     ("user_paint", "最新自创", False, 1, 1, "both"),
     ("grass", "草地", False, 1, 1, "outdoor"),
@@ -164,12 +185,25 @@ HOME_FURNITURE: tuple[tuple[str, str, bool, int, int, str], ...] = (
     ("water", "水面", True, 1, 1, "outdoor"),
     ("brick", "砖地", False, 1, 1, "outdoor"),
     ("tree", "树木", True, 1, 1, "outdoor"),
+    ("tree_pine", "松树", True, 1, 1, "outdoor"),
+    ("tree_fruit", "果树", True, 1, 1, "outdoor"),
+    ("tree_blossom", "花树", True, 1, 1, "outdoor"),
     ("rock", "岩石", True, 1, 1, "outdoor"),
     ("flower", "小花", False, 1, 1, "outdoor"),
     ("fence", "栅栏", True, 1, 1, "outdoor"),
     ("bush", "灌木", False, 1, 1, "outdoor"),
     ("path", "石径", False, 1, 1, "outdoor"),
     ("erase", "删除", False, 1, 1, "both"),
+)
+
+# 室内笔刷分段（布置 UI）
+INDOOR_BRUSH_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("结构", ("erase", "partition", "floor_wood", "floor_tile", "door", "window")),
+    ("客厅", ("sofa", "tv", "coffee", "table", "chair", "carpet", "lamp", "plant", "vase")),
+    ("卧室", ("bed", "wardrobe", "nightstand", "shelf")),
+    ("厨房", ("stove", "sink", "fridge", "counter")),
+    ("卫浴", ("toilet", "bathtub", "basin")),
+    ("其它", ("gift_art", "user_paint")),
 )
 
 _FURN_PHOTO_CACHE: dict[tuple, ImageTk.PhotoImage] = {}
@@ -199,9 +233,13 @@ FLOWER_PETAL_COLORS: tuple[str, ...] = (
     "#ffb060",
 )
 # 地物：叠在背景上，外圈抠底（不含铺地类；岩石归铺地满铺）
-OUTDOOR_PROP_KINDS = frozenset({"tree", "flower", "fence", "bush", "plant", "gift_art", "user_paint"})
+OUTDOOR_PROP_KINDS = frozenset(
+    {"tree", "tree_pine", "tree_fruit", "tree_blossom", "flower", "fence", "bush", "plant", "gift_art", "user_paint"}
+)
 # 室外铺地：背景层；可与地物叠放（地物存在 g 字段）
 OUTDOOR_GROUND_KINDS = frozenset({"grass", "land", "water", "rock", "brick", "path"})
+# 室内地砖：铺地不挡路，可与家具叠放（视觉层；叠放逻辑仍以室外为主）
+INDOOR_FLOOR_KINDS = frozenset({"floor_wood", "floor_tile"})
 # 室外底色：不透明实色（勿用黑底当「透明洞」）
 OUTDOOR_BASE_COLOR = "#3a6a38"
 OUTDOOR_BASE_COLOR_B = "#325e32"
@@ -255,6 +293,17 @@ def max_rooms_for_companion_days(days: int) -> int:
         return 2
     return 1
 
+
+def max_rooms_with_bond(days: int, bond_level: int = 1) -> int:
+    """相伴天数与羁绊等级取较大可开房间数（羁绊加速，不替代天数门槛完全）。"""
+    base = max_rooms_for_companion_days(days)
+    bonus = 0
+    lv = int(bond_level or 1)
+    if lv >= 5:
+        bonus = 2
+    elif lv >= 3:
+        bonus = 1
+    return max(1, min(HOME_ROOMS_MAX, base + bonus))
 
 def companion_days_for_next_room(current_max: int) -> int | None:
     """再开一间还需的相伴天数门槛；已满则 None。"""
@@ -728,16 +777,33 @@ def _place(tiles: list[list[Cell]], kind: str, x: int, y: int, *, color: str | N
 
 def default_indoor_tiles() -> list[list[Cell]]:
     tiles = blank_tiles()
+    # 卧室角
     _place(tiles, "window", 1, 0, color=HOME_COLOR_BROWN)
     _place(tiles, "bed", 1, 2, color=HOME_COLOR_PINK)
-    _place(tiles, "shelf", 10, 2, color=HOME_COLOR_BROWN)
-    _place(tiles, "carpet", 4, 4, color=HOME_COLOR_PINK)
-    _place(tiles, "table", 5, 6, color=HOME_COLOR_BROWN)
-    _place(tiles, "chair", 5, 7, color=HOME_COLOR_PURPLE)
-    _place(tiles, "plant", 9, 7, color=HOME_COLOR_BROWN)
-    _place(tiles, "lamp", 3, 2, color=HOME_COLOR_IVORY)
-    _place(tiles, "plant", 10, 1, color=HOME_COLOR_BROWN)
-    _place(tiles, "door", 0, 5, color=HOME_COLOR_BROWN)
+    _place(tiles, "nightstand", 3, 2, color=HOME_COLOR_BROWN)
+    _place(tiles, "lamp", 3, 3, color=HOME_COLOR_IVORY)
+    _place(tiles, "wardrobe", 4, 1, color=HOME_COLOR_BROWN)
+    # 客厅
+    _place(tiles, "carpet", 5, 4, color=HOME_COLOR_PINK)
+    _place(tiles, "coffee", 6, 6, color=HOME_COLOR_BROWN)
+    _place(tiles, "tv", 5, 3, color=HOME_COLOR_BROWN)
+    _place(tiles, "table", 8, 6, color=HOME_COLOR_BROWN)
+    _place(tiles, "chair", 8, 7, color=HOME_COLOR_PURPLE)
+    _place(tiles, "shelf", 10, 3, color=HOME_COLOR_BROWN)
+    _place(tiles, "plant", 10, 6, color=HOME_COLOR_BROWN)
+    _place(tiles, "vase", 7, 2, color=HOME_COLOR_IVORY)
+    # 厨房条（左墙）
+    _place(tiles, "fridge", 0, 1, color=HOME_COLOR_IVORY)
+    _place(tiles, "counter", 0, 3, color=HOME_COLOR_BROWN)
+    _place(tiles, "stove", 0, 4, color="#5a6068")
+    _place(tiles, "sink", 2, 4, color=HOME_COLOR_IVORY)
+    # 卫浴（右上，隔板隔开）
+    _place(tiles, "partition", 8, 0, color=HOME_COLOR_BROWN)
+    _place(tiles, "partition", 8, 1, color=HOME_COLOR_BROWN)
+    _place(tiles, "bathtub", 9, 0, color=HOME_COLOR_IVORY)
+    _place(tiles, "basin", 9, 1, color=HOME_COLOR_BROWN)
+    _place(tiles, "toilet", 11, 1, color=HOME_COLOR_IVORY)
+    _place(tiles, "door", 0, 7, color=HOME_COLOR_BROWN)
     return tiles
 
 
@@ -795,12 +861,25 @@ def _recolor_legacy_sky_tiles(tiles: list[list[Cell]]) -> list[list[Cell]]:
         "carpet": HOME_COLOR_PINK,
         "shelf": HOME_COLOR_BROWN,
         "table": HOME_COLOR_BROWN,
+        "coffee": HOME_COLOR_BROWN,
+        "nightstand": HOME_COLOR_BROWN,
+        "wardrobe": HOME_COLOR_BROWN,
+        "tv": HOME_COLOR_BROWN,
+        "counter": HOME_COLOR_BROWN,
+        "partition": HOME_COLOR_BROWN,
         "window": HOME_COLOR_BROWN,
         "door": HOME_COLOR_BROWN,
         "plant": HOME_COLOR_BROWN,
         "lamp": HOME_COLOR_IVORY,
+        "fridge": HOME_COLOR_IVORY,
+        "bathtub": HOME_COLOR_IVORY,
+        "basin": HOME_COLOR_IVORY,
+        "sink": HOME_COLOR_IVORY,
+        "vase": HOME_COLOR_IVORY,
         "chair": HOME_COLOR_PURPLE,
         "sofa": HOME_COLOR_PURPLE,
+        "stove": "#5a6068",
+        "toilet": HOME_COLOR_IVORY,
     }
     legacy = _LEGACY_DEFAULT_FURN.lower()
     out: list[list[Cell]] = []
@@ -897,7 +976,9 @@ def default_outdoor_tiles() -> list[list[Cell]]:
         tiles[y][x] = make_stack_cell(g, kind, ground_color=gc, prop_color=color)
 
     stack("tree", 2, 2)
-    stack("tree", 9, 3)
+    stack("tree_pine", 9, 3)
+    stack("tree_fruit", 4, 2)
+    stack("tree_blossom", 10, 5)
     tiles[7][1] = "rock"
     stack("flower", 4, 5)
     stack("flower", 7, 6)
@@ -938,6 +1019,7 @@ def default_layout() -> dict:
         "on_desktop": False,
         "desktop_x": -1,
         "desktop_y": -1,
+        "bgm_muted": False,
         "house_name": "",
         "farm": blank_tiles(),  # 室外农田；值由 home_farm.normalize_farm 规范
         "crafted_furniture": [],
@@ -1197,6 +1279,7 @@ def normalize_layout(raw: dict | None) -> dict:
         "on_desktop": bool(raw.get("on_desktop")),
         "desktop_x": int(raw.get("desktop_x") if raw.get("desktop_x") is not None else -1),
         "desktop_y": int(raw.get("desktop_y") if raw.get("desktop_y") is not None else -1),
+        "bgm_muted": bool(raw.get("bgm_muted")),
         "house_name": str(raw.get("house_name") or "").strip()[:16],
         "farm": farm,
         "crafted_furniture": crafted,
@@ -1533,6 +1616,7 @@ def save_layout(path: Path, layout: dict) -> None:
         "on_desktop": bool(layout.get("on_desktop")),
         "desktop_x": int(layout.get("desktop_x") if layout.get("desktop_x") is not None else -1),
         "desktop_y": int(layout.get("desktop_y") if layout.get("desktop_y") is not None else -1),
+        "bgm_muted": bool(layout.get("bgm_muted")),
         "house_name": str(layout.get("house_name") or "").strip()[:16],
         "farm": layout.get("farm") if isinstance(layout.get("farm"), list) else blank_tiles(),
         "crafted_furniture": list(layout.get("crafted_furniture") or []),
@@ -2219,7 +2303,7 @@ def _draw_furniture_rgb(
     if kind in rpg_map:
         # 铺地满铺不抠图；仅树等叠放地物抠底
         knock = kind in OUTDOOR_PROP_KINDS and kind not in OUTDOOR_GROUND_KINDS
-        pair_tree = kind == "tree"
+        pair_tree = kind in ("tree", "tree_pine", "tree_fruit", "tree_blossom")
         rpg = _load_rpg_rgba(rpg_map[kind], tile, knock=knock, pair_tree=pair_tree)
         if rpg is not None:
             if mat_tint:
@@ -2306,6 +2390,83 @@ def _draw_furniture_rgb(
             for ox, oy, col in ((-4, -6, "#ff7799"), (4, -6, "#ffcc66"), (0, -10, "#ff88cc"), (0, -4, "#88ddff")):
                 box(tile // 2 + ox - 2, tile // 2 + oy - 2, tile // 2 + ox + 2, tile // 2 + oy + 2, col)
             box(tile // 2 - 1, th // 2 - 8, tile // 2 + 1, th // 2 + 2, "#44aa55")
+    elif kind == "partition":
+        wall_c = _blend(wood, "#c8b8a0", 0.35)
+        wall_d = _shade(wall_c, 0.72)
+        box(tile // 2 - 5, 1, tile // 2 + 5, th - 1, wall_c, wall_d)
+        box(tile // 2 - 3, 3, tile // 2 + 3, th - 3, _blend(wall_c, "#ffffff", 0.12))
+        box(tile // 2 - 5, 1, tile // 2 + 5, 4, wall_d)
+    elif kind == "floor_wood":
+        base = "#b08858"
+        box(0, 0, tw, th, base, _shade(base, 0.75))
+        for i in range(0, th, max(4, tile // 6)):
+            box(0, i, tw, i + 2, _shade(base, 0.88))
+        box(tw // 3, 0, tw // 3 + 1, th, _shade(base, 0.7))
+        box(2 * tw // 3, 0, 2 * tw // 3 + 1, th, _shade(base, 0.7))
+    elif kind == "floor_tile":
+        base = "#d8d0c4"
+        grout = "#a8a098"
+        box(0, 0, tw, th, grout)
+        m = max(2, tile // 10)
+        box(m, m, tw // 2 - 1, th // 2 - 1, base)
+        box(tw // 2 + 1, m, tw - m, th // 2 - 1, _blend(base, "#c8e0e8", 0.2))
+        box(m, th // 2 + 1, tw // 2 - 1, th - m, _blend(base, "#e8d8c8", 0.15))
+        box(tw // 2 + 1, th // 2 + 1, tw - m, th - m, base)
+    elif kind == "tv":
+        box(2, th - 8, tw - 2, th - 2, wood_d, _shade(wood_d, 0.7))
+        box(4, 4, tw - 4, th - 10, "#1a1a22", "#333344")
+        box(8, 8, tw - 8, th - 14, "#2a4060")
+        box(tw // 2 - 4, th - 8, tw // 2 + 4, th - 2, wood)
+    elif kind == "coffee":
+        box(4, th // 3, tw - 4, th - 6, wood, wood_d)
+        box(6, th - 6, 10, th - 2, wood_d)
+        box(tw - 10, th - 6, tw - 6, th - 2, wood_d)
+        box(tile // 2 - 4, th // 3 - 2, tile // 2 + 4, th // 3 + 4, _blend(wood, "#886644", 0.4))
+    elif kind == "wardrobe":
+        box(2, 2, tw - 2, th - 2, wood, wood_d)
+        mid = tw // 2
+        box(mid - 1, 4, mid + 1, th - 4, wood_d)
+        box(6, th // 3, 10, th // 3 + 4, _blend(wood, "#ffee88", 0.3))
+        box(tw - 10, th // 2, tw - 6, th // 2 + 4, _blend(wood, "#ffee88", 0.3))
+    elif kind == "nightstand":
+        box(4, th // 3, tw - 4, th - 2, wood, wood_d)
+        box(6, th // 3 + 4, tw - 6, th // 3 + 8, _blend(wood, "#ffffff", 0.15))
+        box(tile // 2 - 3, 4, tile // 2 + 3, th // 3, "#ffee88", "#ccaa44")
+    elif kind == "stove":
+        box(3, th // 2, tw - 3, th - 2, "#555566", "#333344")
+        box(5, 6, tw - 5, th // 2 + 2, "#3a3a48", "#222230")
+        box(8, 10, tile // 2 - 2, th // 2 - 4, "#222228")
+        box(tile // 2 + 2, 10, tw - 8, th // 2 - 4, "#222228")
+        box(tile // 2 - 2, 4, tile // 2 + 2, 8, "#888899")
+    elif kind == "sink":
+        box(3, th // 2, tw - 3, th - 2, "#a8b4bc", "#889098")
+        box(6, th // 2 + 2, tw - 6, th - 4, "#88ccee", "#6688aa")
+        box(tile // 2 - 2, 4, tile // 2 + 2, th // 2 + 2, "#889098")
+        box(tile // 2 + 2, 8, tile // 2 + 8, 12, "#889098")
+    elif kind == "fridge":
+        box(3, 2, tw - 3, th - 2, "#d0d8e0", "#889098")
+        box(5, 4, tw - 5, th // 2 - 2, "#e8eef2")
+        box(5, th // 2 + 2, tw - 5, th - 4, "#e8eef2")
+        box(tw - 10, th // 3, tw - 6, th // 3 + 8, "#889098")
+        box(tw - 10, 2 * th // 3, tw - 6, 2 * th // 3 + 6, "#889098")
+    elif kind == "counter":
+        box(2, th // 2, tw - 2, th - 2, wood, wood_d)
+        box(2, th // 3, tw - 2, th // 2 + 2, _blend(wood, "#c8c0b0", 0.4), wood_d)
+        box(8, th // 3 + 2, 16, th // 2 - 2, "#88aacc")
+        box(tw - 20, th // 3 + 2, tw - 8, th // 2 - 2, "#ddccaa")
+    elif kind == "toilet":
+        box(tile // 2 - 8, th // 2, tile // 2 + 8, th - 2, "#e8eef2", "#a8b4bc")
+        box(tile // 2 - 6, th // 2 + 2, tile // 2 + 6, th - 4, "#c8e8f8")
+        box(tile // 2 - 10, 4, tile // 2 + 10, th // 2 + 2, "#e8eef2", "#a8b4bc")
+    elif kind == "bathtub":
+        box(2, th // 3, tw - 2, th - 2, "#d0d8e0", "#889098")
+        box(6, th // 3 + 4, tw - 6, th - 4, "#88ccee", "#6688aa")
+        box(8, 4, 14, th // 3 + 2, "#889098")
+    elif kind == "basin":
+        box(4, th // 2, tw - 4, th - 2, wood, wood_d)
+        box(6, th // 3, tw - 6, th // 2 + 4, "#e8eef2", "#a8b4bc")
+        box(8, th // 3 + 2, tw - 8, th // 2, "#88ccee")
+        box(tile // 2 - 2, 4, tile // 2 + 2, th // 3 + 2, "#889098")
     elif kind == "flower":
         box(tile // 2 - 2, th // 2, tile // 2 + 2, th - 2, "#44aa55")
         seed = int(vary_seed) if vary_seed is not None else abs(hash(str(furn_color))) % 10_000_007
@@ -2344,6 +2505,22 @@ def _draw_furniture_rgb(
     elif kind == "tree":
         box(tile // 2 - 3, th // 2, tile // 2 + 3, th - 1, wood)
         box(4, 2, tw - 4, th // 2 + 4, "#2f8a3a", "#1f6a2a")
+    elif kind == "tree_pine":
+        box(tile // 2 - 2, th // 2, tile // 2 + 2, th - 1, "#5a4030")
+        box(tile // 2 - 8, th // 2 - 2, tile // 2 + 8, th // 2 + 6, "#2a6a3a", "#1a4a28")
+        box(tile // 2 - 6, th // 3 - 2, tile // 2 + 6, th // 2 + 2, "#348048", "#1f5a30")
+        box(tile // 2 - 4, 2, tile // 2 + 4, th // 3 + 2, "#3a9860", "#246040")
+    elif kind == "tree_fruit":
+        box(tile // 2 - 3, th // 2, tile // 2 + 3, th - 1, wood)
+        box(3, 2, tw - 3, th // 2 + 6, "#3a9a3a", "#2a7a2a")
+        for ox, oy, col in ((-5, 2, "#e84848"), (5, 0, "#e86828"), (0, -4, "#d83838"), (4, 6, "#ee5544")):
+            box(tile // 2 + ox - 2, th // 3 + oy - 2, tile // 2 + ox + 2, th // 3 + oy + 2, col)
+    elif kind == "tree_blossom":
+        box(tile // 2 - 3, th // 2, tile // 2 + 3, th - 1, "#8a6050")
+        box(3, 2, tw - 3, th // 2 + 6, "#f0a0c0", "#d080a0")
+        box(6, 6, tw - 6, th // 2, "#ffe0ee")
+        for ox, oy in ((-6, 0), (6, 2), (0, -4), (-3, 6), (4, -2)):
+            box(tile // 2 + ox - 2, th // 3 + oy - 2, tile // 2 + ox + 2, th // 3 + oy + 2, "#ff88bb")
     elif kind == "rock":
         base = mat_tint or DEFAULT_BG_COLORS["rock"]
         box(3, 8, tw - 3, th - 2, base, _shade(base, 0.7))

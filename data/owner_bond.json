@@ -1,0 +1,28 @@
+{
+  "points": 0.0,
+  "daily_ymd": "2026-09-16",
+  "daily_xp": 0.0,
+  "channels_today": {},
+  "coexist_scene": "",
+  "coexist_started_ms": 0,
+  "coexist_awarded": {
+    "2026-09-16": {
+      "code": [],
+      "chat": [],
+      "office": []
+    }
+  },
+  "focus_contract": {
+    "active": false,
+    "scene": "",
+    "started_ms": 0,
+    "away_ms": 0,
+    "target_sec": 1500
+  },
+  "quiet_scene_mode": true,
+  "focus_nudge_enabled": false,
+  "focus_nudge_ymd": "2026-09-16",
+  "focus_nudge_count": 0,
+  "last_grant_ms": 0,
+  "milestones_noted": []
+}

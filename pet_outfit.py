@@ -441,6 +441,368 @@ def _builtin_cheer_stick(put) -> None:
     put(6, 9, 7)
 
 
+# —— 新增配饰（伊得粉调像素）——
+def _builtin_crown(put) -> None:
+    put(2, 3, 13)
+    put(5, 2, 13)
+    put(8, 3, 13)
+    _fill_rect(put, 2, 4, 9, 5, 13)
+    put(3, 4, 2)
+    put(5, 4, 1)
+    put(7, 4, 2)
+    _fill_rect(put, 3, 6, 8, 6, 13)
+
+
+def _builtin_cat_ears(put) -> None:
+    put(2, 2, 17)
+    put(3, 1, 17)
+    put(3, 2, 1)
+    put(4, 2, 17)
+    put(7, 2, 17)
+    put(8, 1, 17)
+    put(8, 2, 1)
+    put(9, 2, 17)
+
+
+def _builtin_bunny_ears(put) -> None:
+    put(3, 0, 12)
+    put(3, 1, 12)
+    put(3, 2, 1)
+    put(4, 1, 12)
+    put(8, 0, 12)
+    put(8, 1, 12)
+    put(8, 2, 1)
+    put(7, 1, 12)
+
+
+def _builtin_witch_hat(put) -> None:
+    put(5, 0, 14)
+    put(4, 1, 14)
+    put(5, 1, 14)
+    put(6, 1, 14)
+    _fill_rect(put, 3, 2, 8, 3, 14)
+    put(5, 2, 6)
+    _fill_rect(put, 1, 4, 10, 5, 14)
+    put(2, 4, 13)
+
+
+def _builtin_flower_crown(put) -> None:
+    for x in range(2, 10):
+        put(x, 4, 4)
+    put(2, 3, 1)
+    put(4, 3, 8)
+    put(6, 3, 1)
+    put(8, 3, 6)
+    put(3, 5, 8)
+    put(5, 5, 1)
+    put(7, 5, 4)
+
+
+def _builtin_party_hat(put) -> None:
+    put(5, 0, 2)
+    put(4, 1, 1)
+    put(5, 1, 1)
+    put(6, 1, 1)
+    put(3, 2, 6)
+    put(4, 2, 6)
+    put(5, 2, 6)
+    put(6, 2, 6)
+    put(7, 2, 6)
+    _fill_rect(put, 2, 3, 9, 4, 3)
+    put(4, 3, 5)
+    put(6, 3, 5)
+
+
+def _builtin_sailor_hat(put) -> None:
+    _fill_rect(put, 2, 3, 9, 4, 5)
+    _fill_rect(put, 3, 2, 8, 2, 5)
+    put(5, 1, 16)
+    put(4, 3, 16)
+    put(5, 3, 16)
+    put(6, 3, 16)
+    _fill_rect(put, 1, 5, 10, 5, 5)
+
+
+def _builtin_headphones(put) -> None:
+    for x in range(2, 10):
+        put(x, 2, 14)
+    _fill_rect(put, 1, 3, 2, 6, 14)
+    _fill_rect(put, 9, 3, 10, 6, 14)
+    put(1, 4, 1)
+    put(10, 4, 1)
+
+
+def _builtin_hair_clip(put) -> None:
+    put(7, 2, 1)
+    put(8, 2, 1)
+    put(6, 3, 13)
+    put(7, 3, 1)
+    put(8, 3, 13)
+    put(9, 3, 13)
+    put(7, 4, 13)
+    put(8, 4, 1)
+
+
+def _builtin_hair_ribbon(put) -> None:
+    put(6, 2, 1)
+    put(7, 2, 1)
+    put(5, 3, 1)
+    put(6, 3, 5)
+    put(7, 3, 5)
+    put(8, 3, 1)
+    put(4, 4, 1)
+    put(9, 4, 1)
+    put(5, 4, 1)
+    put(8, 4, 1)
+
+
+def _builtin_heart_glasses(put) -> None:
+    for x, y in ((2, 4), (3, 4), (1, 5), (4, 5), (2, 6), (3, 6),
+                 (7, 4), (8, 4), (6, 5), (9, 5), (7, 6), (8, 6)):
+        put(x, y, 1)
+    put(5, 5, 1)
+    put(2, 5, 5)
+    put(7, 5, 5)
+
+
+def _builtin_star_glasses(put) -> None:
+    put(2, 4, 2)
+    put(3, 5, 2)
+    put(1, 5, 2)
+    put(4, 5, 2)
+    put(2, 6, 2)
+    put(3, 6, 2)
+    put(7, 4, 2)
+    put(8, 5, 2)
+    put(6, 5, 2)
+    put(9, 5, 2)
+    put(7, 6, 2)
+    put(8, 6, 2)
+    put(5, 5, 2)
+
+
+def _builtin_monocle(put) -> None:
+    for x, y in ((7, 4), (8, 4), (9, 4), (6, 5), (10, 5), (6, 6), (10, 6), (7, 7), (8, 7), (9, 7)):
+        put(x, y, 13)
+    put(8, 5, 3)
+    put(8, 6, 3)
+    put(10, 8, 13)
+    put(10, 9, 13)
+
+
+def _builtin_choker(put) -> None:
+    _fill_rect(put, 3, 7, 8, 7, 14)
+    put(5, 8, 13)
+    put(6, 8, 13)
+    put(5, 9, 1)
+
+
+def _builtin_bowtie(put) -> None:
+    put(2, 6, 8)
+    put(3, 6, 8)
+    put(4, 6, 8)
+    put(7, 6, 8)
+    put(8, 6, 8)
+    put(9, 6, 8)
+    put(5, 6, 5)
+    put(6, 6, 5)
+    put(3, 7, 8)
+    put(8, 7, 8)
+    put(5, 7, 5)
+    put(6, 7, 5)
+
+
+def _builtin_bell_collar(put) -> None:
+    _fill_rect(put, 2, 7, 9, 7, 8)
+    put(5, 8, 13)
+    put(6, 8, 13)
+    put(5, 9, 13)
+    put(6, 9, 2)
+    put(4, 8, 8)
+    put(7, 8, 8)
+
+
+def _builtin_backpack(put) -> None:
+    _fill_rect(put, 3, 3, 8, 9, 16)
+    put(4, 2, 7)
+    put(7, 2, 7)
+    put(4, 4, 3)
+    put(5, 4, 3)
+    put(6, 4, 3)
+    put(5, 6, 13)
+    put(6, 6, 13)
+    put(3, 8, 11)
+    put(8, 8, 11)
+
+
+def _builtin_crossbody(put) -> None:
+    put(2, 3, 11)
+    put(3, 4, 11)
+    put(4, 5, 11)
+    _fill_rect(put, 5, 5, 10, 9, 17)
+    put(7, 6, 1)
+    put(8, 7, 13)
+
+
+def _builtin_coffee(put) -> None:
+    _fill_rect(put, 4, 3, 8, 4, 12)
+    _fill_rect(put, 4, 5, 8, 9, 5)
+    put(5, 6, 11)
+    put(6, 6, 11)
+    put(7, 6, 11)
+    put(9, 6, 18)
+    put(9, 7, 18)
+    put(5, 2, 18)
+    put(6, 1, 18)
+
+
+def _builtin_book(put) -> None:
+    _fill_rect(put, 3, 2, 9, 9, 8)
+    _fill_rect(put, 4, 3, 8, 8, 12)
+    put(5, 4, 7)
+    put(6, 4, 7)
+    put(5, 6, 7)
+    put(6, 6, 7)
+    put(3, 5, 13)
+
+
+def _builtin_umbrella(put) -> None:
+    _fill_rect(put, 2, 2, 9, 3, 1)
+    put(1, 3, 1)
+    put(10, 3, 1)
+    put(3, 1, 1)
+    put(5, 1, 1)
+    put(7, 1, 1)
+    put(5, 4, 11)
+    put(5, 5, 11)
+    put(5, 6, 11)
+    put(5, 7, 11)
+    put(6, 8, 11)
+
+
+def _builtin_phone(put) -> None:
+    _fill_rect(put, 4, 1, 7, 10, 14)
+    _fill_rect(put, 5, 2, 6, 8, 3)
+    put(5, 9, 5)
+    put(6, 9, 5)
+
+
+def _builtin_lollipop(put) -> None:
+    put(5, 1, 1)
+    put(4, 2, 1)
+    put(5, 2, 5)
+    put(6, 2, 1)
+    put(5, 3, 1)
+    put(5, 4, 12)
+    put(5, 5, 12)
+    put(5, 6, 12)
+    put(5, 7, 12)
+    put(5, 8, 11)
+
+
+def _builtin_wand(put) -> None:
+    put(8, 1, 2)
+    put(7, 2, 2)
+    put(8, 2, 5)
+    put(9, 2, 2)
+    put(8, 3, 2)
+    put(7, 4, 13)
+    put(6, 5, 13)
+    put(5, 6, 13)
+    put(4, 7, 13)
+    put(3, 8, 13)
+    put(2, 9, 11)
+
+
+def _builtin_moon(put) -> None:
+    _fill_rect(put, 4, 2, 8, 8, 2)
+    _fill_rect(put, 6, 3, 9, 7, 0)
+    put(5, 3, 2)
+    put(4, 4, 2)
+    put(4, 5, 2)
+    put(4, 6, 2)
+    put(5, 7, 2)
+
+
+def _builtin_sparkle(put) -> None:
+    put(5, 1, 5)
+    put(5, 2, 2)
+    put(5, 3, 5)
+    put(3, 3, 5)
+    put(4, 3, 2)
+    put(6, 3, 2)
+    put(7, 3, 5)
+    put(5, 4, 2)
+    put(5, 5, 5)
+    put(2, 6, 2)
+    put(8, 7, 5)
+
+
+def _builtin_cloud(put) -> None:
+    _fill_rect(put, 3, 4, 8, 6, 5)
+    put(2, 5, 5)
+    put(9, 5, 5)
+    put(4, 3, 5)
+    put(5, 3, 5)
+    put(6, 3, 5)
+    put(7, 3, 5)
+
+
+def _builtin_sakura(put) -> None:
+    put(5, 2, 1)
+    put(3, 4, 1)
+    put(4, 3, 17)
+    put(5, 3, 5)
+    put(6, 3, 17)
+    put(7, 4, 1)
+    put(4, 4, 17)
+    put(5, 4, 1)
+    put(6, 4, 17)
+    put(5, 5, 17)
+    put(5, 6, 4)
+    put(5, 7, 4)
+
+
+def _builtin_butterfly(put) -> None:
+    put(2, 3, 6)
+    put(3, 2, 6)
+    put(3, 4, 6)
+    put(4, 3, 5)
+    put(5, 3, 14)
+    put(6, 3, 5)
+    put(7, 2, 3)
+    put(7, 4, 3)
+    put(8, 3, 3)
+    put(5, 4, 14)
+    put(5, 2, 14)
+
+
+def _builtin_cherry(put) -> None:
+    put(4, 4, 8)
+    put(5, 4, 8)
+    put(4, 5, 8)
+    put(5, 5, 8)
+    put(7, 5, 8)
+    put(8, 5, 8)
+    put(7, 6, 8)
+    put(8, 6, 8)
+    put(5, 3, 4)
+    put(6, 2, 4)
+    put(6, 3, 4)
+    put(7, 3, 4)
+
+
+def _builtin_halo(put) -> None:
+    for x in range(3, 9):
+        put(x, 2, 13)
+    put(2, 3, 13)
+    put(9, 3, 13)
+    put(2, 4, 13)
+    put(9, 4, 13)
+    for x in range(3, 9):
+        put(x, 5, 13)
+
+
 def _entry(
     eid: str,
     name: str,
@@ -463,11 +825,18 @@ def _entry(
 
 
 BUILTIN_CATALOG: tuple[dict, ...] = (
-    # —— 装饰 / 表情（原有）——
+    # —— 装饰 / 表情 ——
     _entry("star", "星星", _builtin_star, group="装饰"),
     _entry("heart", "爱心", _builtin_heart, group="装饰"),
     _entry("bow", "蝴蝶结", _builtin_bow, group="装饰", ny=-0.36, scale=0.26),
     _entry("leaf", "小叶", _builtin_leaf, group="装饰"),
+    _entry("moon", "月牙", _builtin_moon, group="装饰", nx=-0.34, ny=-0.40, scale=0.24),
+    _entry("sparkle", "闪闪", _builtin_sparkle, group="装饰", nx=0.34, ny=-0.40, scale=0.22),
+    _entry("cloud", "小云", _builtin_cloud, group="装饰", ny=-0.42, scale=0.26),
+    _entry("sakura", "樱花", _builtin_sakura, group="装饰", nx=0.32, ny=-0.36, scale=0.24),
+    _entry("butterfly", "蝴蝶", _builtin_butterfly, group="装饰", nx=-0.32, ny=-0.34, scale=0.26),
+    _entry("cherry", "樱桃", _builtin_cherry, group="装饰", nx=0.30, ny=-0.28, scale=0.24),
+    _entry("halo", "光环", _builtin_halo, group="装饰", ny=-0.48, scale=0.28),
     _entry("question", "问号", _builtin_question, group="表情", nx=0.36, ny=-0.42, scale=0.22),
     _entry("droplet", "无语", _builtin_droplet, group="表情", nx=-0.36, ny=-0.42, scale=0.22),
     _entry("sweat", "流汗", _builtin_sweat, group="表情", nx=0.38, ny=-0.40, scale=0.20),
@@ -479,6 +848,16 @@ BUILTIN_CATALOG: tuple[dict, ...] = (
     _entry("hat_sleep", "睡帽", _builtin_hat_sleep, group="帽子", ny=-0.46, scale=0.32),
     _entry("beanie", "针织帽", _builtin_beanie, group="帽子", ny=-0.48, scale=0.30),
     _entry("beret", "贝雷", _builtin_beret, group="帽子", nx=-0.04, ny=-0.46, scale=0.28),
+    _entry("crown", "小皇冠", _builtin_crown, group="帽子", ny=-0.48, scale=0.30),
+    _entry("cat_ears", "猫耳", _builtin_cat_ears, group="帽子", ny=-0.50, scale=0.28),
+    _entry("bunny_ears", "兔耳", _builtin_bunny_ears, group="帽子", ny=-0.52, scale=0.30),
+    _entry("witch_hat", "魔女帽", _builtin_witch_hat, group="帽子", ny=-0.48, scale=0.34),
+    _entry("flower_crown", "花环", _builtin_flower_crown, group="帽子", ny=-0.44, scale=0.30),
+    _entry("party_hat", "派对帽", _builtin_party_hat, group="帽子", ny=-0.50, scale=0.30),
+    _entry("sailor_hat", "水手帽", _builtin_sailor_hat, group="帽子", ny=-0.46, scale=0.32),
+    _entry("headphones", "耳机", _builtin_headphones, group="帽子", ny=-0.40, scale=0.32),
+    _entry("hair_clip", "发夹", _builtin_hair_clip, group="帽子", nx=0.28, ny=-0.40, scale=0.22),
+    _entry("hair_ribbon", "发带结", _builtin_hair_ribbon, group="帽子", nx=0.26, ny=-0.42, scale=0.24),
     # —— 眼镜 ——
     _entry("glasses_thick", "粗框眼镜", _builtin_glasses_thick, group="眼镜", ny=-0.16, scale=0.30),
     _entry("glasses_thin", "细框眼镜", _builtin_glasses_thin, group="眼镜", ny=-0.16, scale=0.28),
@@ -491,19 +870,33 @@ BUILTIN_CATALOG: tuple[dict, ...] = (
     _entry("glasses_odd", "异形眼镜", _builtin_glasses_odd, group="眼镜", ny=-0.16, scale=0.30),
     _entry("sunglasses", "墨镜", _builtin_sunglasses, group="眼镜", ny=-0.16, scale=0.30),
     _entry("glasses_funny", "搞怪眼镜", _builtin_glasses_funny, group="眼镜", ny=-0.14, scale=0.32),
+    _entry("heart_glasses", "爱心镜", _builtin_heart_glasses, group="眼镜", ny=-0.16, scale=0.30),
+    _entry("star_glasses", "星星镜", _builtin_star_glasses, group="眼镜", ny=-0.16, scale=0.30),
+    _entry("monocle", "单片镜", _builtin_monocle, group="眼镜", nx=0.06, ny=-0.14, scale=0.28),
     # —— 颈饰 ——
     _entry("scarf", "围巾", _builtin_scarf, group="颈饰", ny=0.08, scale=0.32),
     _entry("silk_scarf", "丝巾", _builtin_silk_scarf, group="颈饰", ny=0.02, scale=0.30),
     _entry("necklace", "项链", _builtin_necklace, group="颈饰", ny=0.06, scale=0.26),
+    _entry("choker", "项圈", _builtin_choker, group="颈饰", ny=0.08, scale=0.26),
+    _entry("bowtie", "领结", _builtin_bowtie, group="颈饰", ny=0.04, scale=0.26),
+    _entry("bell_collar", "铃铛颈圈", _builtin_bell_collar, group="颈饰", ny=0.10, scale=0.28),
     # —— 包袋 ——
     _entry("bag", "包包", _builtin_bag, group="包袋", nx=0.36, ny=0.12, scale=0.28),
     _entry("handbag", "手袋", _builtin_handbag, group="包袋", nx=0.34, ny=0.10, scale=0.28),
     _entry("ita_bag", "痛包", _builtin_ita_bag, group="包袋", nx=0.36, ny=0.08, scale=0.32),
+    _entry("backpack", "双肩包", _builtin_backpack, group="包袋", nx=-0.34, ny=0.06, scale=0.30),
+    _entry("crossbody", "斜挎包", _builtin_crossbody, group="包袋", nx=0.34, ny=0.08, scale=0.30),
     # —— 手持 ——
     _entry("bouquet", "花束", _builtin_bouquet, group="手持", nx=0.34, ny=0.18, scale=0.30),
     _entry("doll", "玩偶", _builtin_doll, group="手持", nx=-0.34, ny=0.16, scale=0.28),
     _entry("cheer_fan", "应援扇", _builtin_cheer_fan, group="手持", nx=0.38, ny=0.05, scale=0.30),
     _entry("cheer_stick", "应援棒", _builtin_cheer_stick, group="手持", nx=0.40, ny=0.02, scale=0.30),
+    _entry("coffee", "咖啡杯", _builtin_coffee, group="手持", nx=0.36, ny=0.14, scale=0.26),
+    _entry("book", "小书", _builtin_book, group="手持", nx=-0.36, ny=0.12, scale=0.28),
+    _entry("umbrella", "雨伞", _builtin_umbrella, group="手持", nx=0.38, ny=-0.02, scale=0.32),
+    _entry("phone", "手机", _builtin_phone, group="手持", nx=0.34, ny=0.10, scale=0.24),
+    _entry("lollipop", "棒棒糖", _builtin_lollipop, group="手持", nx=0.36, ny=0.06, scale=0.26),
+    _entry("wand", "星星杖", _builtin_wand, group="手持", nx=0.38, ny=0.00, scale=0.30),
 )
 
 
@@ -710,12 +1103,14 @@ def compose_outfit_layer(
     materials_dir: Path,
     materials_index: Path,
     props_dir: Path,
+    canvas_size: int | None = None,
 ) -> Image.Image:
-    """透明底 pet_size×pet_size，装饰按相对中心坐标粘贴（支持顺时针旋转）。"""
+    """透明底：逻辑尺寸 pet_size；canvas_size 更大时可画出头饰溢出（装扮预览用）。"""
     side = max(16, int(pet_size))
-    canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
-    cx = side / 2.0
-    cy = side / 2.0
+    out = max(side, int(canvas_size or side))
+    canvas = Image.new("RGBA", (out, out), (0, 0, 0, 0))
+    cx = out / 2.0
+    cy = out / 2.0
     for d in normalize_decors(decors):
         deco_side = max(8, int(round(side * float(d["scale"]))))
         img = load_decor_image(
@@ -733,8 +1128,44 @@ def compose_outfit_layer(
             img = img.rotate(-rot, expand=True, resample=Image.Resampling.NEAREST)
         x = int(round(cx + float(d["nx"]) * side - img.width / 2))
         y = int(round(cy + float(d["ny"]) * side - img.height / 2))
-        canvas.alpha_composite(img, (x, y))
+        _safe_alpha_composite(canvas, img, x, y)
     return canvas
+
+
+def _safe_alpha_composite(dst: Image.Image, src: Image.Image, x: int, y: int) -> None:
+    """允许装饰略超出画布：裁切后合成，避免头饰被整块丢掉。"""
+    if src.width <= 0 or src.height <= 0:
+        return
+    dw, dh = dst.size
+    sx0 = 0
+    sy0 = 0
+    dx0 = int(x)
+    dy0 = int(y)
+    sx1 = src.width
+    sy1 = src.height
+    if dx0 < 0:
+        sx0 = -dx0
+        dx0 = 0
+    if dy0 < 0:
+        sy0 = -dy0
+        dy0 = 0
+    if dx0 + (sx1 - sx0) > dw:
+        sx1 = sx0 + max(0, dw - dx0)
+    if dy0 + (sy1 - sy0) > dh:
+        sy1 = sy0 + max(0, dh - dy0)
+    if sx1 <= sx0 or sy1 <= sy0:
+        return
+    if sx0 == 0 and sy0 == 0 and sx1 == src.width and sy1 == src.height:
+        try:
+            dst.alpha_composite(src, (dx0, dy0))
+        except Exception:
+            dst.paste(src, (dx0, dy0), src)
+        return
+    cropped = src.crop((sx0, sy0, sx1, sy1))
+    try:
+        dst.alpha_composite(cropped, (dx0, dy0))
+    except Exception:
+        dst.paste(cropped, (dx0, dy0), cropped)
 
 
 def list_asset_choices(

@@ -1,0 +1,51 @@
+{
+  "coins": 56,
+  "items": {
+    "seed_wheat": 3,
+    "seed_berry": 2,
+    "seed_corn": 2,
+    "crop_wheat": 0,
+    "crop_berry": 0,
+    "crop_corn": 0,
+    "wood": 2,
+    "flower_cut": 0,
+    "fish": 1,
+    "work_reward_box": 0,
+    "achieve_reward_box": 1,
+    "dew": 2,
+    "dew_drop": 0,
+    "fertilizer": 0,
+    "compost": 0,
+    "jam_berry": 0
+  },
+  "last_daily_coin_ymd": "2026-09-16",
+  "farm_day": "2026-09-16",
+  "farm_actions_today": 0,
+  "farm_quests": {
+    "day": "2026-09-16",
+    "water": {
+      "need": 2,
+      "done": 0,
+      "label": "浇水 2 次"
+    },
+    "harvest": {
+      "need": 1,
+      "done": 0,
+      "label": "收获 1 次"
+    },
+    "plant": {
+      "need": 1,
+      "done": 0,
+      "label": "播种 1 次"
+    }
+  },
+  "farm_orders_ymd": "",
+  "farm_orders": [],
+  "ranch_pet": {
+    "name": "团子",
+    "kind": "sheep",
+    "mood": 70,
+    "last_pet_ymd": "",
+    "last_feed_ymd": ""
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "entries": [
+    {
+      "id": "cecc674c-d405-410e-98cd-64685fcbd5e5",
+      "date": "2026-09-13",
+      "time": "16:17",
+      "text": "背单词正确：八日",
+      "mood": 100,
+      "mood_face": "happy",
+      "weather": "sunny",
+      "weather_label": "晴朗",
+      "auto": true
+    },
+    {
+      "id": "ce6af788-e409-413d-bdee-a8c4fcb046de",
+      "date": "2026-09-13",
+      "time": "16:17",
+      "text": "背单词正确：割る",
+      "mood": 97,
+      "mood_face": "happy",
+      "weather": "sunny",
+      "weather_label": "晴朗",
+      "auto": true
+    },
+    {
+      "id": "478e4c3d-d8a6-4e00-8341-6e84b833c926",
+      "date": "2026-09-13",
+      "time": "16:17",
+      "text": "背单词正确：農家",
+      "mood": 94,
+      "mood_face": "happy",
+      "weather": "sunny",
+      "weather_label": "晴朗",
+      "auto": true
+    },
+    {
+      "id": "5d770600-3061-4ba2-afd6-50f87f628f93",
+      "date": "2026-09-13",
+      "time": "16:17",
+      "text": "背单词正确：もっと",
+      "mood": 91,
+      "mood_face": "happy",
+      "weather": "sunny",
+      "weather_label": "晴朗",
+      "auto": true
+    },
+    {
+      "id": "2bdbe89b-b870-4d95-8ae2-47f99ad44c25",
+      "date": "2026-09-13",
+      "time": "16:17",
+      "text": "背单词正确：強盗",
+      "mood": 88,
+      "mood_face": "happy",
+      "weather": "sunny",
+      "weather_label": "晴朗",
+      "auto": true
+    },
+    {
+      "id": "98cc75c5-7451-4ae2-bc22-35fd78277696",
+      "date": "2026-09-13",
+      "time": "16:10",
+      "text": "气死我了，改了好几天的代码都没了",
+      "mood": 76,
+      "mood_face": "happy",
+      "weather": "partly",
+      "weather_label": "多云",
+      "auto": false,
+      "preview": "diary_pages/98cc75c5-7451-4ae2-bc22-35fd78277696.png"
+    }
+  ]
+}

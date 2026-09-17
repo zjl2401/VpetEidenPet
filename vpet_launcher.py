@@ -188,7 +188,7 @@ def set_launch_at_login(enabled: bool) -> None:
 
 
 def sync_desktop_shortcut(*, force: bool = True) -> bool:
-    """桌面「Vpet Eiden.lnk」：若已是统一包 --pet --kind eiden，则勿覆盖（可多开、不关旧宠）。"""
+    """桌面「Vpet Eiden.lnk」：保留热更启动脚本；勿每次启动改回裸 Vpet.exe。"""
     if sys.platform != "win32":
         return False
     desktop = Path.home() / "Desktop"
@@ -197,7 +197,7 @@ def sync_desktop_shortcut(*, force: bool = True) -> bool:
     if not desktop.is_dir():
         return False
     lnk = desktop / STARTUP_LNK_NAME
-    # 已指向统一包多开参数：保留，避免每次启动把快捷方式改回旧 bat
+    # 已指向热更脚本 / 多开参数：一律保留
     if lnk.is_file():
         try:
             import win32com.client  # type: ignore
@@ -206,16 +206,20 @@ def sync_desktop_shortcut(*, force: bool = True) -> bool:
             cur = shell.CreateShortcut(str(lnk))
             cur_target = str(getattr(cur, "TargetPath", "") or "").lower().replace("/", "\\")
             cur_args = str(getattr(cur, "Arguments", "") or "").lower()
-            if cur_target.endswith("vpet.exe") and "--pet" in cur_args and "eiden" in cur_args:
+            if (
+                "start_eiden.bat" in cur_target
+                or "start_eiden.vbs" in cur_target
+                or (cur_target.endswith("vpet.exe") and "--pet" in cur_args and "eiden" in cur_args)
+            ):
                 return True
         except Exception:
             try:
-                # 无 pywin32 时用 PowerShell 读一次
                 ps = (
                     "$s=(New-Object -ComObject WScript.Shell).CreateShortcut("
                     f"'{str(lnk).replace(chr(39), chr(39)+chr(39))}'); "
                     "$t=($s.TargetPath+' '+$s.Arguments).ToLower(); "
-                    "if($t -like '*vpet.exe*' -and $t -like '*--pet*' -and $t -like '*eiden*'){'KEEP'}else{'REWRITE'}"
+                    "if($t -like '*start_eiden.bat*' -or $t -like '*start_eiden.vbs*' -or "
+                    "($t -like '*vpet.exe*' -and $t -like '*--pet*' -and $t -like '*eiden*')){'KEEP'}else{'REWRITE'}"
                 )
                 r = subprocess.run(
                     ["powershell", "-NoProfile", "-Command", ps],
@@ -228,13 +232,32 @@ def sync_desktop_shortcut(*, force: bool = True) -> bool:
                     return True
             except Exception:
                 pass
+    # 优先写热更启动器（每次开宠前同步源码）
+    hot = None
+    for name in ("start_eiden.vbs", "start_eiden.bat"):
+        cand = Path(sys.executable).resolve().parent / name if getattr(sys, "frozen", False) else APP_ROOT.parent / name
+        if getattr(sys, "frozen", False):
+            cand = Path(sys.executable).resolve().parent / name
+        else:
+            # 开发态：工程旁 App 目录
+            cand = (APP_ROOT.parent / "VpetEidenApp" / name) if (APP_ROOT.parent / "VpetEidenApp").is_dir() else (APP_ROOT / name)
+        if cand.is_file():
+            hot = cand
+            break
     bat = APP_ROOT / "启动 Vpet.bat"
-    if getattr(sys, "frozen", False):
+    if hot is not None:
+        target = str(hot.resolve())
+        workdir = str(hot.resolve().parent)
+        args = ""
+        icon = hot.resolve().parent / "app_icon.ico"
+        alt = hot.resolve().parent / "app_icon_eiden.ico"
+        if alt.is_file():
+            icon = alt
+    elif getattr(sys, "frozen", False):
         target = str(Path(sys.executable).resolve())
         workdir = str(Path(sys.executable).resolve().parent)
         args = ""
         icon = Path(sys.executable).resolve().parent / "app_icon.ico"
-        # 若误装进苍叶统一目录，仍尽量用旁路伊得图标
         alt = Path(sys.executable).resolve().parent / "app_icon_eiden.ico"
         if alt.is_file():
             icon = alt
@@ -247,17 +270,19 @@ def sync_desktop_shortcut(*, force: bool = True) -> bool:
         icon = APP_ROOT / "app_icon.ico"
     try:
         if not force and lnk.is_file():
-            # 已存在但误指苍叶统一包时强制纠正
             try:
                 import win32com.client  # type: ignore
 
                 shell = win32com.client.Dispatch("WScript.Shell")
                 cur = shell.CreateShortcut(str(lnk))
                 cur_target = str(getattr(cur, "TargetPath", "") or "")
+                low = cur_target.lower().replace("/", "\\")
+                # 热更脚本 / 已正确的 exe：不要覆盖
+                if "start_eiden.bat" in low or "start_eiden.vbs" in low:
+                    return True
                 if "VpetEidenPet" not in cur_target.replace("/", "\\") and (
-                    cur_target.lower().endswith("vpet.exe")
-                    or "start_eiden.bat" in cur_target.lower()
-                    or "\\vpet\\" in cur_target.lower().replace("/", "\\")
+                    low.endswith("vpet.exe")
+                    or "\\vpet\\" in low
                 ):
                     force = True
                 else:
@@ -279,7 +304,7 @@ def sync_desktop_shortcut(*, force: bool = True) -> bool:
             f"$s.WorkingDirectory = '{workdir.replace(chr(39), chr(39)+chr(39))}'; "
             f"$s.Arguments = '{args.replace(chr(39), chr(39)+chr(39))}'; "
             "$s.WindowStyle = 1; "
-            "$s.Description = 'Vpet Eiden 伊得桌宠（源码工程）· Ctrl+Alt'; "
+            "$s.Description = 'Vpet Eiden 伊得桌宠（启动前热更）· Ctrl+Alt+Q'; "
             f"{icon_ps}"
             "$s.Save()"
         )
@@ -296,9 +321,42 @@ def sync_desktop_shortcut(*, force: bool = True) -> bool:
 
 
 def refresh_launch_shortcuts() -> None:
-    """启动器起来时刷新桌面/开机快捷方式，避免仍指向旧 release exe。"""
+    """启动器起来时刷新桌面/开机快捷方式；有热更脚本时绝不写回裸 Vpet.exe。"""
     try:
         sync_desktop_shortcut(force=True)
+    except Exception:
+        pass
+    # 再钉一次：防止旧逻辑/竞态把快捷方式改回 exe
+    try:
+        if sys.platform == "win32":
+            app = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else (APP_ROOT.parent / "VpetEidenApp")
+            hot = app / "start_eiden.vbs"
+            if not hot.is_file():
+                hot = app / "start_eiden.bat"
+            desktop = Path.home() / "Desktop"
+            if not desktop.is_dir():
+                desktop = Path.home() / "桌面"
+            lnk = desktop / STARTUP_LNK_NAME
+            if hot.is_file() and desktop.is_dir():
+                icon = app / "app_icon.ico"
+                ps = (
+                    "$ws=New-Object -ComObject WScript.Shell; "
+                    f"$s=$ws.CreateShortcut('{str(lnk).replace(chr(39), chr(39)+chr(39))}'); "
+                    f"$s.TargetPath='{str(hot.resolve()).replace(chr(39), chr(39)+chr(39))}'; "
+                    f"$s.WorkingDirectory='{str(hot.resolve().parent).replace(chr(39), chr(39)+chr(39))}'; "
+                    "$s.Arguments=''; $s.WindowStyle=1; "
+                    "$s.Description='Vpet Eiden hot-reload'; "
+                )
+                if icon.is_file():
+                    ps += f"$s.IconLocation='{str(icon).replace(chr(39), chr(39)+chr(39))},0'; "
+                ps += "$s.Save()"
+                subprocess.run(
+                    ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+                )
     except Exception:
         pass
     try:

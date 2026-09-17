@@ -1,0 +1,43 @@
+name: vpet_eiden
+description: 伊得桌宠 Flutter 双端（对齐电脑版全量功能）
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  provider: ^6.1.2
+  shared_preferences: ^2.3.3
+  path_provider: ^2.1.5
+  just_audio: ^0.9.42
+  audio_session: ^0.1.21
+  permission_handler: ^11.3.1
+  url_launcher: ^6.3.1
+  http: ^1.2.2
+  collection: ^1.18.0
+  intl: ^0.19.0
+  uuid: ^4.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/sprites/
+    - assets/music/BGM/
+    - assets/voice/
+    - assets/voice/dizzy/
+    - assets/voice/hurt/
+    - assets/voice/normal/
+    - assets/voice/sleep/
+    - assets/voice/work/
+    - assets/voice/yuqi/
+    - assets/voice/misc/
+    - assets/data/

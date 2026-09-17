@@ -380,6 +380,7 @@ class VoicePlayer:
         init_mixer: Callable[[], bool],
         stop_sfx: Callable[[], None] | None = None,
         load_catalog: bool = True,
+        on_clip_started: Callable[[], None] | None = None,
     ) -> None:
         self.root = root
         self.cache_dir = cache_dir
@@ -388,6 +389,7 @@ class VoicePlayer:
         self.get_volume = get_volume
         self.init_mixer = init_mixer
         self.stop_sfx = stop_sfx
+        self.on_clip_started = on_clip_started
         self.enabled = False
         self.catalog = VoiceCatalog()  # 启动时空目录，后台异步扫描
         self._catalog_building = False
@@ -1040,6 +1042,14 @@ class VoicePlayer:
         self._clip_started_ms = int(time.time() * 1000)
         self._clip_deadline_ms = self._clip_started_ms + duration_ms + 500
         self._clip_min_play_ms = min_play_ms
+        # 语音走 Channel，不应掐 BGM；部分 SDL 会让 music 停——通知上层软续
+        try:
+            cb = self.on_clip_started
+            if cb:
+                self.root.after(30, cb)
+                self.root.after(220, cb)
+        except Exception:
+            pass
         self._show_subtitle(clip, duration_ms)
         if rest:
             self._queue = rest

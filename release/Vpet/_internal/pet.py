@@ -905,9 +905,37 @@ def _build_music_tracks() -> tuple[dict[str, dict], tuple[str, ...]]:
 
 
 MUSIC_TRACKS, MUSIC_TRACK_ORDER = _build_music_tracks()
+# 曲库里有 BGM008 文件，但任何路径都禁止播放（自动/叠层/手选均不可）
+MUSIC_TRACK_NO_AUTO_PLAY: frozenset[str] = frozenset({"bgm008"})
+
+
+def _music_track_is_blocked(track_id: str) -> bool:
+    """bgm008 等禁用曲：按 id / 标题 / 文件名拦截。"""
+    tid = MUSIC_TRACK_LEGACY_IDS.get(str(track_id or ""), str(track_id or "")).strip().lower()
+    if not tid:
+        return True
+    if tid in MUSIC_TRACK_NO_AUTO_PLAY:
+        return True
+    compact = tid.replace(" ", "").replace("_", "").replace("-", "")
+    if "bgm008" in compact:
+        return True
+    info = MUSIC_TRACKS.get(tid) or {}
+    try:
+        stem = Path(str(info.get("src") or "")).stem.lower()
+    except Exception:
+        stem = ""
+    blob = f"{info.get('title') or ''} {stem}".lower().replace(" ", "")
+    return "bgm008" in blob
+
+
 DEFAULT_MUSIC_TRACK = next(
-    (tid for tid in MUSIC_TRACK_ORDER if MUSIC_TRACKS[tid].get("folder") == MUSIC_CATEGORY_BGM),
-    MUSIC_TRACK_ORDER[0] if MUSIC_TRACK_ORDER else "bgm001",
+    (
+        tid
+        for tid in MUSIC_TRACK_ORDER
+        if MUSIC_TRACKS[tid].get("folder") == MUSIC_CATEGORY_BGM
+        and not _music_track_is_blocked(tid)
+    ),
+    next((t for t in MUSIC_TRACK_ORDER if not _music_track_is_blocked(t)), MUSIC_TRACK_ORDER[0] if MUSIC_TRACK_ORDER else "bgm001"),
 )
 
 # 面板不用素材边框；对话文本框用 Eiden「border」（伊得铭牌米色框）
@@ -929,14 +957,14 @@ SPEECH_TEXT_PAD_X = 18
 SPEECH_TEXT_EDGE_SLACK = 12
 # 文字相对框内再下移一点（视觉居中，避免贴顶）
 SPEECH_TEXT_NUDGE_Y = 4
-# 对话内容区：border 中间已有实色，不再另铺白底
-SPEECH_TEXT_INNER_ALPHA = 0.0
-SPEECH_TEXT_BG = THEME_PANEL_INNER  # 仅扁平框（无 border）仍用
 # 跨宠「话/动」台词：浅青色气泡（对照苍叶浅蓝气泡气质）
 SPEECH_MEET_BUBBLE_FILL = "#D8F5F8"
 SPEECH_MEET_BUBBLE_STROKE = "#A8DCE8"
 SPEECH_MEET_BUBBLE_SHADOW = "#C0E8EE"
 SPEECH_MEET_BUBBLE_FG = "#2a5a68"
+# 对话内容区：浅青底（border 中间叠色 / 扁平框填色）
+SPEECH_TEXT_INNER_ALPHA = 0.94
+SPEECH_TEXT_BG = SPEECH_MEET_BUBBLE_FILL
 # 普通对话微信风气泡（所属人问 / 伊得答）——实心不透明
 CHAT_AVATAR_PX = 40
 CHAT_BUBBLE_MAX_W = 280
@@ -985,7 +1013,7 @@ def _resolve_border_file(stem: str) -> Path | None:
 
 
 def _speech_text_bg_rgba() -> tuple[int, int, int, int]:
-    """对话内容区底色；alpha=0 时完全透出 border 中间实色。"""
+    """对话内容区底色（浅青）；alpha=0 时完全透出 border 中间实色。"""
     try:
         hex_s = str(SPEECH_TEXT_BG).strip().lstrip("#")
         r = int(hex_s[0:2], 16)
@@ -1155,8 +1183,8 @@ def _compose_speech_border2(target_w: int, target_h: int) -> Image.Image | None:
     src_w, src_h = base.size
     target_w = max(SPEECH_BORDER2_MIN_W, int(target_w))
     target_h = max(SPEECH_BORDER2_MIN_H, int(target_h))
-    # v3：不再叠白底，透出 border 中间实色
-    key = (3, target_w, target_h)
+    # v4：内容区叠浅青底，保留左右铭牌帽
+    key = (4, target_w, target_h)
     cached = _SPEECH_BORDER2_COMPOSE_CACHE.get(key)
     if cached is not None:
         return cached
@@ -1182,7 +1210,7 @@ def _compose_speech_border2(target_w: int, target_h: int) -> Image.Image | None:
     out.paste(left_cap, (0, 0), left_cap)
     out.paste(mid, (left_cap.width, 0), mid)
     out.paste(right_cap, (target_w - right_cap.width, 0), right_cap)
-    # border 中间已是实色铭牌底：仅在需要时叠一层（默认透明，不再盖白）
+    # 内容区叠浅青，左右帽仍是原铭牌装饰
     fill = _speech_text_bg_rgba()
     if fill[3] > 0:
         inner_w = max(1, target_w - left_cap.width - right_cap.width)
@@ -2667,12 +2695,13 @@ BULB_FX_SIZE = 144
 AI_DIALOG_HIDE_MS = 5000
 AI_CHAT_IDLE_MS = 5000
 
-EXPRESSION_BOUNCE_PX = 14
-EXPRESSION_BOUNCE_MS = 100
-EXPRESSION_BOUNCE_GAP_MS = 50  # 多段弹之间的落地停顿
-# 表情弹动次数：开心/伤心/生气=3；无语=0；其余表情=1
+EXPRESSION_BOUNCE_PX = 18
+EXPRESSION_BOUNCE_MS = 160
+EXPRESSION_BOUNCE_GAP_MS = 70  # 多段弹之间的落地停顿
+# 开心/伤心/生气=3（开心另走 happy_bounce）；其余表情一律弹 1 下
 EXPRESSION_BOUNCE_TRIPLE = frozenset({"happy", "sad", "angry"})
-EXPRESSION_BOUNCE_SKIP = frozenset({"speechless"})  # 无语：不弹
+EXPRESSION_BOUNCE_SKIP = frozenset()
+
 KICK_BOUNCE_PX = 18
 KICK_BOUNCE_MS = 100
 KICK_BOUNCE_TIMES = 2  # 侧踢上下弹两下
@@ -2885,12 +2914,13 @@ FAULT_ALERT_MESSAGES = ()  # 电脑版故障窗不再显示文字
 GAME_BGM_GATHER = "bgm001"
 GAME_BGM_QTE = "bgm002"
 GAME_BGM_QTE_ALERT = "bgm003"
-GAME_BGM_CHEST_WAIT = "bgm008"
+# bgm008 不作为任何场景配乐（勿自动切歌）
+GAME_BGM_CHEST_WAIT = ""
 GAME_BGM_RHYTHM_SELECT = "bgm001"  # 选曲/时长等待：不播（见 BLOCKED）
 GAME_BGM_PRESET_DIALOG = "bgm010"  # 普通对话
 GAME_BGM_HOME_DAY = "bgm007"  # 家园白天（含黎明）
 GAME_BGM_HOME_NIGHT = "bgm009"  # 家园夜晚（含黄昏）
-GAME_BGM_RHYTHM_WIN = "bgm004"  # 音游胜利庆功一小段
+GAME_BGM_RHYTHM_WIN = "bgm004"  # 游戏胜利庆功一小段（采集 / 音游等共用；勿用 bgm008）
 GAME_BGM_RHYTHM_WIN_SEC = 6.5
 GAME_BGM_VOCAB = "bgm024"  # 背单词
 GAME_BGM_VOCAB_NOTEBOOK = "bgm012"  # 生词本 / 单词本
@@ -2903,9 +2933,30 @@ GAME_BGM_BIRTHDAY = "bgm022"  # 生日设定 / 赠送礼物
 # 背景配乐起播渐入（音乐模式 / 叠层 BGM / 短庆功曲）
 MUSIC_FADE_IN_MS = 900
 MUSIC_FADE_IN_STEP_MS = 50
+# 音游/音乐选曲：鼠标悬停一会后试听
+MUSIC_PICKER_HOVER_DELAY_MS = 550
+MUSIC_PICKER_PREVIEW_SEC = 8.0
 # 这些场景不叠层配乐（选曲等待静音；其余场景恢复）
 OVERLAY_BGM_BLOCKED_REASONS: frozenset[str] = frozenset({"rhythm_select"})
-# 达成下列成就时发「成就宝箱」；待开箱时播 GAME_BGM_CHEST_WAIT
+# 已指定场景的叠层 BGM：不可被「普通对话 / 待开箱」等低优先级切歌顶掉
+OVERLAY_BGM_PROTECTED_REASONS: frozenset[str] = frozenset(
+    {
+        "outfit",
+        "home",
+        "diary",
+        "phonograph",
+        "gallery",
+        "birthday",
+        "gather",
+        "qte",
+        "typing",
+        "vocab",
+        "vocab_notebook",
+    }
+)
+# 未进入指定模式时不要自动切歌的 reason（普通对话选题等）
+OVERLAY_BGM_NO_AUTO_SWITCH: frozenset[str] = frozenset({"preset_dialog"})
+# 达成下列成就时发「成就宝箱」（不再为此自动配乐）
 ACHIEVEMENT_CHEST_IDS: frozenset[str] = frozenset(
     {
         "gather_pro",
@@ -4715,7 +4766,7 @@ SELECT_ACTIONS: dict[str, tuple[str, ...]] = {
 SKIP_GREEN_KEY_FILENAMES = frozenset()
 OUTER_LIME_KEY_FILENAMES = frozenset({"yes.jpg", "no.jpg", "box.jpg", "flag.jpg", "shy3.jpg"})
 # 抠绿/预抠后保持原画布布局：不按内容包围盒再裁、不按站立比例二次放大（避免切帧跳动/顶角被裁）
-# 注意：伏案主立绘 1/2/3work 须与 stand 同 reference_scale，勿放入本集合（否则会显小）
+# 注意：伏案主立绘 1/2/3work、打电话 call1/2 须与 stand 同 reference_scale，勿放入本集合（否则会显小）
 KEEP_SOURCE_LAYOUT_FILENAMES = frozenset(
     {
         "work_0.jpg",
@@ -4724,8 +4775,6 @@ KEEP_SOURCE_LAYOUT_FILENAMES = frozenset(
         "work_3.jpg",
         "work_4.jpg",
         "work_5.jpg",
-        "call1.jpg",
-        "call2.jpg",
     }
 )
 
@@ -7955,10 +8004,22 @@ def _build_phonograph_catalog(*, force: bool = False) -> list[dict]:
         category="sfx",
     )
     for tid in MUSIC_TRACK_ORDER:
+        if _music_track_is_blocked(tid):
+            continue
         track = _music_track(tid)
         audio = _peek_music_track_audio(tid)
-        if audio is not None:
-            add_file(f"builtin:music:{tid}", str(track["phonograph"]), audio, category="music")
+        # 始终列入「音乐」分组；源未缓存时播放时再 resolve
+        catalog.append(
+            {
+                "id": f"builtin:music:{tid}",
+                "title": str(track["phonograph"]),
+                "kind": "file",
+                "path": audio,
+                "track_id": tid,
+                "category": "music",
+                "builtin": True,
+            }
+        )
 
     catalog.extend(
         [
@@ -8381,29 +8442,33 @@ def _schedule_matches_today(item: dict, weekday: int) -> bool:
 
 
 def _default_full_music_playlist() -> list[str]:
-    """默认播放列表＝曲库全部（不再默认只塞 radical_mat）。"""
+    """默认播放列表＝曲库可用曲（排除禁止播放的如 bgm008）。"""
     if MUSIC_TRACK_ORDER:
-        return list(MUSIC_TRACK_ORDER)
-    if DEFAULT_MUSIC_TRACK in MUSIC_TRACKS:
+        return [tid for tid in MUSIC_TRACK_ORDER if not _music_track_is_blocked(tid)]
+    if DEFAULT_MUSIC_TRACK in MUSIC_TRACKS and not _music_track_is_blocked(DEFAULT_MUSIC_TRACK):
         return [DEFAULT_MUSIC_TRACK]
     return []
 
 
 def _normalize_music_playlist(raw, *, fallback: str | None = None) -> list[str]:
-    """校验播放列表，至少保留一首有效曲。"""
+    """校验播放列表，至少保留一首有效曲（永不含 bgm008）。"""
     out: list[str] = []
     if isinstance(raw, list):
         for tid in raw:
             tid = MUSIC_TRACK_LEGACY_IDS.get(str(tid), str(tid))
-            if tid in MUSIC_TRACKS and tid not in out:
+            if tid in MUSIC_TRACKS and tid not in out and not _music_track_is_blocked(tid):
                 out.append(tid)
     if not out:
         fb_list = _default_full_music_playlist()
         if fallback:
             fb = MUSIC_TRACK_LEGACY_IDS.get(str(fallback), str(fallback))
-            if fb in MUSIC_TRACKS:
+            if fb in MUSIC_TRACKS and not _music_track_is_blocked(fb):
                 return [fb]
-        return fb_list or ([DEFAULT_MUSIC_TRACK] if DEFAULT_MUSIC_TRACK in MUSIC_TRACKS else [])
+        return fb_list or (
+            [DEFAULT_MUSIC_TRACK]
+            if DEFAULT_MUSIC_TRACK in MUSIC_TRACKS and not _music_track_is_blocked(DEFAULT_MUSIC_TRACK)
+            else []
+        )
     return out
 
 
@@ -15423,6 +15488,9 @@ class DesktopPet:
         """语音标题框：Vpet 在桌宠正下方；Allmate 在智能伴侣正下方；越界夹屏强制显示。"""
         if not win or not win.winfo_exists():
             return False
+        # 其它文本已出现：立刻停语音框，禁止再定位/显示
+        if self._yield_voice_subtitle_to_other_text():
+            return False
         # 已关掉时禁止再 deiconify（跟随 tick 与 hide 竞态会导致气泡「永久留着」）
         if not getattr(self, "_voice_subtitle_active", False):
             return False
@@ -15489,15 +15557,35 @@ class DesktopPet:
                 return hit
         return None
 
+    def _other_text_blocks_voice_subtitle(self) -> bool:
+        """语音文本层级最低：任意非语音对话框在场则让路。"""
+        if not (self.speech_dialog and self.speech_dialog.winfo_exists()):
+            return False
+        # speech_dialog 正作为语音框使用时，不算「其它文本」
+        return not bool(getattr(self, "_speech_from_voice", False))
+
+    def _yield_voice_subtitle_to_other_text(self) -> bool:
+        """其它文本触发时立刻收起语音文本框。返回 True 表示已让路。"""
+        if not self._other_text_blocks_voice_subtitle():
+            return False
+        if getattr(self, "_voice_subtitle_active", False) or (
+            self.voice_subtitle_win and self.voice_subtitle_win.winfo_exists()
+        ):
+            self._hide_voice_subtitle()
+        return True
+
     def _show_voice_subtitle(self, title: str, duration_ms: int, source: str = "vpet") -> None:
-        """语音台词文本框：独立扁平窗；时长 = 语音 + 1s。与语音成对，强制显示标题框。"""
+        """语音台词文本框：独立扁平窗；时长 = 语音 + 1s。层级最低，不抢其它文本。"""
         if not self._speech_display_enabled():
             return
         # 相遇模式：不要语音字幕（含普通自由语音）
         if self._in_crossover_meet_mode() or self._meet_priority_active():
             return
-        # 相遇优先：自由语音字幕不得盖住相遇台词（打招呼 hi 等相遇后续仍允许）
-        if self._meet_priority_active() and self.speech_dialog and self.speech_dialog.winfo_exists():
+        # 其它文本在场：不触发语音文本框（也不关掉对方）
+        if self._other_text_blocks_voice_subtitle():
+            return
+        # 已有对话框占用（含 from_voice 路径）：勿再开独立语音窗叠两层
+        if self.speech_dialog and self.speech_dialog.winfo_exists():
             return
         display = (title or "").strip()
         display = re.sub(r"^((?:\d+)|(?:[a-zA-Z]))(?:[\s._\-]+)?", "", display).strip()
@@ -15509,10 +15597,6 @@ class DesktopPet:
         self._voice_subtitle_gen = gen
         self._voice_subtitle_source = str(source or "vpet").lower()
         fg = _speech_fg_for_source(source)
-        # 与普通对话框互斥
-        if self.speech_dialog and self.speech_dialog.winfo_exists():
-            self._speech_from_voice = False
-            self._hide_speech_dialog()
         self._ensure_voice_subtitle_win()
         self._voice_subtitle_active = True
         self._layout_voice_subtitle(display, color=fg)
@@ -16444,7 +16528,9 @@ class DesktopPet:
             self.achievements.setdefault("stats", {})["used_char_filter"] = True
             _save_achievements(self.achievements)
             self._check_achievements(source="filter")
-        if self.bg_music_playing or self.music_sprite_mode:
+        if self.bg_music_playing or (
+            self.music_sprite_mode and not bool(getattr(self, "music_ambient_only", False))
+        ):
             self._stop_bg_music()
             self._start_bg_music()
 
@@ -16730,8 +16816,17 @@ class DesktopPet:
             order[0], order[1] = order[1], order[0]
         self._bg_music_shuffle_bag = order
 
-    def _bg_music_play_track(self, track_id: str, *, single_loop: bool) -> bool:
-        wav = _music_playable_path(track_id)
+    def _bg_music_play_track(self, track_id: str, *, single_loop: bool, force: bool = False) -> bool:
+        tid = MUSIC_TRACK_LEGACY_IDS.get(str(track_id), str(track_id))
+        if _music_track_is_blocked(tid):
+            return False
+        # 检测听歌/视频/游戏：禁止任何内部曲库出声（装扮/日记窗强制续播除外）
+        if not force:
+            if bool(getattr(self, "music_ambient_only", False)):
+                return False
+            if str(getattr(self, "app_scene", "") or "") in ("game", "video"):
+                return False
+        wav = _music_playable_path(tid)
         if wav is None or not wav.exists():
             return False
         import pygame
@@ -16746,15 +16841,15 @@ class DesktopPet:
         self._begin_bg_music_fade_in()
         # 若正在播源文件，后台慢慢补 cache，下次可走短路径；绝不挡主线程
         try:
-            track = _music_track(track_id)
+            track = _music_track(tid)
             cache = Path(track["cache"])
             src = Path(track["src"])
             if wav.resolve() == src.resolve() and (not cache.is_file()):
-                tid = str(track_id)
+                expected = str(tid)
 
-                def _bg_cache(expected: str = tid) -> None:
+                def _bg_cache(exp: str = expected) -> None:
                     try:
-                        _ensure_music_track_wav(expected)
+                        _ensure_music_track_wav(exp)
                     except Exception:
                         pass
 
@@ -16861,6 +16956,16 @@ class DesktopPet:
     def _bg_music_toggle_pause(self) -> None:
         if not getattr(self, "music_sprite_mode", False):
             return
+        # 环境跟听：只控外部音乐软件，不碰内部 BGM
+        if bool(getattr(self, "music_ambient_only", False)):
+            ok = self._send_external_media_command("play_pause")
+            self._show_toast(
+                "播放/暂停（外部）" if ok else "未能控制外部播放",
+                "#88ccff" if ok else "#ff8866",
+                duration_ms=1200,
+            )
+            self._refresh_music_media_play_btn()
+            return
         try:
             import pygame
 
@@ -16901,13 +17006,38 @@ class DesktopPet:
         self._refresh_music_media_play_btn()
         self._sync_music_wave_to_playback()
 
+    def _send_external_media_command(self, command: str) -> bool:
+        """控制网易云 / QQ / Spotify 等外部播放器（GSMTC 或全局媒体键）。"""
+        try:
+            import system_media_control as smc
+
+            return bool(smc.send_command(command))
+        except Exception:
+            return False
+
     def _bg_music_next_track(self) -> None:
         if not getattr(self, "music_sprite_mode", False):
+            return
+        if bool(getattr(self, "music_ambient_only", False)):
+            ok = self._send_external_media_command("next")
+            self._show_toast(
+                "下一首（外部）" if ok else "未能切歌（外部）",
+                "#88ccff" if ok else "#ff8866",
+                duration_ms=1200,
+            )
             return
         self._advance_bg_music_track(silent=False)
 
     def _bg_music_prev_track(self) -> None:
         if not getattr(self, "music_sprite_mode", False):
+            return
+        if bool(getattr(self, "music_ambient_only", False)):
+            ok = self._send_external_media_command("prev")
+            self._show_toast(
+                "上一首（外部）" if ok else "未能切歌（外部）",
+                "#88ccff" if ok else "#ff8866",
+                duration_ms=1200,
+            )
             return
         self._retreat_bg_music_track()
 
@@ -16934,6 +17064,11 @@ class DesktopPet:
         self.bg_music_watch_job = self._safe_after(500, tick)
 
     def _start_bg_music(self) -> None:
+        # 环境检测（视频/音乐/游戏）只切姿势/特效，不播桌宠曲库
+        if bool(getattr(self, "music_ambient_only", False)):
+            return
+        if str(getattr(self, "app_scene", "") or "") in ("game", "video"):
+            return
         if self.bg_music_playing:
             return
         playlist = self._music_playlist()
@@ -16969,6 +17104,14 @@ class DesktopPet:
             self._sync_music_wave_to_playback()
 
     def _stop_bg_music(self) -> None:
+        # 装扮/日记/家园等叠层 BGM 占用通道：勿掐渐入、勿停播（否则窗口内按键一触发 stop 就静音）
+        if bool(getattr(self, "_overlay_bgm_active", False)):
+            self.bg_music_paused_for_call = False
+            self.bg_music_user_paused = False
+            # 保持 bg_music_playing，便于音量/渐入逻辑继续生效
+            self.bg_music_playing = True
+            self._refresh_music_media_play_btn()
+            return
         self._cancel_bg_music_watch()
         self._cancel_bg_music_fade()
         self._cancel_affinity_tick()
@@ -16987,18 +17130,24 @@ class DesktopPet:
 
     def _resolve_overlay_bgm_id(self, track_id: str) -> str | None:
         tid = MUSIC_TRACK_LEGACY_IDS.get(str(track_id), str(track_id))
+        if not tid or _music_track_is_blocked(tid):
+            return None
         if tid in MUSIC_TRACKS:
             return tid
         low = tid.lower().strip()
         if not low:
             return None
         for cand in MUSIC_TRACK_ORDER:
+            if _music_track_is_blocked(cand):
+                continue
             if cand == low or cand.endswith(low) or low in cand:
                 return cand
         # 主题曲等：按标题 / 文件名匹配（兼容「鉴定/检定」异体）
         needles = {low, low.replace("鉴定", "检定"), low.replace("检定", "鉴定")}
         needles = {n for n in needles if n}
         for cand in MUSIC_TRACK_ORDER:
+            if _music_track_is_blocked(cand):
+                continue
             info = MUSIC_TRACKS.get(cand) or {}
             title = str(info.get("title") or "").lower()
             try:
@@ -17041,8 +17190,11 @@ class DesktopPet:
                 return 0.0
             self._cancel_bg_music_watch()
             self._cancel_bg_music_fade()
-            # 庆功曲不要被叠层标记占住
+            # 庆功短曲：勿打断装扮等指定场景叠层
             if bool(getattr(self, "_overlay_bgm_active", False)):
+                cur = str(getattr(self, "_overlay_bgm_reason", "") or "")
+                if cur in OVERLAY_BGM_PROTECTED_REASONS:
+                    return 0.0
                 self._overlay_bgm_active = False
                 self._overlay_bgm_reason = None
                 self._overlay_bgm_track = None
@@ -17075,6 +17227,208 @@ class DesktopPet:
         except Exception:
             return 0.0
 
+    def _cancel_music_picker_preview(self, *, resume: bool = False) -> None:
+        """取消选曲悬停试听；resume=True 时若先前打断了手动音乐则尝试续播。"""
+        leave_job = getattr(self, "_music_picker_leave_job", None)
+        if leave_job:
+            try:
+                self.root.after_cancel(leave_job)
+            except Exception:
+                pass
+        self._music_picker_leave_job = None
+        job = getattr(self, "_music_picker_hover_job", None)
+        if job:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+        self._music_picker_hover_job = None
+        self._music_picker_hover_tid = None
+        stop_job = getattr(self, "_music_picker_preview_stop_job", None)
+        if stop_job:
+            try:
+                self.root.after_cancel(stop_job)
+            except Exception:
+                pass
+        self._music_picker_preview_stop_job = None
+        was = bool(getattr(self, "_music_picker_preview_active", False))
+        want_resume = bool(getattr(self, "_music_picker_preview_resume", False))
+        panel_resume = getattr(self, "_music_picker_preview_panel_resume", None)
+        self._music_picker_preview_active = False
+        self._music_picker_preview_resume = False
+        self._music_picker_preview_panel_resume = None
+        if was:
+            try:
+                import pygame
+
+                if pygame.mixer.get_init():
+                    pygame.mixer.music.stop()
+            except Exception:
+                pass
+        if resume and isinstance(panel_resume, dict) and panel_resume.get("reason"):
+            try:
+                self._reassert_panel_overlay_bgm()
+            except Exception:
+                pass
+            return
+        if resume and want_resume:
+            try:
+                if (
+                    getattr(self, "music_sprite_mode", False)
+                    and not bool(getattr(self, "music_ambient_only", False))
+                    and not getattr(self, "bg_music_user_paused", False)
+                ):
+                    self._start_bg_music()
+            except Exception:
+                pass
+
+    def _schedule_music_picker_preview(self, track_id: str) -> None:
+        tid = MUSIC_TRACK_LEGACY_IDS.get(str(track_id or ""), str(track_id or "")).strip()
+        if not tid or tid not in MUSIC_TRACKS or _music_track_is_blocked(tid):
+            return
+        # 换曲悬停：只停试听，不立刻恢复整曲（避免切格子卡顿）
+        self._cancel_music_picker_preview(resume=False)
+        tok = int(getattr(self, "_music_picker_preview_tok", 0) or 0) + 1
+        self._music_picker_preview_tok = tok
+        self._music_picker_hover_tid = tid
+
+        def _fire(t: str = tid, k: int = tok) -> None:
+            self._music_picker_hover_job = None
+            if int(getattr(self, "_music_picker_preview_tok", 0) or 0) != k:
+                return
+            if str(getattr(self, "_music_picker_hover_tid", "") or "") != t:
+                return
+            self._start_music_picker_preview(t, token=k)
+
+        self._music_picker_hover_job = self.root.after(
+            int(MUSIC_PICKER_HOVER_DELAY_MS), _fire
+        )
+
+    def _start_music_picker_preview(self, track_id: str, *, token: int) -> None:
+        if int(getattr(self, "_music_picker_preview_tok", 0) or 0) != token:
+            return
+        tid = MUSIC_TRACK_LEGACY_IDS.get(str(track_id or ""), str(track_id or "")).strip()
+        if _music_track_is_blocked(tid):
+            return
+        src = _music_playable_path(tid)
+        if src is None or not src.is_file():
+            self._show_toast("暂无法试听（缺音频）", "#ff8866", duration_ms=1200)
+            return
+        sec = float(MUSIC_PICKER_PREVIEW_SEC)
+        cache = DATA_AUDIO_DIR / f"music_{tid}_preview_{int(sec)}.wav"
+        try:
+            _ensure_data_dirs()
+        except Exception:
+            pass
+        wav = _ensure_audio_wav(src, cache, clip_sec=sec) or src
+        resume = bool(
+            getattr(self, "music_sprite_mode", False)
+            and not bool(getattr(self, "music_ambient_only", False))
+            and bool(getattr(self, "bg_music_playing", False))
+            and not bool(getattr(self, "bg_music_user_paused", False))
+        )
+        try:
+            import pygame
+
+            _init_pygame_mixer()
+            if not pygame.mixer.get_init():
+                return
+            self._cancel_bg_music_watch()
+            self._cancel_bg_music_fade()
+            # 试听可短暂占用通道；装扮/日记等保护层先记下再让出，试听结束拉回
+            self._music_picker_preview_panel_resume = None
+            if bool(getattr(self, "_overlay_bgm_active", False)):
+                cur = str(getattr(self, "_overlay_bgm_reason", "") or "")
+                if cur in ("outfit", "diary") or self._panel_overlay_bgm_spec():
+                    spec = self._panel_overlay_bgm_spec()
+                    if spec:
+                        self._music_picker_preview_panel_resume = {
+                            "reason": spec[0],
+                            "track": spec[1],
+                        }
+                    elif cur in ("outfit", "diary"):
+                        self._music_picker_preview_panel_resume = {
+                            "reason": cur,
+                            "track": str(getattr(self, "_overlay_bgm_track", "") or ""),
+                        }
+                if cur in OVERLAY_BGM_PROTECTED_REASONS:
+                    try:
+                        self._stop_overlay_bgm(reason=cur, resume=False)
+                    except Exception:
+                        return
+                else:
+                    self._overlay_bgm_active = False
+                    self._overlay_bgm_reason = None
+                    self._overlay_bgm_track = None
+            pygame.mixer.music.load(str(wav))
+            pygame.mixer.music.set_volume(self._sound_scale("music"))
+            pygame.mixer.music.play(0)
+            self.bg_music_playing = False
+            self._music_picker_preview_active = True
+            self._music_picker_preview_resume = resume
+            title = _music_track(tid).get("title") or tid
+            self._show_toast(f"试听 · {title}（{int(sec)}s）", "#88ccff", duration_ms=1400)
+
+            def _stop(k: int = token) -> None:
+                self._music_picker_preview_stop_job = None
+                if int(getattr(self, "_music_picker_preview_tok", 0) or 0) != k:
+                    return
+                self._cancel_music_picker_preview(resume=True)
+
+            self._music_picker_preview_stop_job = self.root.after(
+                int(sec * 1000) + 60, _stop
+            )
+        except Exception:
+            self._music_picker_preview_active = False
+            self._music_picker_preview_resume = False
+            self._music_picker_preview_panel_resume = None
+
+    def _bind_music_picker_hover_preview(self, widgets, track_id: str) -> None:
+        tid = str(track_id)
+
+        def on_enter(_e=None, t=tid) -> None:
+            leave_job = getattr(self, "_music_picker_leave_job", None)
+            if leave_job:
+                try:
+                    self.root.after_cancel(leave_job)
+                except Exception:
+                    pass
+                self._music_picker_leave_job = None
+            self._schedule_music_picker_preview(t)
+
+        def on_leave(_e=None, t=tid) -> None:
+            leave_job = getattr(self, "_music_picker_leave_job", None)
+            if leave_job:
+                try:
+                    self.root.after_cancel(leave_job)
+                except Exception:
+                    pass
+
+            def _maybe_stop(cur: str = t) -> None:
+                self._music_picker_leave_job = None
+                # 已移到其它曲目悬停则不打断
+                if str(getattr(self, "_music_picker_hover_tid", "") or "") != cur:
+                    return
+                self._cancel_music_picker_preview(resume=True)
+
+            # 短延迟：在格子内图标/文字间移动时不误停
+            self._music_picker_leave_job = self.root.after(140, _maybe_stop)
+
+        def _bind_tree(root_w) -> None:
+            try:
+                root_w.bind("<Enter>", on_enter, add="+")
+                root_w.bind("<Leave>", on_leave, add="+")
+            except Exception:
+                pass
+            try:
+                for ch in root_w.winfo_children():
+                    _bind_tree(ch)
+            except Exception:
+                pass
+
+        for w in widgets:
+            _bind_tree(w)
+
     def _resume_music_after_rhythm_fanfare(self) -> None:
         if not getattr(self, "music_sprite_mode", False):
             return
@@ -17087,19 +17441,139 @@ class DesktopPet:
         except Exception:
             pass
 
-    def _start_overlay_bgm(self, track_id: str, *, reason: str) -> None:
+    def _panel_overlay_bgm_spec(self) -> tuple[str, str] | None:
+        """装扮 / 日记窗仍开着时返回 (reason, track_id)。优先装扮。"""
+        try:
+            ow = getattr(self, "outfit_editor_win", None)
+            if ow is not None and ow.winfo_exists():
+                return ("outfit", GAME_BGM_OUTFIT)
+        except Exception:
+            pass
+        try:
+            dw = getattr(self, "diary_win", None)
+            if dw is not None and dw.winfo_exists():
+                return ("diary", GAME_BGM_DIARY)
+        except Exception:
+            pass
+        return None
+
+    def _cancel_panel_overlay_bgm_watch(self) -> None:
+        job = getattr(self, "_panel_overlay_bgm_watch_job", None)
+        if job:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+        self._panel_overlay_bgm_watch_job = None
+
+    def _schedule_panel_overlay_bgm_watch(self) -> None:
+        """装扮/日记开着时定期检查：通道被掐/静音则拉回场景曲。"""
+        self._cancel_panel_overlay_bgm_watch()
+        if not self._panel_overlay_bgm_spec():
+            return
+
+        def tick() -> None:
+            self._panel_overlay_bgm_watch_job = None
+            if self._closing or not self._alive():
+                return
+            spec = self._panel_overlay_bgm_spec()
+            if not spec:
+                return
+            try:
+                self._reassert_panel_overlay_bgm()
+            except Exception:
+                pass
+            try:
+                self._panel_overlay_bgm_watch_job = self.root.after(2200, tick)
+            except Exception:
+                self._panel_overlay_bgm_watch_job = None
+
+        try:
+            self._panel_overlay_bgm_watch_job = self.root.after(2200, tick)
+        except Exception:
+            self._panel_overlay_bgm_watch_job = None
+
+    def _reassert_panel_overlay_bgm(self) -> bool:
+        """窗仍开着时强制续播装扮/日记 BGM（按钮/检测误停后拉回）。"""
+        spec = self._panel_overlay_bgm_spec()
+        if not spec:
+            self._cancel_panel_overlay_bgm_watch()
+            return False
+        reason, track = spec
+        # 留声试听占用中：等结束再由 resume 拉回
+        if getattr(self, "phonograph_playing_id", None):
+            return False
+        if bool(getattr(self, "_music_picker_preview_active", False)):
+            return False
+        if bool(getattr(self, "bg_music_paused_for_call", False)):
+            return False
+        try:
+            self._start_overlay_bgm(track, reason=reason, force=True)
+        except Exception:
+            return False
+        self._schedule_panel_overlay_bgm_watch()
+        return True
+
+    def _start_overlay_bgm(self, track_id: str, *, reason: str, force: bool = False) -> None:
         """小游戏 / 场景叠层 BGM：单曲循环，不进音乐模式 UI；不叠音波光圈以免卡。"""
         if str(reason) in OVERLAY_BGM_BLOCKED_REASONS:
             return
+        # 未指定模式：不要自动切 BGM（普通对话 / 自由态待开箱等）
+        if str(reason) in OVERLAY_BGM_NO_AUTO_SWITCH:
+            return
+        # 装扮/日记窗仍开：允许强制续播，不被检测听歌/视频拦住
+        panel_force = bool(force)
+        if not panel_force and str(reason) in ("outfit", "diary"):
+            try:
+                if str(reason) == "outfit":
+                    ow = getattr(self, "outfit_editor_win", None)
+                    panel_force = bool(ow is not None and ow.winfo_exists())
+                else:
+                    dw = getattr(self, "diary_win", None)
+                    panel_force = bool(dw is not None and dw.winfo_exists())
+            except Exception:
+                panel_force = False
+        if not panel_force:
+            # 检测听歌 / 视频 / 游戏：只切姿势特效，禁止叠层内部曲
+            if bool(getattr(self, "music_ambient_only", False)):
+                return
+            if str(getattr(self, "app_scene", "") or "") in ("game", "video"):
+                return
         tid = self._resolve_overlay_bgm_id(track_id)
         if not tid:
+            return
+        cur_reason = str(getattr(self, "_overlay_bgm_reason", "") or "")
+        # 已在装扮等指定场景：勿被其它 reason 顶掉
+        if (
+            bool(getattr(self, "_overlay_bgm_active", False))
+            and cur_reason in OVERLAY_BGM_PROTECTED_REASONS
+            and str(reason) != cur_reason
+            and str(reason) not in OVERLAY_BGM_PROTECTED_REASONS
+        ):
             return
         if (
             bool(getattr(self, "_overlay_bgm_active", False))
             and str(getattr(self, "_overlay_bgm_track", "") or "") == tid
-            and str(getattr(self, "_overlay_bgm_reason", "") or "") == reason
+            and cur_reason == reason
         ):
-            return
+            # 同曲同场景：若通道已静音 / 未在播则重开；仅音量被掐则拉回音量
+            try:
+                import pygame
+
+                if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+                    try:
+                        cur_vol = float(pygame.mixer.music.get_volume())
+                    except Exception:
+                        cur_vol = 0.0
+                    want = float(self._sound_scale("music"))
+                    self.bg_music_playing = True
+                    if cur_vol < max(0.02, want * 0.12):
+                        self._begin_bg_music_fade_in()
+                    if str(reason) in ("outfit", "diary"):
+                        self._schedule_panel_overlay_bgm_watch()
+                    return
+            except Exception:
+                pass
         if not bool(getattr(self, "_overlay_bgm_active", False)):
             self._overlay_bgm_resume = {
                 "was_playing": bool(
@@ -17126,10 +17600,12 @@ class DesktopPet:
         self._overlay_bgm_reason = str(reason)
         self._overlay_bgm_track = tid
         try:
-            if not self._bg_music_play_track(tid, single_loop=True):
+            if not self._bg_music_play_track(tid, single_loop=True, force=panel_force):
                 self._overlay_bgm_active = False
                 self._overlay_bgm_reason = None
                 self._overlay_bgm_track = None
+            elif str(reason) in ("outfit", "diary"):
+                self._schedule_panel_overlay_bgm_watch()
         except Exception:
             self._overlay_bgm_active = False
             self._overlay_bgm_reason = None
@@ -17140,6 +17616,12 @@ class DesktopPet:
             return
         if reason is not None and str(getattr(self, "_overlay_bgm_reason", "") or "") != str(reason):
             return
+        was = str(reason or getattr(self, "_overlay_bgm_reason", "") or "")
+        # 装扮结束 / 宝箱等待：任何时候都不要自动续播内部曲（尤其 bgm008）
+        if was in ("outfit", "chest_wait"):
+            resume = False
+        if was in ("outfit", "diary"):
+            self._cancel_panel_overlay_bgm_watch()
         self._overlay_bgm_active = False
         self._overlay_bgm_reason = None
         self._overlay_bgm_track = None
@@ -17159,6 +17641,8 @@ class DesktopPet:
             and snap.get("music_mode")
             and snap.get("was_playing")
             and getattr(self, "music_sprite_mode", False)
+            and not bool(getattr(self, "music_ambient_only", False))
+            and str(getattr(self, "app_scene", "") or "") not in ("game", "video")
         ):
             try:
                 self._start_bg_music()
@@ -17166,30 +17650,31 @@ class DesktopPet:
             except Exception:
                 pass
 
+    def _play_game_victory_fanfare(self) -> float:
+        """小游戏胜利：成功音效 + bgm004 短庆功（与音游等一致；绝不播 bgm008）。"""
+        try:
+            _play_ui_sfx("game_success", volume=0.58)
+        except Exception:
+            pass
+        try:
+            return float(
+                self._play_short_bgm_clip(
+                    GAME_BGM_RHYTHM_WIN, clip_sec=GAME_BGM_RHYTHM_WIN_SEC
+                )
+                or 0
+            )
+        except Exception:
+            return 0.0
+
     def _maybe_start_chest_wait_bgm(self) -> None:
-        """有未开成就宝箱且非对局中时播 bgm008。"""
-        if getattr(self, "phonograph_playing_id", None):
-            return
-        reason = str(getattr(self, "_overlay_bgm_reason", "") or "")
-        if reason in (
-            "gather",
-            "qte",
-            "rhythm_select",
-            "preset_dialog",
-            "home",
-            "vocab",
-            "vocab_notebook",
-            "typing",
-            "gallery",
-            "phonograph",
-            "outfit",
-        ):
-            return
-        items = (self.wallet.get("items") if isinstance(getattr(self, "wallet", None), dict) else None) or {}
-        if int(items.get("achieve_reward_box", 0) or 0) <= 0:
-            self._stop_overlay_bgm(reason="chest_wait")
-            return
-        self._start_overlay_bgm(GAME_BGM_CHEST_WAIT, reason="chest_wait")
+        """成就宝箱永不自动配乐（bgm008 永久停用）；顺带清掉残留 chest_wait。"""
+        try:
+            if str(getattr(self, "_overlay_bgm_reason", "") or "") == "chest_wait":
+                self._stop_overlay_bgm(reason="chest_wait", resume=False)
+        except Exception:
+            pass
+        # 明确不启动任何曲目
+        return
 
     def _grant_achievement_chest(self, aid: str) -> None:
         have = self._grant_wallet_item("achieve_reward_box", 1)
@@ -17260,6 +17745,11 @@ class DesktopPet:
             if self.mode == "game":
                 self._stop_game_mode()
         self._end_app_game_video_scenes(silent=True)
+        # 面板手动音乐：只播内部歌单；停掉外部播放器，避免和软件音乐叠一起
+        try:
+            self._send_external_media_command("stop")
+        except Exception:
+            pass
         # 音乐模式＝漫步：只走路听歌，不触发动作/台词特效
         self.mode = "stroll"
         self.follow_animating = False
@@ -17270,15 +17760,45 @@ class DesktopPet:
         self.music_sprite_mode = True
         self.music_ambient_only = False
         self.app_scene = "music"
+        self.app_scene_fx_on = False
+        self.app_scene_sig = ""
+        self._clear_app_scene_sticky()
         self.bg_music_user_paused = False
         self._sync_mode_time_bucket()
         self._stop_voice_for_music_mode()
+        # 手动音乐模式要占用通道：先停场景叠层（装扮窗若仍开着，关闭音乐后再开装扮会重开曲）
+        if bool(getattr(self, "_overlay_bgm_active", False)):
+            try:
+                self._stop_overlay_bgm(resume=False)
+            except Exception:
+                pass
+        self.bg_music_playing = False
         # 先切立绘；声波等真正开播后再出（_start_bg_music → _on_bg_music_track_changed）
         self._set_image(self._current_stand_sprite())
         self._place_window(light=True)
         self._start_bg_music()
         self._sync_music_wave_to_playback()
         self._sync_auto_desk_clocks()
+        self._refresh_music_media_play_btn()
+        # 再兜一次：确保控歌栏已建（⏮ ⏯ ⏭ ⏹）
+        try:
+            if not (
+                self._desk_clock_active("music")
+                and (self._desk_clocks.get("music") or {}).get("with_media")
+                and not bool((self._desk_clocks.get("music") or {}).get("media_external"))
+            ):
+                self._start_desk_clock(
+                    "music",
+                    kind="stopwatch",
+                    title="音乐",
+                    force=True,
+                    with_media=True,
+                    show_timer_face=self._timers_display_enabled(),
+                    media_external=False,
+                )
+                self._refresh_music_media_play_btn()
+        except Exception:
+            pass
         playlist = self._music_playlist()
         mode_label = self._music_play_mode_label()
         if len(playlist) == 1:
@@ -17359,6 +17879,99 @@ class DesktopPet:
         ):
             try:
                 self._apply_music_off()
+            except Exception:
+                pass
+
+    def _stop_internal_playback_for_app_scene(self) -> None:
+        """检测听歌/视频/游戏：停掉内部曲；装扮/日记窗仍开着则保留/拉回场景曲。"""
+        panel = self._panel_overlay_bgm_spec()
+        try:
+            self._cancel_bg_music_watch()
+        except Exception:
+            pass
+        try:
+            self._cancel_bg_music_fade()
+        except Exception:
+            pass
+        try:
+            if bool(getattr(self, "_overlay_bgm_active", False)):
+                cur = str(getattr(self, "_overlay_bgm_reason", "") or "")
+                # 装扮/日记窗开着：不要掐对应场景曲
+                if panel and cur == panel[0]:
+                    pass
+                else:
+                    self._stop_overlay_bgm(resume=False)
+        except Exception:
+            pass
+        try:
+            # 有面板叠层时 _stop_bg_music 会早退保场景曲
+            self._stop_bg_music()
+        except Exception:
+            pass
+        if panel:
+            try:
+                self._reassert_panel_overlay_bgm()
+            except Exception:
+                pass
+            return
+        try:
+            import pygame
+
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+        except Exception:
+            pass
+        self.bg_music_playing = False
+        self.bg_music_user_paused = False
+        self._overlay_bgm_resume = None
+
+    def _engage_music_ambient_follow(self, signature: str = "", *, toast: str = "") -> None:
+        """切到「检测跟听」：只听外部软件，绝不播内部曲。"""
+        # 必须先置位，阻断 watch / start_bg_music 竞态再开内部曲
+        self.music_sprite_mode = True
+        self.music_ambient_only = True
+        self.app_scene = "music"
+        self.app_scene_fx_on = True
+        self._mark_app_scene_entered()
+        self._stop_internal_playback_for_app_scene()
+        self.bg_music_user_paused = False
+        self._music_session_start_ms = 0
+        try:
+            self._stop_voice_for_music_mode()
+        except Exception:
+            pass
+        try:
+            self._set_image(self._current_stand_sprite())
+        except Exception:
+            pass
+        try:
+            self._start_music_wave_fx(force_rebuild=False)
+            self._sync_music_wave_to_playback()
+        except Exception:
+            pass
+        try:
+            self._sync_auto_desk_clocks()
+            self._refresh_music_media_play_btn()
+        except Exception:
+            pass
+        # 再强制建一栏外部控歌，避免旧栏仍绑内部切歌
+        try:
+            self._start_desk_clock(
+                "music",
+                kind="stopwatch",
+                title="音乐",
+                force=True,
+                with_media=True,
+                show_timer_face=False,
+                media_external=True,
+            )
+            self._refresh_music_media_play_btn()
+        except Exception:
+            pass
+        tip = str(toast or "").strip()
+        if tip:
+            try:
+                self._show_toast(tip, "#88ccff", duration_ms=1800)
             except Exception:
                 pass
 
@@ -17657,7 +18270,8 @@ class DesktopPet:
         if scene == self.app_scene and signature == self.app_scene_sig:
             if scene in ("game", "video") and self.state == "scene_rest":
                 return
-            if scene == "music" and self.music_sprite_mode:
+            # 已在跟听：同签名续命。面板手动音乐需落到下方，切成只听软件。
+            if scene == "music" and self.music_sprite_mode and self.music_ambient_only:
                 return
         prev = self.app_scene
         prev_sig = self.app_scene_sig
@@ -17698,38 +18312,22 @@ class DesktopPet:
         if prev_colors is not None and tuple(prev_colors) == tuple(new_colors):
             new_colors = _music_wave_colors_random(seed=f"{signature}|alt")
         self._ambient_wave_colors = new_colors
+        # 已在面板手动音乐：强制切跟听（停内部，只控外部）
         if self.music_sprite_mode and not self.music_ambient_only:
-            self.app_scene = "music"
-            self.app_scene_fx_on = True
-            self._mark_app_scene_entered()
-            self._start_music_wave_fx(force_rebuild=False)
-            self._sync_music_wave_to_playback()
+            self._engage_music_ambient_follow(
+                signature, toast="检测到音乐 · 已切跟听（外部）"
+            )
             return
         if self.music_sprite_mode and self.music_ambient_only:
-            self.app_scene = "music"
-            self.app_scene_fx_on = True
-            self._mark_app_scene_entered()
-            # 切歌换色：动画帧会读 _ambient_wave_colors，无需毁窗重建
-            self._start_music_wave_fx(force_rebuild=False)
-            self._sync_music_wave_to_playback()
+            self._engage_music_ambient_follow(signature, toast="")
             return
         if self._scene_busy_for_app():
             return
-        self._yield_to_app_scene(keep_menu_music=True)
+        self._yield_to_app_scene(keep_menu_music=False)
         self.mode = "stroll"
         self.state = "stand"
-        self.music_sprite_mode = True
-        self.music_ambient_only = True
-        self.app_scene = "music"
-        self.app_scene_fx_on = True
-        self._mark_app_scene_entered()
-        self._stop_voice_for_music_mode()
-        self._stop_bg_music()
-        self._set_image(self._current_stand_sprite())
         self._resume_idle()
-        self._start_music_wave_fx(force_rebuild=False)
-        self._sync_music_wave_to_playback()
-        self._show_toast("检测到音乐", "#88ccff", duration_ms=1800)
+        self._engage_music_ambient_follow(signature, toast="检测到音乐 · 跟听外部")
 
     def _enter_app_game_scene(self) -> None:
         if self._scene_busy_for_app() and self.app_scene != "game":
@@ -17741,6 +18339,7 @@ class DesktopPet:
         self.app_scene = "game"
         self.app_scene_fx_on = True
         self._mark_app_scene_entered()
+        self._stop_internal_playback_for_app_scene()
         self.mode = "stroll"
         self.state = "scene_rest"
         self.rest_base_y = self.y
@@ -17758,12 +18357,14 @@ class DesktopPet:
             self._schedule_app_scene_frame_tick()
             if not getattr(self, "rest_bobble_job", None):
                 self._schedule_rest_bobble()
+            self._stop_internal_playback_for_app_scene()
             return
         self._yield_to_app_scene(keep_menu_music=False)
         self._stop_idle_jobs_for_scene()
         self.app_scene = "video"
         self.app_scene_fx_on = True
         self._mark_app_scene_entered()
+        self._stop_internal_playback_for_app_scene()
         self.mode = "stroll"
         self.state = "scene_rest"
         self.rest_base_y = self.y
@@ -18159,7 +18760,9 @@ class DesktopPet:
             list_btn.config(bg=MENU_ACTIVE if mode == "list" else MENU_BG)
             random_btn.config(bg=MENU_ACTIVE if mode == "random" else MENU_BG)
             path_label.config(text=self._music_path_label())
-            if self.bg_music_playing or self.music_sprite_mode:
+            if self.bg_music_playing or (
+                self.music_sprite_mode and not bool(getattr(self, "music_ambient_only", False))
+            ):
                 self._stop_bg_music()
                 self._start_bg_music()
 
@@ -18321,7 +18924,9 @@ class DesktopPet:
                     refresh_playlist_label()
             except Exception:
                 pass
-            if self.bg_music_playing or self.music_sprite_mode:
+            if self.bg_music_playing or (
+                self.music_sprite_mode and not bool(getattr(self, "music_ambient_only", False))
+            ):
                 self._stop_bg_music()
                 self._start_bg_music()
 
@@ -21654,7 +22259,12 @@ class DesktopPet:
                     "long_topic": str(plan.get("long_topic") or plan.get("mood_topic") or ""),
                     "mood_emote": str(plan.get("mood_emote") or plan.get("emote_open") or ""),
                     "emote_open": str(plan.get("emote_open") or plan.get("mood_emote") or ""),
+                    "emote1": str(plan.get("emote1") or ""),
+                    "emote2": str(plan.get("emote2") or ""),
+                    "style": str(plan.get("style") or ""),
+                    "talk_style": str(plan.get("style") or ""),
                     "mid_lines": list(plan.get("mid_lines") or []),
+                    "mid_emotes": list(plan.get("mid_emotes") or []),
                     "topic_editable": bool(plan.get("topic_editable", True)),
                     "garble_left": int(plan.get("garble_left") or 0),
                     "dialog_step": 0,
@@ -22107,15 +22717,17 @@ class DesktopPet:
     def _stop_crossover_stroll(self, *, clear_session: bool = False) -> None:
         self._crossover_stroll_active = False
         self._crossover_stroll_peer_id = ""
-        if self._crossover_stroll_job:
+        stroll_job = getattr(self, "_crossover_stroll_job", None)
+        if stroll_job:
             try:
-                self.root.after_cancel(self._crossover_stroll_job)
+                self.root.after_cancel(stroll_job)
             except Exception:
                 pass
             self._crossover_stroll_job = None
-        if self._crossover_chat_job:
+        chat_job = getattr(self, "_crossover_chat_job", None)
+        if chat_job:
             try:
-                self.root.after_cancel(self._crossover_chat_job)
+                self.root.after_cancel(chat_job)
             except Exception:
                 pass
             self._crossover_chat_job = None
@@ -22598,6 +23210,14 @@ class DesktopPet:
                 )
             except Exception:
                 pass
+            try:
+                self._crossover_maybe_talk_emote(
+                    line1,
+                    session=session,
+                    preferred=str(session.get("emote1") or ""),
+                )
+            except Exception:
+                pass
             self._crossover_dialogue_said_step = 1
             if talk_mode == "tell":
                 try:
@@ -22700,6 +23320,14 @@ class DesktopPet:
                     )
                 except Exception:
                     pass
+                try:
+                    self._crossover_maybe_talk_emote(
+                        line2,
+                        session=session,
+                        preferred=str(session.get("emote2") or ""),
+                    )
+                except Exception:
+                    pass
                 self._crossover_dialogue_said_step = 2
                 until = int(getattr(self, "_peer_speech_until_ms", 0) or now_ms + hide_ms)
                 peer_friendship.merge_session(
@@ -22745,6 +23373,14 @@ class DesktopPet:
                         instant=True,
                         from_meet=True,
                         bubble_tone="cyan",
+                    )
+                except Exception:
+                    pass
+                try:
+                    self._crossover_maybe_talk_emote(
+                        line2,
+                        session=session,
+                        preferred=str(session.get("emote2") or ""),
                     )
                 except Exception:
                     pass
@@ -23303,6 +23939,50 @@ class DesktopPet:
         except Exception:
             pass
 
+    def _crossover_maybe_talk_emote(
+        self,
+        line: str = "",
+        *,
+        session: dict | None = None,
+        force: bool = False,
+        chance: float | None = None,
+        preferred: str = "",
+    ) -> None:
+        """说话时附带轻表情：乱码更高频，普通对话也会常出。"""
+        try:
+            sess = session if isinstance(session, dict) else {}
+            style = str(sess.get("talk_style") or sess.get("style") or "")
+            talk_mode = str(sess.get("talk_mode") or "")
+            try:
+                garbled = bool(peer_friendship.looks_like_garbled_line(line)) or style == "garble"
+            except Exception:
+                garbled = style == "garble"
+            pref = str(preferred or "").strip()
+            if chance is None:
+                chance = 0.92 if (garbled or pref) else 0.58
+            if pref:
+                force = True
+            if not force and random.random() > float(chance):
+                return
+            now = int(time.time() * 1000)
+            last = int(getattr(self, "_crossover_talk_emote_ms", 0) or 0)
+            gap = 580 if garbled else 980
+            if now - last < gap and not force:
+                return
+            try:
+                emote = peer_friendship.pick_talk_line_emote(
+                    garbled=garbled,
+                    style=style,
+                    talk_mode=talk_mode,
+                    preferred=pref,
+                )
+            except Exception:
+                emote = pref or ("awkward" if garbled else "like")
+            self._crossover_talk_emote_ms = now
+            self._crossover_soft_emote(emote)
+        except Exception:
+            pass
+
     def _ensure_crossover_long_mid_tick(self) -> None:
         """保证中段 tick 只挂一条 after，避免 stroll 每帧重入造成死循环。"""
         job = getattr(self, "_crossover_long_mid_job", None)
@@ -23493,13 +24173,20 @@ class DesktopPet:
             )
         except Exception:
             pass
-        if mid_turn in (0, 2) and str(session.get("emote_open") or session.get("mood_emote") or "").strip():
-            try:
-                self._crossover_play_scene_emote(
-                    str(session.get("emote_open") or session.get("mood_emote") or "")
-                )
-            except Exception:
-                pass
+        # 乱码中段：几乎每句都跟表情
+        try:
+            mid_emotes = session.get("mid_emotes") if isinstance(session.get("mid_emotes"), list) else []
+            preferred = ""
+            if mid_turn < len(mid_emotes):
+                preferred = str(mid_emotes[mid_turn] or "").strip()
+            self._crossover_maybe_talk_emote(
+                line,
+                session={**session, "style": "garble"},
+                preferred=preferred,
+                chance=0.95,
+            )
+        except Exception:
+            pass
         left_n = max(0, garble_left - 1)
         try:
             peer_friendship.merge_session(
@@ -25046,6 +25733,7 @@ class DesktopPet:
         _scroll_arm_canvas(wrap, canvas)
 
         def pick(tid: str) -> None:
+            self._cancel_music_picker_preview(resume=False)
             try:
                 win.destroy()
             except Exception:
@@ -25054,6 +25742,7 @@ class DesktopPet:
             on_pick(tid)
 
         def rebuild_grid() -> None:
+            self._cancel_music_picker_preview(resume=False)
             for child in grid.winfo_children():
                 try:
                     child.destroy()
@@ -25084,7 +25773,7 @@ class DesktopPet:
                 name = str(track["title"])
                 if len(name) > 14:
                     name = name[:13] + "…"
-                tk.Label(
+                name_lbl = tk.Label(
                     cell,
                     text=name,
                     font=_ui_title_font(8),
@@ -25092,9 +25781,11 @@ class DesktopPet:
                     bg="#f4f4f4",
                     wraplength=88,
                     justify=tk.CENTER,
-                ).pack(pady=(2, 0))
+                )
+                name_lbl.pack(pady=(2, 0))
                 for wdg in (cell, btn):
                     wdg.bind("<Button-1>", lambda _e, t=tid: pick(t))
+                self._bind_music_picker_hover_preview((cell, btn, name_lbl), tid)
             for c in range(MUSIC_PICKER_COLS):
                 grid.grid_columnconfigure(c, weight=1)
             on_configure()
@@ -25124,6 +25815,7 @@ class DesktopPet:
         rebuild_grid()
 
         def on_close() -> None:
+            self._cancel_music_picker_preview(resume=True)
             while canvas in _SCROLL_WHEEL_STACK:
                 try:
                     _SCROLL_WHEEL_STACK.remove(canvas)
@@ -25238,6 +25930,7 @@ class DesktopPet:
 
         def rebuild_grid() -> None:
             nonlocal visible_ids
+            self._cancel_music_picker_preview(resume=False)
             for child in grid.winfo_children():
                 try:
                     child.destroy()
@@ -25283,6 +25976,7 @@ class DesktopPet:
                 label_refs[tid] = name_lbl
                 for wdg in (cell, name_lbl):
                     wdg.bind("<Button-1>", lambda _e, t=tid: toggle(t))
+                self._bind_music_picker_hover_preview((cell, btn, name_lbl), tid)
             for c in range(MUSIC_PICKER_COLS):
                 grid.grid_columnconfigure(c, weight=1)
             refresh_count()
@@ -25360,6 +26054,7 @@ class DesktopPet:
         tk.Button(foot, text="确定", command=confirm, font=PIXEL_FONT, bg=MENU_ACTIVE, fg=MENU_FG).pack(side=tk.RIGHT)
 
         def on_close() -> None:
+            self._cancel_music_picker_preview(resume=True)
             while canvas in _SCROLL_WHEEL_STACK:
                 try:
                     _SCROLL_WHEEL_STACK.remove(canvas)
@@ -26257,10 +26952,6 @@ class DesktopPet:
         self._restore_mini_pets_after_gather()
         try:
             self._stop_overlay_bgm(reason="gather")
-        except Exception:
-            pass
-        try:
-            self._maybe_start_chest_wait_bgm()
         except Exception:
             pass
 
@@ -27232,14 +27923,17 @@ class DesktopPet:
         controls_armed: bool = False,
         with_media: bool = False,
         show_timer_face: bool = True,
+        media_external: bool = False,
         on_done=None,
     ) -> None:
         """kind: stopwatch | countdown。force=工具打开时无视显示开关。
         with_controls：秒表/计时器/番茄 显示 ⏸▶⏹。
         controls_armed：有控件但开局即走（番茄工作/休息）；否则等点 ▶。
         with_media：音乐模式下方 ⏮ ⏯ ⏭ ⏹（⏹ 结束回自由）。
-        show_timer_face：是否显示秒表数字/绕圈小人；关「时间显示」时音乐可仅留媒体键。"""
+        show_timer_face：是否显示秒表数字/绕圈小人；关「时间显示」时音乐可仅留媒体键。
+        media_external：环境跟听时控外部软件（不播内部曲）。"""
         show_face = bool(show_timer_face)
+        external = bool(media_external)
         # 音乐媒体栏在关时间显示时仍要建（仅无秒表面）
         if (
             not force
@@ -27252,8 +27946,10 @@ class DesktopPet:
         now = int(time.time() * 1000)
         if slot == "sleep":
             self._sleep_session_start_ms = now
-        elif slot == "music":
+        elif slot == "music" and not external:
             self._music_session_start_ms = now
+        elif slot == "music" and external:
+            self._music_session_start_ms = 0
         m = self._desk_clock_metrics()
         pad = int(m["pad"])
         inner_w, inner_h = int(m["inner_w"]), int(m["inner_h"])
@@ -27316,6 +28012,7 @@ class DesktopPet:
             "with_controls": bool(with_controls),
             "with_media": bool(with_media),
             "show_timer_face": show_face,
+            "media_external": external,
             "controls_armed": bool(controls_armed),
             "force": bool(force),
             "running": running,
@@ -27353,17 +28050,25 @@ class DesktopPet:
             mf.pack(fill=tk.X, padx=6, pady=(0, 4))
             mid = tk.Frame(mf, bg=clock_chrome)
             mid.pack(anchor=tk.CENTER)
+            prev_tip = "上一首（外部）" if external else "上一首"
+            next_tip = "下一首（外部）" if external else "下一首"
+            play_tip = "播放/暂停（外部）" if external else "播放/暂停"
+            stop_tip = "结束跟听 · 回自由" if external else "结束音乐 · 回自由"
             self._icon_transport_btn(
                 mid, "⏮", self._bg_music_prev_track,
-                tip="上一首", font=btn_font, tone="orange",
+                tip=prev_tip, font=btn_font, tone="orange",
                 transparency=glass, key_chrome=clock_chrome,
             ).pack(side=tk.LEFT, padx=3)
-            play_glyph = "▶" if getattr(self, "bg_music_user_paused", False) else "⏸"
+            play_glyph = (
+                "⏯"
+                if external
+                else ("▶" if getattr(self, "bg_music_user_paused", False) else "⏸")
+            )
             play_btn = self._icon_transport_btn(
                 mid,
                 play_glyph,
                 self._bg_music_toggle_pause,
-                tip="播放/暂停",
+                tip=play_tip,
                 font=btn_font,
                 tone="pink",
                 transparency=glass,
@@ -27373,12 +28078,12 @@ class DesktopPet:
             info["media_play_btn"] = play_btn
             self._icon_transport_btn(
                 mid, "⏭", self._bg_music_next_track,
-                tip="下一首", font=btn_font, tone="green",
+                tip=next_tip, font=btn_font, tone="green",
                 transparency=glass, key_chrome=clock_chrome,
             ).pack(side=tk.LEFT, padx=3)
             self._icon_transport_btn(
                 mid, "⏹", self._apply_music_off,
-                tip="结束音乐 · 回自由", font=btn_font, tone="purple",
+                tip=stop_tip, font=btn_font, tone="purple",
                 transparency=glass, key_chrome=clock_chrome,
             ).pack(side=tk.LEFT, padx=(8, 3))
 
@@ -27471,7 +28176,12 @@ class DesktopPet:
         try:
             if not btn.winfo_exists():
                 return
-            btn.config(text="▶" if getattr(self, "bg_music_user_paused", False) else "⏸")
+            if bool(info.get("media_external")) or bool(
+                getattr(self, "music_ambient_only", False)
+            ):
+                btn.config(text="⏯")
+            else:
+                btn.config(text="▶" if getattr(self, "bg_music_user_paused", False) else "⏸")
         except Exception:
             pass
 
@@ -27766,6 +28476,7 @@ class DesktopPet:
                     "controls_armed": bool(info.get("controls_armed")),
                     "with_media": bool(info.get("with_media")),
                     "show_timer_face": bool(info.get("show_timer_face", True)),
+                    "media_external": bool(info.get("media_external")),
                     "on_done": info.get("on_done"),
                     "running": bool(info.get("running")),
                     "accum_ms": accum,
@@ -27804,6 +28515,7 @@ class DesktopPet:
                 controls_armed=False,  # 先不自动跑，恢复 accum 后再决定
                 with_media=bool(snap["with_media"]),
                 show_timer_face=bool(snap.get("show_timer_face", True)),
+                media_external=bool(snap.get("media_external")),
                 on_done=snap["on_done"],
             )
             info = self._desk_clocks.get(slot)
@@ -27846,14 +28558,18 @@ class DesktopPet:
         else:
             self._hide_desk_clock("sleep")
 
-        # 音乐：时间显示关只去掉秒表面，媒体键 ⏮⏯⏭⏹ 必须保留
+        # 音乐栏：
+        # - 手动音乐：播内部曲；「时间显示」开才出秒表数字/小人，关则只留控歌键
+        # - 环境检测：切图跟听、无秒表；控歌键控外部软件，不播内部曲
         if getattr(self, "music_sprite_mode", False):
-            want_face = show
+            ambient = bool(getattr(self, "music_ambient_only", False))
+            want_face = bool(show) and not ambient
             info = self._desk_clocks.get("music")
             active = self._desk_clock_active("music")
             face_ok = bool(info and bool(info.get("show_timer_face", True)) == want_face)
             media_ok = bool(info and info.get("with_media"))
-            if not active or not media_ok or not face_ok:
+            ambient_ok = bool(info and bool(info.get("media_external", False)) == ambient)
+            if not active or not media_ok or not face_ok or not ambient_ok:
                 music_sess = int(getattr(self, "_music_session_start_ms", 0) or 0)
                 wx = wy = None
                 if active and info:
@@ -27872,17 +28588,22 @@ class DesktopPet:
                     force=True,
                     with_media=True,
                     show_timer_face=want_face,
+                    media_external=ambient,
                 )
-                if music_sess > 0:
+                if (not ambient) and music_sess > 0:
                     self._music_session_start_ms = music_sess
+                elif ambient:
+                    self._music_session_start_ms = 0
                 info2 = self._desk_clocks.get("music")
                 if info2 and wx is not None and wy is not None:
                     try:
                         info2["win"].geometry(f"+{wx}+{wy}")
                     except Exception:
                         pass
+                self._refresh_music_media_play_btn()
             else:
                 self._ensure_desk_clock_on_screen("music")
+                self._refresh_music_media_play_btn()
         else:
             self._hide_desk_clock("music")
 
@@ -28440,6 +29161,18 @@ class DesktopPet:
         subtitle = f"接取 {catches} 个 · 得分 {score}\n错过 {misses}  ·  库存 {self._food_inventory_total()}\n{detail}"
         if coin_gain > 0:
             subtitle += f"\n金币 +{coin_gain}"
+        failed = misses >= catches or catches <= 0
+        if failed:
+            try:
+                _play_ui_sfx("game_fail", volume=0.58)
+            except Exception:
+                pass
+        else:
+            # 与音游等胜利相同：游戏成功音效 + bgm004，不用 bgm008
+            try:
+                self._play_game_victory_fanfare()
+            except Exception:
+                pass
         self._show_game_clear(
             title="采集完成",
             subtitle=subtitle,
@@ -28447,7 +29180,7 @@ class DesktopPet:
             on_done=self._resume_idle,
         )
         # 差劲：错过 ≥ 接住，或整局 0 接（与结算画面并存，hurt 仅附加）
-        if misses >= catches or catches <= 0:
+        if failed:
             self._play_game_fail_voice("hurt")
 
     def _hide_game_clear(self) -> None:
@@ -35104,7 +35837,7 @@ class DesktopPet:
         except Exception:
             pass
         try:
-            self._start_overlay_bgm(GAME_BGM_DIARY, reason="diary")
+            self._start_overlay_bgm(GAME_BGM_DIARY, reason="diary", force=True)
         except Exception:
             pass
         _, frame = _pack_fixed_scroll_panel(
@@ -35455,6 +36188,10 @@ class DesktopPet:
                     )
                 else:
                     mid()
+                try:
+                    self._reassert_panel_overlay_bgm()
+                except Exception:
+                    pass
 
             try:
                 self._open_diary_page_studio(
@@ -35464,6 +36201,10 @@ class DesktopPet:
                     mood_face=pick["mood_face"],
                     on_saved=on_saved,
                 )
+                try:
+                    self._reassert_panel_overlay_bgm()
+                except Exception:
+                    pass
             except Exception as exc:
                 tip = str(exc).strip().replace("\n", " ")[:80] or type(exc).__name__
                 self._show_toast(f"打开日记页失败：{tip}", "#ff8866", duration_ms=3200)
@@ -35495,7 +36236,16 @@ class DesktopPet:
         self.diary_win = None
         self.diary_photos = []
         try:
+            self._cancel_panel_overlay_bgm_watch()
+        except Exception:
+            pass
+        try:
             self._stop_overlay_bgm(reason="diary")
+        except Exception:
+            pass
+        # 若装扮仍开着，把场景曲拉回装扮
+        try:
+            self._reassert_panel_overlay_bgm()
         except Exception:
             pass
 
@@ -36365,10 +37115,8 @@ class DesktopPet:
                 self._overlay_bgm_resume = snap
             reason = str(ov.get("reason") or "")
             if reason == "chest_wait":
-                try:
-                    self._maybe_start_chest_wait_bgm()
-                except Exception:
-                    pass
+                # bgm008 已停用，不恢复待开箱配乐
+                self._overlay_bgm_resume = None
                 return
             if reason == "home":
                 try:
@@ -36418,7 +37166,9 @@ class DesktopPet:
                 # 对应界面若已关，不自动续播
                 self._overlay_bgm_resume = None
                 return
-        if paused and getattr(self, "music_sprite_mode", False):
+        if paused and getattr(self, "music_sprite_mode", False) and not bool(
+            getattr(self, "music_ambient_only", False)
+        ):
             try:
                 self._start_bg_music()
             except Exception:
@@ -36562,24 +37312,26 @@ class DesktopPet:
 
         if kind == "file":
             path = entry.get("path")
-            if path is None or not Path(path).exists():
-                self._show_toast("找不到音频文件", "#ff8844")
-                self._stop_phonograph_playback()
-                return
-            play_path = Path(path)
+            play_path = Path(path) if path else None
             # 内置曲：走与音乐模式相同的可播路径（cache / 源文件）
-            if entry_id.startswith("builtin:music:"):
+            tid = str(entry.get("track_id") or "").strip()
+            if not tid and entry_id.startswith("builtin:music:"):
                 tid = entry_id.split(":", 2)[-1]
+            if tid:
                 resolved = _music_playable_path(tid)
                 if resolved is not None and resolved.exists():
                     play_path = resolved
-            elif play_path.suffix.lower() not in (".wav", ".wave", ".ogg", ".mp3"):
+            if play_path is None or not play_path.exists():
+                self._show_toast("找不到音频文件", "#ff8844")
+                self._stop_phonograph_playback()
+                return
+            if (not tid) and play_path.suffix.lower() not in (".wav", ".wave", ".ogg", ".mp3"):
                 converted = _ensure_audio_wav(play_path, play_path.with_suffix(".wav"))
                 if converted is not None:
                     play_path = converted
             duration_ms = _get_audio_duration_ms(play_path)
             try:
-                _load_and_play(play_path, category)
+                _load_and_play(play_path, "music" if tid else category)
             except Exception as exc:
                 tip = str(exc).strip().replace("\n", " ")[:60] or type(exc).__name__
                 self._show_toast(f"播放失败：{tip}", "#ff6666")
@@ -36724,7 +37476,17 @@ class DesktopPet:
     def _format_phonograph_duration(self, entry: dict) -> str:
         kind = str(entry.get("kind", "file"))
         if kind == "file":
-            path = entry.get("path")
+            tid = str(entry.get("track_id") or "").strip()
+            eid = str(entry.get("id") or "")
+            if not tid and eid.startswith("builtin:music:"):
+                tid = eid.split(":", 2)[-1]
+            path = None
+            if tid:
+                path = _music_playable_path(tid) or _peek_music_track_audio(tid)
+            if path is None:
+                raw = entry.get("path")
+                if raw and Path(raw).exists():
+                    path = Path(raw)
             if path and Path(path).exists():
                 ms = _get_audio_duration_ms(Path(path))
                 if ms > 0:
@@ -38270,14 +39032,8 @@ class DesktopPet:
             win_grade = grade not in ("D", "C")
             fanfare_ms = 0.0
             if win_grade:
-                _play_ui_sfx("game_success", volume=0.58)
                 try:
-                    fanfare_ms = float(
-                        self._play_short_bgm_clip(
-                            GAME_BGM_RHYTHM_WIN, clip_sec=GAME_BGM_RHYTHM_WIN_SEC
-                        )
-                        or 0
-                    )
+                    fanfare_ms = float(self._play_game_victory_fanfare() or 0)
                 except Exception:
                     fanfare_ms = 0.0
             else:
@@ -43199,7 +43955,7 @@ class DesktopPet:
         self._finish_expression()
 
     def _play_expression_pop(self, *, times: int = 1) -> None:
-        """表情轻弹（click_bounce_offset）。默认 1 次；伤心/生气传 times=3；无语传 0 跳过。"""
+        """表情轻弹（click_bounce_offset）。默认 1 次；伤心/生气传 times=3。"""
         times = int(times)
         if times <= 0:
             return
@@ -43218,14 +43974,43 @@ class DesktopPet:
         self._expression_bounce_tok = self.interaction_token
         self._expression_bounce_up()
 
+    def _schedule_expression_bounce(self, name: str, *, delay_ms: int = 20) -> None:
+        """切图/特效后再弹，避免完整 place/lift 冲掉首帧。"""
+        times = self._expression_bounce_times(name)
+        if times <= 0:
+            return
+        tok = self.interaction_token
+
+        def _go(expected: int = tok, n: int = times) -> None:
+            if expected != self.interaction_token:
+                return
+            self._play_expression_pop(times=n)
+
+        try:
+            self.root.after(max(0, int(delay_ms)), _go)
+        except Exception:
+            self._play_expression_pop(times=times)
+
     def _expression_bounce_times(self, name: str) -> int:
-        """按表情名返回弹动次数：无语 0；开心/伤心/生气 3；其余 1。"""
+        """按表情名返回弹动次数：开心/伤心/生气 3；其余一律 1。"""
         key = str(name or "").strip().lower()
         if key in EXPRESSION_BOUNCE_SKIP:
             return 0
         if key in EXPRESSION_BOUNCE_TRIPLE:
             return 3
         return 1
+
+    def _place_expression_bounce_frame(self) -> None:
+        """只移立绘（同开心）；旁效不跟、也不 lift，避免冲掉弹动观感。"""
+        self._place_window(light=True)
+        try:
+            self._place_sleep_zzz()
+        except Exception:
+            pass
+        try:
+            self._place_ai_chat()
+        except Exception:
+            pass
 
     def _expression_bounce_up(self) -> None:
         if int(getattr(self, "_expression_bounce_tok", 0) or 0) != self.interaction_token:
@@ -43236,9 +44021,7 @@ class DesktopPet:
             return
         self.click_bouncing = True
         self.click_bounce_offset = -EXPRESSION_BOUNCE_PX
-        self._place_window()
-        self._place_sleep_zzz()
-        self._place_ai_chat()
+        self._place_expression_bounce_frame()
         tok = self._expression_bounce_tok
         self.expression_bounce_job = self.root.after(
             EXPRESSION_BOUNCE_MS, lambda t=tok: self._expression_bounce_down_guarded(t)
@@ -43254,9 +44037,7 @@ class DesktopPet:
         if int(getattr(self, "_expression_bounce_tok", 0) or 0) != self.interaction_token:
             return
         self.click_bounce_offset = 0
-        self._place_window()
-        self._place_sleep_zzz()
-        self._place_ai_chat()
+        self._place_expression_bounce_frame()
         left = int(getattr(self, "_expression_bounce_left", 0) or 0) - 1
         self._expression_bounce_left = left
         if left <= 0:
@@ -43401,7 +44182,7 @@ class DesktopPet:
             )
 
     def _play_expression_shy(self) -> None:
-        if self.dragging or self.state == "work" or self._app_scene_blocks_actions():
+        if self.dragging or self.state == "work":
             return
         # 睡眠中可被点红：先打断睡眠链路，结束后若仍是睡眠模式会回到 rest
         was_quiet = self.mode == "quiet"
@@ -43468,16 +44249,16 @@ class DesktopPet:
 
     def _play_expression_bixin(self) -> None:
         """站姿比心：胸口涌出爱心并不断放大，传向屏幕前的使用者。"""
-        if self.dragging or self.state == "work" or self._app_scene_blocks_actions():
+        if self.dragging or self.state == "work":
             return
         self._interrupt_current_interaction()
         self.state = "action"
         self.action_name = "bixin"
         self.bixin_fx_started_ms = int(time.time() * 1000)
         self._interact_flair("bixin", banter=True)
-        self._play_expression_pop()
         self._set_image(self.sprites.stand)
         self._show_bixin_fx()
+        self._schedule_expression_bounce("bixin")
         self._schedule_action_end(
             action="bixin",
             duration_ms=BIXIN_DURATION_MS,
@@ -43493,7 +44274,7 @@ class DesktopPet:
         self._play_like_or_wink("wink", self.sprites.wink)
 
     def _play_like_or_wink(self, name: str, sprite: ImageTk.PhotoImage) -> None:
-        if self.dragging or self.state == "work" or self._app_scene_blocks_actions():
+        if self.dragging or self.state == "work":
             return
         self._interrupt_current_interaction()
         self.state = "action"
@@ -43508,8 +44289,8 @@ class DesktopPet:
             self._play_wink_bounce()
             self._show_wink_fx()
         else:
-            self._play_expression_pop(times=self._expression_bounce_times("like"))
             self._show_like_fx()
+            self._schedule_expression_bounce("like")
         self._schedule_action_end(
             action=name,
             duration_ms=WINK_DURATION_MS,
@@ -43572,14 +44353,14 @@ class DesktopPet:
         self._after_wink_or_like()
 
     def _play_expression_sprite(self, name: str, sprite: ImageTk.PhotoImage, *, banter: bool = True) -> None:
-        if self.dragging or self.state == "work" or self._app_scene_blocks_actions():
+        if self.dragging or self.state == "work":
             return
         self._interrupt_current_interaction()
         self.state = "action"
         self.action_name = name
         self._interact_flair(name, banter=banter)
-        self._play_expression_pop()
         self._set_image(sprite)
+        self._schedule_expression_bounce(name)
         self._schedule_action_end(action=name, callback=self._after_simple_expression)
 
     def _play_yesno_judge(self) -> None:
@@ -43656,7 +44437,7 @@ class DesktopPet:
         self.angry_lift_offset = 0
         self.angry_walk_phase = False
         self._interact_flair("angry", banter=True)
-        self._play_expression_pop(times=self._expression_bounce_times("angry"))
+        self._schedule_expression_bounce("angry")
         self._angry_anim_step(0)
 
     def _angry_anim_step(self, step: int) -> None:
@@ -44429,8 +45210,8 @@ class DesktopPet:
         self.sad_phase = "squat"
         self._interact_flair("sad", banter=True)
         self._set_image(self.sprites.actions["squat"][0])
-        self._play_expression_pop(times=self._expression_bounce_times("sad"))
         self._show_rain_fx()
+        self._schedule_expression_bounce("sad")
         tok = self.interaction_token
         self.root.after(SAD_SQUAT_MS, lambda t=tok: self._sad_phase_sad1(t))
         self._schedule_action_end(
@@ -44471,7 +45252,7 @@ class DesktopPet:
         self._interact_flair("idea", banter=False)
         self._set_image(self.sprites.stand)
         self._show_bulb_fx()
-        self._play_expression_pop(times=self._expression_bounce_times("idea"))
+        self._schedule_expression_bounce("idea")
         self.root.after(IDEA_STAND_MS, self._idea_to_eat2)
 
     def _idea_to_eat2(self) -> None:
@@ -44505,7 +45286,7 @@ class DesktopPet:
         return photo
 
     def _play_expression(self, name: str) -> None:
-        if self.dragging or self._app_scene_blocks_actions():
+        if self.dragging:
             return
         sticker_kinds = {
             "angry": "angry",
@@ -44529,8 +45310,8 @@ class DesktopPet:
             self._show_sweat_fx()
         else:
             self._set_image(self._stand_with_sticker(sticker_kinds[name]))
-        # 无语不弹；尴尬/疑惑等弹一下（须在切图/特效之后，避免被 place 冲掉观感）
-        self._play_expression_pop(times=self._expression_bounce_times(name))
+        # 开心走专用弹；生气/伤心=3；其余（疑惑/无语/尴尬等）弹 1
+        self._schedule_expression_bounce(name)
         self._schedule_action_end(action=name, callback=self._after_expression)
 
     def _finish_expression(self) -> None:
@@ -45414,7 +46195,7 @@ class DesktopPet:
 
     def _open_preset_dialog_menu(self) -> None:
         self._cancel_preset_dialog_return()
-        self._start_overlay_bgm(GAME_BGM_PRESET_DIALOG, reason="preset_dialog")
+        # 普通对话不切 BGM：仅指定模式（装扮/家园/音乐等）才播叠层曲
         setattr(self, "_preset_dialog_session", False)
         # self_close：先点子菜单再播，避免 hide_main_menu 把配乐掐掉再重开
         items = [
@@ -45426,7 +46207,6 @@ class DesktopPet:
     def _play_preset_dialog(self, question: str, answers: tuple[str, ...]) -> None:
         self._cancel_preset_dialog_return()
         setattr(self, "_preset_dialog_session", True)
-        self._start_overlay_bgm(GAME_BGM_PRESET_DIALOG, reason="preset_dialog")
         self._hide_main_menu()
         if self.preset_dialog_job:
             try:
@@ -47758,6 +48538,7 @@ class DesktopPet:
             self._voice_subtitle_active = True
             self._speech_from_voice = True
         else:
+            # 其它文本优先：先停语音文本框，再开本对话框
             self._hide_voice_subtitle()
             self._hide_speech_dialog()
             self._speech_from_voice = False
@@ -48352,7 +49133,7 @@ class DesktopPet:
         # 编辑时仍显示已烘焙的佩戴（在立绘上）
         self._sync_outfit_layer(force_redraw=False)
         try:
-            self._start_overlay_bgm(GAME_BGM_OUTFIT, reason="outfit")
+            self._start_overlay_bgm(GAME_BGM_OUTFIT, reason="outfit", force=True)
         except Exception:
             pass
 
@@ -49049,6 +49830,11 @@ class DesktopPet:
             )
             # 立刻贴到身上（编辑窗仍开着也可看）
             self._sync_outfit_layer(force_redraw=True)
+            # 窗未关：装扮 BGM 必须继续循环，保存佩戴不得掐断
+            try:
+                self._reassert_panel_overlay_bgm()
+            except Exception:
+                pass
             try:
                 self.root.after(50, self._resume_idle)
             except Exception:
@@ -49068,15 +49854,36 @@ class DesktopPet:
             self._save_outfit_decors([])
             self._show_toast("已清空装扮", "#ffcc66", duration_ms=1400)
             try:
+                self._reassert_panel_overlay_bgm()
+            except Exception:
+                pass
+            try:
                 self.root.after(50, self._resume_idle)
             except Exception:
                 self._resume_idle()
 
         def close_editor() -> None:
+            # 装扮结束：停掉叠层曲，绝不自动续播歌单 / 宝箱曲（含 bgm008）
             try:
-                self._stop_overlay_bgm(reason="outfit")
+                self._cancel_panel_overlay_bgm_watch()
             except Exception:
                 pass
+            try:
+                self._stop_overlay_bgm(reason="outfit", resume=False)
+            except Exception:
+                pass
+            try:
+                self._overlay_bgm_resume = None
+            except Exception:
+                pass
+            try:
+                import pygame
+
+                if pygame.mixer.get_init():
+                    pygame.mixer.music.stop()
+            except Exception:
+                pass
+            self.bg_music_playing = False
             try:
                 win.destroy()
             except Exception:
@@ -49225,8 +50032,11 @@ class DesktopPet:
         return "dialog"
 
     def _pause_bg_music_for_call(self) -> None:
-        if self.bg_music_playing:
+        overlay_on = bool(getattr(self, "_overlay_bgm_active", False))
+        if self.bg_music_playing or overlay_on:
             self.bg_music_paused_for_call = True
+            if overlay_on:
+                setattr(self, "_overlay_bgm_paused_for_call", True)
             self._cancel_affinity_tick()
             try:
                 import pygame
@@ -49293,6 +50103,16 @@ class DesktopPet:
                 pygame.mixer.music.stop()
         except Exception:
             pass
+        if self.bg_music_paused_for_call and getattr(self, "_overlay_bgm_paused_for_call", False):
+            self.bg_music_paused_for_call = False
+            setattr(self, "_overlay_bgm_paused_for_call", False)
+            tid = str(getattr(self, "_overlay_bgm_track", "") or "")
+            if tid and bool(getattr(self, "_overlay_bgm_active", False)):
+                try:
+                    self._bg_music_play_track(tid, single_loop=True)
+                except Exception:
+                    pass
+            return
         if self.bg_music_paused_for_call and self.music_sprite_mode:
             self.bg_music_paused_for_call = False
             self._start_bg_music()
@@ -49317,6 +50137,16 @@ class DesktopPet:
                 pygame.mixer.music.stop()
         except Exception:
             pass
+        if self.bg_music_paused_for_call and getattr(self, "_overlay_bgm_paused_for_call", False):
+            self.bg_music_paused_for_call = False
+            setattr(self, "_overlay_bgm_paused_for_call", False)
+            tid = str(getattr(self, "_overlay_bgm_track", "") or "")
+            if tid and bool(getattr(self, "_overlay_bgm_active", False)):
+                try:
+                    self._bg_music_play_track(tid, single_loop=True)
+                except Exception:
+                    pass
+            return
         if self.bg_music_paused_for_call and self.music_sprite_mode:
             self.bg_music_paused_for_call = False
             self._start_bg_music()
@@ -52259,7 +53089,8 @@ class DesktopPet:
         pad = 20
         display_y = self.y + self.click_bounce_offset
         self.sweat_fx_win.geometry(f"+{self.x - pad}+{display_y - pad}")
-        self._lift_pet_above_bg_fx()
+        if not getattr(self, "click_bouncing", False):
+            self._lift_pet_above_bg_fx()
 
     def _show_sweat_fx(self) -> None:
         self._hide_sweat_fx()

@@ -20,6 +20,11 @@ ITEM_LABELS: dict[str, str] = {
     "fish": "鲜鱼",
     "work_reward_box": "工作宝箱",
     "achieve_reward_box": "成就宝箱",
+    "dew": "水滴",
+    "dew_drop": "露水",
+    "fertilizer": "肥料",
+    "compost": "堆肥",
+    "jam_berry": "莓果酱",
 }
 
 SEED_TO_CROP: dict[str, str] = {
@@ -37,23 +42,44 @@ TREE_REGROW_SEC = 48 * 3600
 CHOP_DICE_MIN = 2
 CHOP_DICE_MAX = 6
 
+# —— 轻量种田（低压力；逻辑对齐苍叶，文案/资源名可并存）——
+DAILY_ACTION_CAP = 5  # 今日经营「小事」软上限
+DAILY_ACTION_SOFT = 5
+DAILY_ACTION_HARD = 8
+OFFLINE_GROWTH_CAP_HOURS = 12.0  # 离线成长最多按 12 小时结算
+WILT_AFTER_DRY_DAYS = 4  # 连续多日未浇 → 枯萎可堆肥，不重罚
+FERTILIZER_BOOST_SEC = 7200.0
+POMODORO_DEW_REWARD = 1  # 番茄完成一轮赠水滴/露水
+
 CROP_DEFS: dict[str, dict[str, Any]] = {
     "wheat": {
         "label": "小麦",
         "seed": "seed_wheat",
         "item": "crop_wheat",
+        "days": 2,
+        "sell": 4,
+        "use": "做饭 / 烤面包",
+        "tier": "stable",  # 新手稳产
         "colors": ("#c8b070", "#d4c078", "#e8d888", "#f0e090"),
     },
     "berry": {
         "label": "莓果",
         "seed": "seed_berry",
         "item": "crop_berry",
+        "days": 2,
+        "sell": 5,
+        "use": "点心 / 送礼",
+        "tier": "stable",
         "colors": ("#886688", "#aa6688", "#cc6688", "#ee5588"),
     },
     "corn": {
         "label": "玉米",
         "seed": "seed_corn",
         "item": "crop_corn",
+        "days": 3,
+        "sell": 5,
+        "use": "烤玉米 / 饲料",
+        "tier": "mid",
         "colors": ("#889944", "#aaba44", "#ccdd55", "#ffe066"),
     },
 }
@@ -73,9 +99,10 @@ SELL_PRICES: dict[str, int] = {
     "crop_corn": 5,
     "fish": 6,
     "flower_cut": 2,
+    "jam_berry": 14,
 }
 
-# 默认可放置（布置模式）；合成解锁 sofa / shelf 等
+# 默认可放置（布置模式）；合成解锁 sofa / shelf / 部分家电
 DEFAULT_FURNITURE_UNLOCK: frozenset[str] = frozenset(
     {
         "bed",
@@ -86,11 +113,29 @@ DEFAULT_FURNITURE_UNLOCK: frozenset[str] = frozenset(
         "lamp",
         "window",
         "vase",
+        "door",
+        "partition",
+        "floor_wood",
+        "floor_tile",
+        "coffee",
+        "nightstand",
+        "tv",
+        "wardrobe",
+        "stove",
+        "sink",
+        "fridge",
+        "counter",
+        "toilet",
+        "bathtub",
+        "basin",
         "grass",
         "land",
         "water",
         "brick",
         "tree",
+        "tree_pine",
+        "tree_fruit",
+        "tree_blossom",
         "rock",
         "flower",
         "fence",
@@ -136,6 +181,13 @@ CRAFT_RECIPES: tuple[dict[str, Any], ...] = (
         "desc": "莓果+小麦 → 果汁",
     },
     {
+        "id": "jam_berry",
+        "label": "莓果酱",
+        "costs": {"crop_berry": 3},
+        "result": ("item", "jam_berry"),
+        "desc": "3 莓果 → 果酱（可卖 / 交订单）",
+    },
+    {
         "id": "sofa",
         "label": "解锁沙发",
         "costs": {"wood": 3, "crop_wheat": 1},
@@ -151,7 +203,7 @@ CRAFT_RECIPES: tuple[dict[str, Any], ...] = (
     },
 )
 
-FARM_DISCLAIMER = "经营：脱离原作"
+FARM_DISCLAIMER = "轻量种田 · 每天一小步"
 
 # 工具键位：切换 / 确定使用
 FARM_TOOL_KEYS: dict[str, str] = {
@@ -176,6 +228,9 @@ FARM_TOOL_KEYS: dict[str, str] = {
     "7": "pick",
     "g": "pick",
     "G": "pick",
+    "8": "fert",
+    "h": "fert",
+    "H": "fert",
 }
 
 FARM_TOOL_LABELS: dict[str, str] = {
@@ -186,51 +241,92 @@ FARM_TOOL_LABELS: dict[str, str] = {
     "chop": "砍树",
     "fish": "钓鱼",
     "pick": "采花",
+    "fert": "施肥",
 }
 
 FARM_TOOL_HINTS: dict[str, str] = {
     "till": "先清上面，再锄两下草地→土地",
-    "plant": "仅土地可种；种子在格心",
-    "water": "每天最多2次；浇后1小时成长×2",
-    "harvest": "成熟度满100可收",
+    "plant": "仅土地可种；可批量同种",
+    "water": "每天有限次；湿土一眼蓝点；可全浇",
+    "harvest": "成熟可收；枯了可堆肥；可全收",
     "chop": "点树四周格子；掷骰砍够次数得木材",
     "fish": "点水面四周格子；上钩时再按一次",
     "pick": "采小花：可插花瓶，或在面板背包戴到头顶",
+    "fert": "肥料/堆肥加速成长；不强制每日点满",
 }
+
+FARM_GUIDE_BODY = (
+    "· 每天建议只做 3～5 件小事（浇/收/种/摸），别当肝游。\n"
+    "· 主循环：锄地 → 播种 → 浇水 → 收获（约 30～90 秒一轮）。\n"
+    "· 离线也会慢慢长大（有上限）；枯了可堆肥，不重罚。\n"
+    "· 可用「全浇 / 全收 / 全种」批量操作；番茄钟完成会掉水滴。\n"
+    "· 合成可做果酱；每日订单交付换金币；可摸摸小团子。\n"
+    "· 数字键切换工具；确定 / Enter / 空格在脚下执行。"
+)
 
 FARM_GUIDE_SECTIONS: tuple[tuple[str, str, str], ...] = (
     ("🚪", "进入", "室外 →「经营」"),
     ("🚶", "移动", "WASD / 点格子"),
     ("1️⃣", "锄地", "先清上面；草地锄两下变土地"),
-    ("2️⃣", "播种", "种在土地格中心"),
-    ("3️⃣", "浇水", "每天有限次；浇后一段时间成长加快"),
-    ("4️⃣", "收获", "成熟后可收"),
+    ("2️⃣", "播种", "种在土地格中心；可全种"),
+    ("3️⃣", "浇水", "湿土蓝点；可全浇"),
+    ("4️⃣", "收获", "成熟收；枯了堆肥；可全收"),
     ("5️⃣", "砍树", "在树四周格操作"),
     ("6️⃣", "钓鱼", "在水面四周格操作"),
     ("7️⃣", "采花", "可插花瓶；面板背包可戴/摘"),
+    ("8️⃣", "施肥", "肥料/堆肥加速；枯株用「收」堆肥"),
     ("⏎", "执行", "数字键只切换工具；确定 / Enter / 空格才执行"),
     ("🛒", "商店", "购买种子与木材"),
-    ("⚒", "合成", "制作食物 / 解锁家具"),
-)
-
-FARM_GUIDE_BODY = (
-    "· 数字键切换工具；点「确定」或按 Enter / 空格才会在脚下执行。\n"
-    "· 推荐流程：锄地 → 播种 → 浇水 → 收获；亦可砍树、钓鱼、采花。\n"
-    "· 每天首次打开桌宠可领取登录礼金币（同日仅一次）。"
+    ("⚒", "合成", "食物 / 果酱 / 解锁家具"),
+    ("📋", "订单", "每日两单，交付作物换金币"),
+    ("🐑", "团子", "每天摸摸 / 喂食提心情"),
+    ("✦", "羁绊", "专注契约完成可掉种子/露水"),
 )
 
 SEED_START: dict[str, int] = {
-    "seed_wheat": 4,
+    "seed_wheat": 6,
     "seed_berry": 2,
     "seed_corn": 2,
     "wood": 1,
     "flower_cut": 0,
     "fish": 0,
+    "dew": 2,
+    "dew_drop": 0,
+    "fertilizer": 0,
+    "compost": 0,
+    "jam_berry": 0,
 }
+
+DEFAULT_RANCH_PET: dict[str, Any] = {
+    "name": "团子",
+    "kind": "sheep",
+    "mood": 70,
+    "last_pet_ymd": "",
+    "last_feed_ymd": "",
+}
+
+ORDER_POOL: tuple[dict[str, Any], ...] = (
+    {"id": "o_wheat", "item": "crop_wheat", "need": 2, "pay": 12, "label": "茶会订单·小麦×2"},
+    {"id": "o_berry", "item": "crop_berry", "need": 2, "pay": 14, "label": "茶会订单·莓果×2"},
+    {"id": "o_corn", "item": "crop_corn", "need": 2, "pay": 14, "label": "茶会订单·玉米×2"},
+    {"id": "o_jam", "item": "jam_berry", "need": 1, "pay": 20, "label": "茶会订单·果酱×1"},
+    {"id": "o_fish", "item": "fish", "need": 1, "pay": 10, "label": "茶会订单·鲜鱼×1"},
+    {"id": "o_flower", "item": "flower_cut", "need": 2, "pay": 8, "label": "茶会订单·花×2"},
+)
 
 
 def default_wallet() -> dict:
-    return {"coins": 20, "items": dict(SEED_START), "last_daily_coin_ymd": ""}
+    return {
+        "coins": 20,
+        "items": dict(SEED_START),
+        "last_daily_coin_ymd": "",
+        "farm_day": "",
+        "farm_actions_today": 0,
+        "farm_quests": {},
+        "farm_orders_ymd": "",
+        "farm_orders": [],
+        "ranch_pet": dict(DEFAULT_RANCH_PET),
+    }
 
 
 def normalize_wallet(raw: object) -> dict:
@@ -242,7 +338,6 @@ def normalize_wallet(raw: object) -> dict:
     items: dict[str, int] = {}
     for k in ITEM_LABELS:
         items[k] = max(0, int(items_in.get(k, base["items"].get(k, 0))))
-    # 保留未知键（向前兼容）
     for k, v in items_in.items():
         if k not in items:
             try:
@@ -250,7 +345,41 @@ def normalize_wallet(raw: object) -> dict:
             except Exception:
                 pass
     last_day = str(raw.get("last_daily_coin_ymd") or "").strip()
-    return {"coins": coins, "items": items, "last_daily_coin_ymd": last_day}
+    farm_day = str(raw.get("farm_day") or "").strip()
+    farm_actions = max(0, int(raw.get("farm_actions_today") or 0))
+    quests = raw.get("farm_quests") if isinstance(raw.get("farm_quests"), dict) else {}
+    pet_raw = raw.get("ranch_pet") if isinstance(raw.get("ranch_pet"), dict) else {}
+    ranch = dict(DEFAULT_RANCH_PET)
+    ranch["name"] = str(pet_raw.get("name") or ranch["name"])[:8] or "团子"
+    ranch["kind"] = str(pet_raw.get("kind") or "sheep")
+    ranch["mood"] = max(0, min(100, int(pet_raw.get("mood") or 70)))
+    ranch["last_pet_ymd"] = str(pet_raw.get("last_pet_ymd") or "")
+    ranch["last_feed_ymd"] = str(pet_raw.get("last_feed_ymd") or "")
+    orders_raw = raw.get("farm_orders") if isinstance(raw.get("farm_orders"), list) else []
+    orders: list[dict] = []
+    for o in orders_raw[:4]:
+        if isinstance(o, dict) and o.get("id"):
+            orders.append(
+                {
+                    "id": str(o.get("id")),
+                    "item": str(o.get("item") or ""),
+                    "need": max(1, int(o.get("need") or 1)),
+                    "pay": max(1, int(o.get("pay") or 1)),
+                    "label": str(o.get("label") or o.get("id")),
+                    "done": bool(o.get("done")),
+                }
+            )
+    return {
+        "coins": coins,
+        "items": items,
+        "last_daily_coin_ymd": last_day,
+        "farm_day": farm_day,
+        "farm_actions_today": farm_actions,
+        "farm_quests": quests,
+        "farm_orders_ymd": str(raw.get("farm_orders_ymd") or "").strip(),
+        "farm_orders": orders,
+        "ranch_pet": ranch,
+    }
 
 
 DAILY_LOGIN_COINS = 1
@@ -392,6 +521,433 @@ def advance_farm(farm: list[list[dict | None]], *, now: float | None = None) -> 
                 advance_plot_maturity(plot, now=t_now)
 
 
+def apply_offline_growth(
+    farm: list[list[dict | None]],
+    *,
+    now: float | None = None,
+    cap_hours: float = OFFLINE_GROWTH_CAP_HOURS,
+) -> float:
+    """
+    打开家园时结算离线成长：每格最多按 cap_hours 推进，防挂机爆炸。
+    返回实际结算的小时数（各格取最大）。
+    """
+    t_now = float(now if now is not None else time.time())
+    capped = 0.0
+    for row in farm:
+        if not isinstance(row, list):
+            continue
+        for plot in row:
+            if not isinstance(plot, dict):
+                continue
+            last = float(plot.get("last_tick") or plot.get("planted_at") or t_now)
+            gap_h = max(0.0, (t_now - last) / 3600.0)
+            if gap_h <= 0:
+                continue
+            use_h = min(gap_h, float(cap_hours))
+            capped = max(capped, use_h)
+            # 把 last_tick 前移，使 advance 只吃 capped 时段
+            plot["last_tick"] = t_now - use_h * 3600.0
+            advance_plot_maturity(plot, now=t_now)
+            _refresh_wilt_flag(plot, now=t_now)
+    return capped
+
+
+def crop_card(crop_id: str) -> dict[str, Any]:
+    """作物信息卡：季节感用天数近似，卖价与用途一眼懂。"""
+    meta = CROP_DEFS.get(crop_id) or {}
+    return {
+        "id": crop_id,
+        "label": str(meta.get("label") or crop_id),
+        "days": int(meta.get("days") or 2),
+        "sell": int(meta.get("sell") or SELL_PRICES.get(str(meta.get("item") or ""), 0)),
+        "use": str(meta.get("use") or "—"),
+        "tier": str(meta.get("tier") or "mid"),
+        "seed": str(meta.get("seed") or ""),
+    }
+
+
+def plot_moisture(plot: dict | None, *, now: float | None = None) -> str:
+    """土壤状态：dry / wet / ready / wilt。"""
+    if not plot:
+        return "empty"
+    t_now = float(now if now is not None else time.time())
+    advance_plot_maturity(plot, now=t_now)
+    if plot.get("wilted"):
+        return "wilt"
+    if plot_ready(plot, now=t_now):
+        return "ready"
+    if plot_boost_active(plot, now=t_now):
+        return "wet"
+    day = _day_key(t_now)
+    if str(plot.get("water_day") or "") == day and int(plot.get("water_count") or 0) > 0:
+        return "wet"
+    return "dry"
+
+
+def plot_soil_state(plot: dict | None, *, now: float | None = None) -> str:
+    """对齐苍叶命名：empty / wilted / ready / wet / dry。"""
+    st = plot_moisture(plot, now=now)
+    return {"wilt": "wilted", "empty": "empty"}.get(st, st)
+
+
+def crop_card_text(crop_id: str) -> str:
+    card = crop_card(crop_id)
+    if not card.get("label"):
+        return crop_id
+    return f"{card['label']} · 约{card['days']}天 · 卖{card['sell']} · {card.get('use') or ''}"
+
+
+def can_spend_farm_action(wallet: dict, *, today: str | None = None) -> tuple[bool, str]:
+    ensure_farm_day(wallet, today=today)
+    n = int(wallet.get("farm_actions_today") or 0)
+    if n >= DAILY_ACTION_HARD:
+        return False, f"今天小事已做满 {DAILY_ACTION_HARD} 件，明天再来～"
+    if n >= DAILY_ACTION_SOFT:
+        return True, f"今日已做 {n}/{DAILY_ACTION_SOFT} 件（还可继续，别肝坏了）"
+    return True, f"今日小事 {n}/{DAILY_ACTION_SOFT}"
+
+
+def today_farm_quest(farm: list[list[dict | None]], wallet: dict) -> str:
+    """短句今日推荐（对齐苍叶）。"""
+    dry = ready = wilted = empty_land = 0
+    for row in farm:
+        if not isinstance(row, list):
+            continue
+        for plot in row:
+            if not isinstance(plot, dict):
+                empty_land += 1
+                continue
+            st = plot_soil_state(plot)
+            if st == "dry":
+                dry += 1
+            elif st == "ready":
+                ready += 1
+            elif st == "wilted":
+                wilted += 1
+    if wilted:
+        return f"今日推荐：把 {wilted} 格枯萎作物收成堆肥"
+    if ready:
+        return f"今日推荐：收菜 {ready} 格（可用「全收」）"
+    if dry:
+        return f"今日推荐：浇水 {min(dry, 5)} 格（可用「全浇」）"
+    items = wallet.get("items") or {}
+    seeds = sum(int(items.get(s, 0) or 0) for s in SEED_TO_CROP)
+    if seeds > 0 and empty_land > 0:
+        return "今日推荐：种一格稳产菜（麦/莓）"
+    if seeds <= 0:
+        return "今日推荐：去商店买点麦种"
+    return "今日推荐：摆一件装饰 / 歇一会儿也很好"
+
+
+def claim_offline_garden(
+    farm: list[list[dict | None]],
+    wallet: dict,
+    *,
+    now: float | None = None,
+) -> tuple[bool, str]:
+    """打开经营时：推进成长 + 每日一次离线微收益（对齐苍叶）。"""
+    t_now = float(now if now is not None else time.time())
+    day = _day_key(t_now)
+    hours = apply_offline_growth(farm, now=t_now)
+    already = str(wallet.get("farm_offline_ymd") or "") == day
+    bits: list[str] = []
+    if hours >= 0.4:
+        bits.append(f"离线微成长约 {hours:.1f} 小时")
+    if not already:
+        watered = 0
+        for row in farm:
+            if not isinstance(row, list):
+                continue
+            for plot in row:
+                if not isinstance(plot, dict) or plot.get("wilted"):
+                    continue
+                if plot_ready(plot) or plot_boost_active(plot):
+                    continue
+                plot["water_day"] = day
+                plot["water_count"] = max(1, int(plot.get("water_count") or 0))
+                plot["boost_until"] = t_now + WATER_BOOST_SEC
+                watered += 1
+                if watered >= 2:
+                    break
+            if watered >= 2:
+                break
+        coins = 1 if hours >= 1.0 else 0
+        if coins:
+            wallet["coins"] = int(wallet.get("coins") or 0) + coins
+            bits.append(f"金币+{coins}")
+        if watered:
+            bits.append(f"自动润土 {watered} 格")
+        wallet["farm_offline_ymd"] = day
+    wallet["last_farm_visit"] = t_now
+    if bits:
+        return True, " · ".join(bits)
+    return False, ""
+
+
+def grant_pomodoro_farm_drop(wallet: dict) -> str:
+    """番茄完成 → 家园掉落露水（对齐苍叶 API；同步水滴库存）。"""
+    items = wallet.setdefault("items", {})
+    items["dew_drop"] = int(items.get("dew_drop", 0)) + 1
+    items["dew"] = int(items.get("dew", 0)) + 1
+    return "番茄完成！家园掉落露水 ×1（经营里可点「露水」浇一格）"
+
+
+def try_use_dew_drop(farm: list[list[dict | None]], wallet: dict) -> tuple[bool, str]:
+    """消耗 1 露水/水滴：浇最干的一格。"""
+    items = wallet.setdefault("items", {})
+    dew = int(items.get("dew_drop", 0)) + int(items.get("dew", 0))
+    if dew <= 0:
+        return False, "没有露水"
+    target = None
+    for row in farm:
+        if not isinstance(row, list):
+            continue
+        for plot in row:
+            if not isinstance(plot, dict) or plot.get("wilted"):
+                continue
+            if plot_ready(plot) or plot_boost_active(plot):
+                continue
+            target = plot
+            break
+        if target is not None:
+            break
+    if target is None:
+        return False, "没有需要浇的干地"
+    if int(items.get("dew_drop", 0)) > 0:
+        items["dew_drop"] = int(items.get("dew_drop", 0)) - 1
+    else:
+        items["dew"] = int(items.get("dew", 0)) - 1
+    now = time.time()
+    advance_plot_maturity(target, now=now)
+    target["boost_until"] = now + WATER_BOOST_SEC
+    target["water_day"] = _day_key(now)
+    target["water_count"] = max(1, int(target.get("water_count") or 0))
+    return True, "用露水浇了一格！"
+
+
+def _refresh_wilt_flag(plot: dict, *, now: float | None = None) -> None:
+    """多日未浇且未成熟 → 标记枯萎（可堆肥），不直接清空。"""
+    if not plot or plot_ready(plot, now=now):
+        plot.pop("wilted", None)
+        return
+    t_now = float(now if now is not None else time.time())
+    planted = float(plot.get("planted_at") or t_now)
+    age_days = max(0.0, (t_now - planted) / 86400.0)
+    water_day = str(plot.get("water_day") or "")
+    dry_days = age_days
+    if water_day:
+        try:
+            import datetime as _dt
+
+            last = _dt.datetime.strptime(water_day, "%Y-%m-%d")
+            dry_days = max(0.0, ( _dt.datetime.fromtimestamp(t_now) - last).total_seconds() / 86400.0)
+        except Exception:
+            pass
+    if dry_days >= WILT_AFTER_DRY_DAYS and age_days >= WILT_AFTER_DRY_DAYS:
+        plot["wilted"] = True
+    else:
+        plot.pop("wilted", None)
+
+
+def ensure_farm_day(wallet: dict, *, today: str | None = None) -> None:
+    day = today or _day_key()
+    if str(wallet.get("farm_day") or "") != day:
+        wallet["farm_day"] = day
+        wallet["farm_actions_today"] = 0
+        wallet["farm_quests"] = _fresh_daily_quests(day)
+
+
+def _fresh_daily_quests(day: str) -> dict:
+    """今日小目标板：3 件小事即可。"""
+    return {
+        "day": day,
+        "water": {"need": 2, "done": 0, "label": "浇水 2 次"},
+        "harvest": {"need": 1, "done": 0, "label": "收获 1 次"},
+        "plant": {"need": 1, "done": 0, "label": "播种 1 次"},
+    }
+
+
+def farm_actions_left(wallet: dict) -> int:
+    ensure_farm_day(wallet)
+    used = int(wallet.get("farm_actions_today") or 0)
+    return max(0, DAILY_ACTION_CAP - used)
+
+
+def note_farm_action(wallet: dict, kind: str, *, count: int = 1) -> tuple[bool, str]:
+    """记录今日小事；超额时仍允许操作但提示「今日已够轻」。"""
+    ensure_farm_day(wallet)
+    wallet["farm_actions_today"] = int(wallet.get("farm_actions_today") or 0) + max(1, int(count))
+    quests = wallet.get("farm_quests") if isinstance(wallet.get("farm_quests"), dict) else {}
+    q = quests.get(kind) if isinstance(quests.get(kind), dict) else None
+    if q is not None:
+        q["done"] = int(q.get("done") or 0) + max(1, int(count))
+        quests[kind] = q
+        wallet["farm_quests"] = quests
+    left = farm_actions_left(wallet)
+    if left <= 0:
+        return True, "今日小事已做够，可以歇啦（仍可继续，但不催肝）"
+    return True, f"今日还可轻松再做 {left} 件"
+
+
+def daily_quest_summary(wallet: dict) -> str:
+    ensure_farm_day(wallet)
+    quests = wallet.get("farm_quests") if isinstance(wallet.get("farm_quests"), dict) else {}
+    parts = []
+    for key in ("water", "harvest", "plant"):
+        q = quests.get(key) if isinstance(quests.get(key), dict) else None
+        if not q:
+            continue
+        done = int(q.get("done") or 0)
+        need = int(q.get("need") or 1)
+        mark = "✓" if done >= need else f"{min(done, need)}/{need}"
+        parts.append(f"{q.get('label') or key} {mark}")
+    left = farm_actions_left(wallet)
+    head = f"今日小事剩 {left}/{DAILY_ACTION_CAP}"
+    return head + (" · " + " · ".join(parts) if parts else "")
+
+
+def try_compost(farm: list[list[dict | None]], wallet: dict, x: int, y: int) -> tuple[bool, str]:
+    """枯萎作物堆肥回收（低惩罚）。"""
+    if y < 0 or x < 0 or y >= len(farm) or x >= len(farm[0]):
+        return False, "超出范围"
+    plot = farm[y][x]
+    if not plot:
+        return False, "空地"
+    _refresh_wilt_flag(plot)
+    if not plot.get("wilted") and not plot_ready(plot):
+        # 未枯也可主动铲掉换少量堆肥（更轻）
+        farm[y][x] = None
+        items = wallet.setdefault("items", {})
+        items["compost"] = int(items.get("compost", 0)) + 1
+        return True, "已收回，换成堆肥 +1"
+    farm[y][x] = None
+    items = wallet.setdefault("items", {})
+    items["compost"] = int(items.get("compost", 0)) + 2
+    items["fertilizer"] = int(items.get("fertilizer", 0)) + 1
+    return True, "枯株堆肥：堆肥+2、肥料+1"
+
+
+def try_fertilize(farm: list[list[dict | None]], wallet: dict, x: int, y: int) -> tuple[bool, str]:
+    if y < 0 or x < 0 or y >= len(farm) or x >= len(farm[0]):
+        return False, "超出范围"
+    plot = farm[y][x]
+    if not plot:
+        return False, "没有作物"
+    items = wallet.setdefault("items", {})
+    if int(items.get("fertilizer", 0)) <= 0 and int(items.get("compost", 0)) <= 0:
+        return False, "没有肥料/堆肥"
+    if int(items.get("fertilizer", 0)) > 0:
+        items["fertilizer"] = int(items.get("fertilizer", 0)) - 1
+    else:
+        items["compost"] = int(items.get("compost", 0)) - 1
+    now = time.time()
+    advance_plot_maturity(plot, now=now)
+    plot["boost_until"] = max(float(plot.get("boost_until") or 0), now + FERTILIZER_BOOST_SEC)
+    plot["maturity"] = min(MATURITY_MAX, float(plot.get("maturity") or 0) + 12.0)
+    return True, "施肥！成长加速一段时间"
+
+
+def grant_pomodoro_farm_reward(wallet: dict) -> str:
+    """番茄完成 → 家园水滴（兼容旧名；内部走露水掉落）。"""
+    return grant_pomodoro_farm_drop(wallet)
+
+
+def grant_focus_contract_farm_drop(wallet: dict) -> str:
+    """专注契约完成 → 少量种子或露水（长线经营对接羁绊）。"""
+    items = wallet.setdefault("items", {})
+    # 轮换：优先补莓种，其次麦种，再露水
+    if int(items.get("seed_berry", 0) or 0) < 8:
+        items["seed_berry"] = int(items.get("seed_berry", 0) or 0) + 1
+        return "专注契约完成！掉落莓种 ×1"
+    if int(items.get("seed_wheat", 0) or 0) < 10:
+        items["seed_wheat"] = int(items.get("seed_wheat", 0) or 0) + 1
+        return "专注契约完成！掉落麦种 ×1"
+    items["dew"] = int(items.get("dew", 0) or 0) + 1
+    items["dew_drop"] = int(items.get("dew_drop", 0) or 0) + 1
+    return "专注契约完成！掉落露水 ×1"
+
+
+def consume_dew_for_extra_water(wallet: dict) -> bool:
+    items = wallet.setdefault("items", {})
+    if int(items.get("dew", 0)) <= 0:
+        return False
+    items["dew"] = int(items.get("dew", 0)) - 1
+    return True
+
+
+def batch_water(
+    farm: list[list[dict | None]],
+    wallet: dict | None = None,
+) -> tuple[int, str]:
+    """全浇：所有未成熟作物。可用水滴突破每日 2 次上限。"""
+    ok_n = 0
+    for y, row in enumerate(farm):
+        if not isinstance(row, list):
+            continue
+        for x, plot in enumerate(row):
+            if not isinstance(plot, dict):
+                continue
+            ok, _msg = try_water(farm, x, y, wallet=wallet, allow_dew=True)
+            if ok:
+                ok_n += 1
+    if wallet is not None and ok_n:
+        note_farm_action(wallet, "water", count=ok_n)
+    if ok_n <= 0:
+        return 0, "没有需要浇的地"
+    return ok_n, f"全浇完成 · {ok_n} 格"
+
+
+def batch_harvest(farm: list[list[dict | None]], wallet: dict) -> tuple[int, str]:
+    ok_n = 0
+    compost_n = 0
+    for y, row in enumerate(farm):
+        if not isinstance(row, list):
+            continue
+        for x, plot in enumerate(row):
+            if not isinstance(plot, dict):
+                continue
+            _refresh_wilt_flag(plot)
+            if plot.get("wilted"):
+                ok, _ = try_compost(farm, wallet, x, y)
+                if ok:
+                    compost_n += 1
+                continue
+            ok, _ = try_harvest(farm, wallet, x, y)
+            if ok:
+                ok_n += 1
+    if ok_n:
+        note_farm_action(wallet, "harvest", count=ok_n)
+    if ok_n <= 0 and compost_n <= 0:
+        return 0, "没有可收的菜"
+    tip = f"全收 · 收获 {ok_n}"
+    if compost_n:
+        tip += f" · 堆肥 {compost_n}"
+    return ok_n + compost_n, tip
+
+
+def batch_plant(
+    farm: list[list[dict | None]],
+    wallet: dict,
+    outdoor_tiles: list,
+    seed_id: str,
+    *,
+    cell_kind,
+) -> tuple[int, str]:
+    ok_n = 0
+    for y, row in enumerate(farm):
+        if not isinstance(row, list):
+            continue
+        for x in range(len(row)):
+            ok, _ = try_plant(farm, wallet, outdoor_tiles, x, y, seed_id, cell_kind=cell_kind)
+            if ok:
+                ok_n += 1
+    if ok_n:
+        note_farm_action(wallet, "plant", count=ok_n)
+    if ok_n <= 0:
+        return 0, "没有可种的土地或种子不足"
+    return ok_n, f"全种完成 · {ok_n} 格 {ITEM_LABELS.get(seed_id, seed_id)}"
+
+
 def plot_stage(plot: dict | None, *, now: float | None = None) -> int:
     """0..3 仅用于上色阶段。"""
     if not plot:
@@ -525,7 +1081,14 @@ def try_plant(
     return True, "已播种"
 
 
-def try_water(farm: list[list[dict | None]], x: int, y: int) -> tuple[bool, str]:
+def try_water(
+    farm: list[list[dict | None]],
+    x: int,
+    y: int,
+    *,
+    wallet: dict | None = None,
+    allow_dew: bool = False,
+) -> tuple[bool, str]:
     if y < 0 or x < 0 or y >= len(farm) or x >= len(farm[0]):
         return False, "超出范围"
     plot = farm[y][x]
@@ -533,6 +1096,9 @@ def try_water(farm: list[list[dict | None]], x: int, y: int) -> tuple[bool, str]
         return False, "空地无需浇水"
     now = time.time()
     advance_plot_maturity(plot, now=now)
+    _refresh_wilt_flag(plot, now=now)
+    if plot.get("wilted"):
+        return False, "已枯萎，请堆肥回收"
     if plot_ready(plot, now=now):
         return False, "已成熟，请收获"
     day = _day_key(now)
@@ -541,19 +1107,33 @@ def try_water(farm: list[list[dict | None]], x: int, y: int) -> tuple[bool, str]
         plot["water_count"] = 0
     count = int(plot.get("water_count") or 0)
     if count >= WATER_MAX_PER_DAY:
-        return False, "今天已经浇过两次了"
+        if allow_dew and wallet is not None and consume_dew_for_extra_water(wallet):
+            pass  # 用水滴突破今日上限
+        else:
+            return False, "今天已经浇过两次了（可用水滴加浇）"
     plot["water_count"] = count + 1
     plot["watered"] = plot["water_count"]
     plot["boost_until"] = now + WATER_BOOST_SEC
+    plot.pop("wilted", None)
     return True, "浇水！一小时内成长速度×2"
 
 
-def try_harvest(farm: list[list[dict | None]], wallet: dict, x: int, y: int) -> tuple[bool, str]:
+def try_harvest(
+    farm: list[list[dict | None]],
+    wallet: dict,
+    x: int,
+    y: int,
+    *,
+    extra_chance: float = 0.0,
+) -> tuple[bool, str]:
     if y < 0 or x < 0 or y >= len(farm) or x >= len(farm[0]):
         return False, "超出范围"
     plot = farm[y][x]
     if not plot:
         return False, "没有作物"
+    _refresh_wilt_flag(plot)
+    if plot.get("wilted"):
+        return try_compost(farm, wallet, x, y)
     if not plot_ready(plot):
         return False, "还没成熟"
     crop = str(plot.get("crop") or "")
@@ -563,9 +1143,21 @@ def try_harvest(farm: list[list[dict | None]], wallet: dict, x: int, y: int) -> 
         return False, "未知作物"
     item_id = str(meta["item"])
     items = wallet.setdefault("items", {})
-    items[item_id] = int(items.get(item_id, 0)) + 1
+    # 轻品质：浇过水更容易多收 1
+    bonus = 1 if int(plot.get("water_count") or 0) >= 1 and plot_boost_active(plot) is False else 0
+    if float(plot.get("boost_until") or 0) > 0:
+        bonus = 1
+    gain = 1 + (1 if bonus and (hash(str(plot.get("planted_at"))) % 3 == 0) else 0)
+    # 好友同家园微加成：额外一颗（低概率，不替代肝度）
+    if gain <= 1 and float(extra_chance) > 0 and (hash(str(plot.get("planted_at")) + "bond") % 100) < int(float(extra_chance) * 100):
+        gain += 1
+    items[item_id] = int(items.get(item_id, 0)) + gain
     farm[y][x] = None
-    return True, f"收获了{ITEM_LABELS.get(item_id, item_id)}"
+    star = "★" if gain > 1 else ""
+    tip = f"收获了{ITEM_LABELS.get(item_id, item_id)}×{gain}{star}"
+    if gain > 1 and float(extra_chance) > 0:
+        tip += "（好友微加成）"
+    return True, tip
 
 
 def try_chop_start_or_hit(
@@ -852,3 +1444,97 @@ def item_summary(wallet: dict, *, limit: int = 6) -> str:
         if len(parts) >= limit:
             break
     return " ".join(parts) if parts else "空"
+
+
+def ensure_daily_orders(wallet: dict, *, today: str | None = None) -> list[dict]:
+    day = today or _day_key()
+    if str(wallet.get("farm_orders_ymd") or "") == day and isinstance(wallet.get("farm_orders"), list):
+        return list(wallet["farm_orders"])
+    dig = sum(int(c) for c in day if c.isdigit()) or 1
+    picks: list[dict] = []
+    for i in range(2):
+        o = dict(ORDER_POOL[(dig + i * 3) % len(ORDER_POOL)])
+        o["done"] = False
+        picks.append(o)
+    wallet["farm_orders_ymd"] = day
+    wallet["farm_orders"] = picks
+    return picks
+
+
+def try_fulfill_order(wallet: dict, order_id: str) -> tuple[bool, str]:
+    orders = wallet.get("farm_orders") if isinstance(wallet.get("farm_orders"), list) else []
+    target = None
+    for o in orders:
+        if str(o.get("id")) == str(order_id):
+            target = o
+            break
+    if not target:
+        return False, "找不到订单"
+    if target.get("done"):
+        return False, "这份订单已完成"
+    item = str(target.get("item") or "")
+    need = max(1, int(target.get("need") or 1))
+    items = wallet.setdefault("items", {})
+    if int(items.get(item, 0)) < need:
+        return False, f"{ITEM_LABELS.get(item, item)}不足（需要 {need}）"
+    items[item] = int(items.get(item, 0)) - need
+    pay = max(1, int(target.get("pay") or 1))
+    grant_coins_to_wallet(wallet, pay)
+    target["done"] = True
+    return True, f"交付成功！+{pay} 金币"
+
+
+def ensure_ranch_pet(wallet: dict) -> dict:
+    pet = wallet.get("ranch_pet")
+    if not isinstance(pet, dict):
+        pet = dict(DEFAULT_RANCH_PET)
+        wallet["ranch_pet"] = pet
+    return pet
+
+
+def ranch_pet_status(wallet: dict) -> str:
+    pet = ensure_ranch_pet(wallet)
+    name = str(pet.get("name") or "团子")
+    mood = int(pet.get("mood") or 0)
+    feel = "开心" if mood >= 70 else ("平静" if mood >= 40 else "有点闷")
+    return f"{name} · 心情 {mood}（{feel}）"
+
+
+def pet_ranch_animal(wallet: dict, *, today: str | None = None) -> tuple[bool, str]:
+    day = today or _day_key()
+    pet = ensure_ranch_pet(wallet)
+    if str(pet.get("last_pet_ymd") or "") == day:
+        return False, "今天已经摸过啦"
+    pet["last_pet_ymd"] = day
+    pet["mood"] = min(100, int(pet.get("mood") or 0) + 8)
+    return True, f"摸摸{pet.get('name') or '团子'}！心情 +8"
+
+
+def feed_ranch_animal(wallet: dict, *, today: str | None = None) -> tuple[bool, str]:
+    day = today or _day_key()
+    pet = ensure_ranch_pet(wallet)
+    if str(pet.get("last_feed_ymd") or "") == day:
+        return False, "今天已经喂过啦"
+    items = wallet.setdefault("items", {})
+    feed_item = None
+    for cand in ("crop_wheat", "crop_berry", "crop_corn", "jam_berry"):
+        if int(items.get(cand, 0)) > 0:
+            feed_item = cand
+            break
+    if not feed_item:
+        return False, "没有可喂的作物/果酱"
+    items[feed_item] = int(items.get(feed_item, 0)) - 1
+    pet["last_feed_ymd"] = day
+    pet["mood"] = min(100, int(pet.get("mood") or 0) + 12)
+    return True, f"喂了{ITEM_LABELS.get(feed_item, feed_item)}，心情 +12"
+
+
+def ranch_mood_offline_bonus(wallet: dict) -> int:
+    pet = ensure_ranch_pet(wallet)
+    mood = int(pet.get("mood") or 0)
+    if mood >= 80:
+        return 2
+    if mood >= 50:
+        return 1
+    return 0
+

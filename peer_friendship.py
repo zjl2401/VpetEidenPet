@@ -24,17 +24,154 @@ MINIPET_DISPLAY: dict[str, str] = {
 
 ACTION_STROLL_TOGETHER = "stroll_together"
 ACTION_SIDE_MEET = "side_meet"  # 话/动：先并排站定；动再进入 act_ready 选具体动作
+ACTION_HOME_GUEST = "home_guest"  # 熟人起：邀请对方来家园做客（对齐苍叶）
+ACTION_HIGHFIVE = "highfive"  # 挚友：击掌（需双方确认；伊得侧保留）
+
+# 阶段制（对齐苍叶逻辑）：level 1～5 ↔ stage 0～4；每级只解锁可感知特权
+# 0 初识 · 1 熟人 · 2 好友 · 3 挚友 · 4 羁绊
+STAGE_DEFS: tuple[dict, ...] = (
+    {
+        "stage": 0,
+        "level": 1,
+        "name": "初识",
+        "title": "点头之交",
+        "perms": ("挥手打招呼", "短聊 / 表情"),
+        "unlock_action": ACTION_STROLL_TOGETHER,
+        "unlock_label": "并肩散步",
+        "bonus_hint": "同屏时心情略稳",
+        "unlocks": ("挥手寒暄", "并肩散步", "基础礼物"),
+        "next_focus": "再多相遇几次，或一起走一段路",
+    },
+    {
+        "stage": 1,
+        "level": 2,
+        "name": "熟人",
+        "title": "常常见面",
+        "perms": ("合影点（预告）", "家园互访"),
+        "unlock_action": ACTION_HOME_GUEST,
+        "unlock_label": "邀请来家园做客",
+        "bonus_hint": "可互访家园",
+        "unlocks": ("合照点位", "留言足迹", "邀请家园做客"),
+        "next_focus": "完成一次长谈问答，或邀请来家里做客",
+    },
+    {
+        "stage": 2,
+        "level": 3,
+        "name": "好友",
+        "title": "信得过的人",
+        "perms": ("异步帮浇水", "同家园小加成"),
+        "unlock_action": "",
+        "unlock_label": "共同订单 / 组队支援",
+        "bonus_hint": "并肩 / 同家园时小加成",
+        "unlocks": ("异步帮浇水", "同家园产量微加成", "共同小订单"),
+        "next_focus": "请对方帮浇一次水，或同屏家园一会儿",
+    },
+    {
+        "stage": 3,
+        "level": 4,
+        "name": "挚友",
+        "title": "并肩的人",
+        "perms": ("击掌（双方确认）", "共享家具蓝图（预告）"),
+        "unlock_action": ACTION_HIGHFIVE,
+        "unlock_label": "击掌等亲密动作",
+        "bonus_hint": "需双方确认",
+        "unlocks": ("击掌（双方确认）", "共享家具蓝图预览"),
+        "next_focus": "双方都点头确认后，试试击掌",
+    },
+    {
+        "stage": 4,
+        "level": 5,
+        "name": "羁绊",
+        "title": "忘不掉的名字",
+        "perms": ("共建空间入口（预告）", "纪念相册 / 专属称号"),
+        "unlock_action": "",
+        "unlock_label": "家园共建区 · 纪念相册",
+        "bonus_hint": "友情是加速器，不锁单人主线",
+        "unlocks": ("纪念相册槽", "羁绊称号"),
+        "next_focus": "继续写入共同回忆",
+    },
+)
 
 ACTION_BY_LEVEL: dict[int, str] = {
     1: ACTION_STROLL_TOGETHER,
+    2: ACTION_HOME_GUEST,
+    4: ACTION_HIGHFIVE,
 }
 
 ACTION_LABELS: dict[str, str] = {
     ACTION_STROLL_TOGETHER: "并肩散步（18秒）",
+    ACTION_HOME_GUEST: "邀请来家园做客",
+    ACTION_HIGHFIVE: "击掌（需双方确认）",
 }
 
-# 已实装动作的最高友情等级；更高档位面板/升级先锁（加新动作时扩 ACTION_BY_LEVEL 即可）
-MAX_IMPLEMENTED_LEVEL = max(ACTION_BY_LEVEL.keys()) if ACTION_BY_LEVEL else 1
+PRIVILEGE_BY_LEVEL: dict[int, tuple[str, ...]] = {
+    1: ("greet", "basic_gift", "stroll"),
+    2: ("photo_spot", "visit_trace", "guestbook", "home_guest"),
+    3: ("farm_help_async", "bond_yield_small", "joint_order"),
+    4: ("dual_emote", "blueprint_share"),
+    5: ("memory_album", "bond_title"),
+}
+
+PRIVILEGE_LABELS: dict[str, str] = {
+    "greet": "挥手寒暄",
+    "basic_gift": "基础礼物",
+    "stroll": "并肩散步",
+    "photo_spot": "合照点位",
+    "visit_trace": "拜访足迹",
+    "guestbook": "短留言板",
+    "farm_help_async": "离线帮浇水",
+    "bond_yield_small": "同家园产量微加成",
+    "joint_order": "共同小订单",
+    "dual_emote": "双人动作（需确认）",
+    "blueprint_share": "共享蓝图预览",
+    "home_guest": "邀请家园做客",
+    "memory_album": "纪念相册",
+    "bond_title": "羁绊称号",
+}
+
+# 对齐苍叶：熟人（Lv2）即可邀请做客
+HOME_GUEST_UNLOCK_LEVEL = 2
+HOME_GUEST_INVITE_LEVEL = HOME_GUEST_UNLOCK_LEVEL  # 兼容旧名
+FARM_HELP_ASYNC_LEVEL = 3
+BOND_YIELD_LEVEL = 3
+MUTUAL_EMOTE_LEVEL = 4
+MAX_IMPLEMENTED_LEVEL = max(int(s["level"]) for s in STAGE_DEFS)
+
+# 日经验上限（对齐苍叶 100）；同质递减；多通道 bonus
+DAILY_XP_CAP = 100.0
+CHANNEL_DIMINISH = 0.55
+CHANNEL_DIMINISH_FLOOR = 0.2
+DIVERSITY_BONUS = 0.15
+CHANNEL_SOFT_CAP = 4
+VARIETY_BONUS = DIVERSITY_BONUS
+GAIN_CHANNELS = frozenset(
+    {"meet", "talk", "quiz", "gift", "help", "focus", "stroll", "farm_help", "co_focus", "milestone", "visit", "generic"}
+)
+ACTIVITY_COOL_DAYS = 30
+MEMORY_SLOT_MAX = 8
+BOND_YIELD_BONUS = 0.10
+ASYNC_HELP_DAILY_MAX = 3
+
+XP_CHANNEL_MEET = "meet"
+XP_CHANNEL_TALK = "talk"
+XP_CHANNEL_QUIZ = "quiz"
+XP_CHANNEL_STROLL = "stroll"
+XP_CHANNEL_GIFT = "gift"
+XP_CHANNEL_FARM_HELP = "help"  # 对齐苍叶通道名 help
+XP_CHANNEL_CO_FOCUS = "focus"
+XP_CHANNEL_MILESTONE = "milestone"
+XP_CHANNEL_VISIT = "visit"
+
+MILESTONE_LABELS: dict[str, str] = {
+    "first_meet": "第一次相遇",
+    "first_talk": "第一次认真聊天",
+    "first_stroll": "第一次并肩散步",
+    "first_quiz_ok": "第一次答对共同回忆",
+    "first_farm_help": "第一次帮忙浇水",
+    "first_home_guest": "第一次邀请做客",
+    "first_gift": "第一次互赠",
+    "meet_intro": "正式自我介绍（第11次遇）",
+}
 
 # 动：并排到位后短站定，再出动作热区
 SIDE_STAND_HOLD_MS = 480
@@ -68,7 +205,7 @@ PHASE_FREE = "free"
 
 
 def meet_phase(meet_count: int) -> str:
-    """相遇阶段：1–10 眼熟 · 11 自我介绍 · 12+ 自由（已去掉静默期）。"""
+    """相遇阶段：1–10 眼熟 · 11 自我介绍（遇）· 11+「话」可自由聊（长谈/问答）。"""
     n = max(0, int(meet_count))
     if n <= 0:
         return PHASE_FAMILIAR
@@ -122,39 +259,478 @@ def clamp_points(points: float) -> float:
     return max(0.0, min(float(points), max_points_at_cap()))
 
 
-def stats(points: float) -> dict:
+def stage_for_level(level: int) -> dict:
+    lv = max(1, min(int(level), MAX_IMPLEMENTED_LEVEL))
+    for s in STAGE_DEFS:
+        if int(s["level"]) == lv:
+            return dict(s)
+    return dict(STAGE_DEFS[0])
+
+
+def stage_def_for_level(level: int) -> dict:
+    return stage_for_level(level)
+
+
+def stage_def_for_stage(stage: int) -> dict:
+    st = max(0, min(int(stage), len(STAGE_DEFS) - 1))
+    return dict(STAGE_DEFS[st])
+
+
+def level_to_stage(level: int) -> int:
+    return max(0, int(level) - 1)
+
+
+def stage_to_level(stage: int) -> int:
+    return max(1, int(stage) + 1)
+
+
+def stage_name(level: int) -> str:
+    return str(stage_for_level(level).get("name") or f"Lv{level}")
+
+
+def _enrich_stage_fields(out: dict) -> dict:
+    """给 stats 结果补阶段名、下一解锁、权限摘要（对齐苍叶）。"""
+    level = int(out.get("level") or 1)
+    stage = level_to_stage(level)
+    cur = stage_def_for_level(level)
+    out["stage"] = stage
+    out["stage_name"] = str(cur.get("name") or "")
+    out["title"] = str(cur.get("title") or "")
+    out["perms"] = list(cur.get("perms") or ())
+    out["unlocks"] = list(cur.get("unlocks") or cur.get("perms") or ())
+    out["bonus_hint"] = str(cur.get("bonus_hint") or "")
+    if level >= MAX_IMPLEMENTED_LEVEL and out.get("level_capped"):
+        out["next_unlock"] = "已达当前最高阶段"
+        out["next_unlock_detail"] = "后续阶段内容将陆续开放"
+        out["next_stage_name"] = ""
+    else:
+        nxt_lv = min(MAX_IMPLEMENTED_LEVEL, level + 1)
+        nxt = stage_def_for_level(nxt_lv)
+        label = str(nxt.get("unlock_label") or ACTION_LABELS.get(str(nxt.get("unlock_action") or ""), ""))
+        out["next_unlock"] = f"→ {nxt.get('name')}：{label}"
+        out["next_unlock_detail"] = str(nxt.get("bonus_hint") or label)
+        out["next_stage_name"] = str(nxt.get("name") or "")
+    return out
+
+
+def privileges_unlocked(level: int) -> list[str]:
+    lv = max(0, int(level))
+    out: list[str] = []
+    for req, keys in sorted(PRIVILEGE_BY_LEVEL.items()):
+        if lv >= req:
+            out.extend(keys)
+    return out
+
+
+def privilege_unlocked(level: int, key: str) -> bool:
+    return str(key) in privileges_unlocked(level)
+
+
+def _day_key(now: float | None = None) -> str:
+    import datetime as _dt
+
+    t = float(now if now is not None else time.time())
+    return _dt.datetime.fromtimestamp(t).strftime("%Y-%m-%d")
+
+
+def daily_xp_state(data: dict, *, today: str | None = None) -> dict:
+    """对齐苍叶日经验状态；兼容伊得旧字段 xp_day / xp_today。"""
+    day = today or _day_key()
+    ymd = str(data.get("daily_xp_ymd") or data.get("xp_day") or "")
+    if ymd != day:
+        return {
+            "ymd": day,
+            "xp": 0.0,
+            "left": DAILY_XP_CAP,
+            "channels": {},
+            "capped": False,
+        }
+    xp = max(0.0, float(data.get("daily_xp") if data.get("daily_xp") is not None else data.get("xp_today") or 0))
+    ch = data.get("daily_channels") or data.get("xp_channels_today") or {}
+    if not isinstance(ch, dict):
+        ch = {}
+    return {
+        "ymd": day,
+        "xp": xp,
+        "left": max(0.0, DAILY_XP_CAP - xp),
+        "channels": {str(k): int(float(v or 0)) for k, v in ch.items()},
+        "capped": xp >= DAILY_XP_CAP - 1e-6,
+    }
+
+
+def ensure_daily(data: dict, *, now: float | None = None) -> dict:
+    day = _day_key(now)
+    st = daily_xp_state(data, today=day)
+    if str(data.get("daily_xp_ymd") or data.get("xp_day") or "") != day:
+        data["daily_xp_ymd"] = day
+        data["daily_xp"] = 0.0
+        data["daily_channels"] = {}
+        data["xp_day"] = day
+        data["xp_today"] = 0.0
+        data["xp_channels_today"] = {}
+        data["async_help_today"] = 0
+        data["today_hints"] = []
+    else:
+        data["daily_xp_ymd"] = day
+        data["daily_xp"] = float(st["xp"])
+        data["xp_day"] = day
+        data["xp_today"] = float(st["xp"])
+        if not isinstance(data.get("daily_channels"), dict):
+            data["daily_channels"] = dict(st["channels"])
+        if not isinstance(data.get("xp_channels_today"), dict):
+            data["xp_channels_today"] = {k: float(v) for k, v in st["channels"].items()}
+    if not isinstance(data.get("memories"), list):
+        data["memories"] = []
+    if isinstance(data.get("milestones"), list):
+        pass  # 苍叶用 list；伊得也兼容
+    elif not isinstance(data.get("milestones"), dict):
+        data["milestones"] = {}
+    if not isinstance(data.get("mutual_consent"), dict):
+        data["mutual_consent"] = {}
+    return data
+
+
+def daily_xp_left(data: dict) -> float:
+    return float(daily_xp_state(data)["left"])
+
+
+def relation_card(presence_dir: Path) -> dict:
+    """关系卡：阶段、进度、今日经验、下一解锁、权限树（对齐苍叶 API）。"""
+    data = load(presence_dir)
+    st = stats(float(data.get("points") or 0), data)
+    daily = daily_xp_state(data)
+    level = int(st.get("level") or 1)
+    tree: list[dict] = []
+    for s in STAGE_DEFS:
+        unlocked = level >= int(s["level"])
+        tree.append(
+            {
+                "stage": int(s["stage"]),
+                "name": s["name"],
+                "title": s["title"],
+                "unlocked": unlocked,
+                "unlock_label": s.get("unlock_label") or "",
+                "perms": list(s.get("perms") or ()),
+            }
+        )
+    maintain = today_maintain_hints(data, level)
+    return {
+        **st,
+        "meet_count": int(data.get("meet_count") or 0),
+        "meet_phase": meet_phase(int(data.get("meet_count") or 0)),
+        "meet_phase_label": meet_phase_label(int(data.get("meet_count") or 0)),
+        "daily_xp": daily["xp"],
+        "daily_xp_cap": DAILY_XP_CAP,
+        "daily_xp_left": daily["left"],
+        "daily_capped": daily["capped"],
+        "daily_channels": daily["channels"],
+        "perm_tree": tree,
+        "maintain_tips": maintain,
+        "maintain_hints": maintain,
+        "peer_names": f"{PET_DISPLAY[KIND_AOBA]} ↔ {PET_DISPLAY[KIND_EIDEN]}",
+        "next_unlock": st.get("next_unlock") or "",
+        "next_unlock_detail": st.get("next_unlock_detail") or "",
+    }
+
+
+def apply_xp_gain(
+    data: dict,
+    raw_delta: float,
+    *,
+    channel: str = "generic",
+    today: str | None = None,
+) -> tuple[float, dict]:
+    """应用每日上限 + 同质递减 + 多样 bonus（对齐苍叶）。"""
+    ch = str(channel or "generic").strip().lower() or "generic"
+    aliases = {
+        "farm_help": "help",
+        "co_focus": "focus",
+        "stroll": "talk",
+        "visit": "help",
+        "milestone": "generic",
+    }
+    ch = aliases.get(ch, ch)
+    if ch not in GAIN_CHANNELS:
+        ch = "generic"
+    day = today or _day_key()
+    if str(data.get("daily_xp_ymd") or data.get("xp_day") or "") != day:
+        data["daily_xp_ymd"] = day
+        data["daily_xp"] = 0.0
+        data["daily_channels"] = {}
+        data["xp_day"] = day
+        data["xp_today"] = 0.0
+        data["xp_channels_today"] = {}
+    channels = data.setdefault("daily_channels", {})
+    if not isinstance(channels, dict):
+        channels = {}
+        data["daily_channels"] = channels
+    used = max(0.0, float(data.get("daily_xp") or data.get("xp_today") or 0))
+    left = max(0.0, DAILY_XP_CAP - used)
+    meta = {
+        "channel": ch,
+        "raw": float(raw_delta),
+        "applied": 0.0,
+        "capped": left <= 1e-9,
+        "diminished": False,
+        "diversity": False,
+    }
+    if raw_delta <= 0:
+        applied = float(raw_delta)
+        data["points"] = clamp_points(float(data.get("points") or 0) + applied)
+        meta["applied"] = applied
+        return applied, meta
+    if left <= 1e-9:
+        meta["capped"] = True
+        return 0.0, meta
+    count = int(channels.get(ch) or 0)
+    mult = 1.0
+    if count >= 1:
+        mult = max(CHANNEL_DIMINISH_FLOOR, CHANNEL_DIMINISH ** count)
+        meta["diminished"] = True
+    distinct = len([k for k, v in channels.items() if int(v or 0) > 0 and k != ch])
+    if distinct >= 1:
+        mult *= 1.0 + DIVERSITY_BONUS
+        meta["diversity"] = True
+    applied = min(left, float(raw_delta) * mult)
+    data["points"] = clamp_points(float(data.get("points") or 0) + applied)
+    data["daily_xp"] = used + applied
+    data["xp_today"] = float(data["daily_xp"])
+    data["xp_day"] = day
+    data["daily_xp_ymd"] = day
+    channels[ch] = count + 1
+    data["xp_channels_today"] = {str(k): float(v) for k, v in channels.items()}
+    data["last_interact_ms"] = int(time.time() * 1000)
+    meta["applied"] = applied
+    meta["capped"] = float(data["daily_xp"]) >= DAILY_XP_CAP - 1e-6
+    return applied, meta
+
+
+def gain_friendship_xp(
+    presence_dir: Path,
+    delta: float,
+    *,
+    channel: str = "generic",
+) -> dict:
+    """加点并回写；带日上限（对齐苍叶主入口）。"""
+    data = load(presence_dir)
+    before = stats(float(data.get("points") or 0), data)
+    applied, meta = apply_xp_gain(data, float(delta), channel=channel)
+    save(presence_dir, data)
+    after = stats(float(data.get("points") or 0), data)
+    leveled = int(after.get("level") or 1) > int(before.get("level") or 1)
+    if leveled:
+        note_milestone(presence_dir, f"stage_{after.get('stage_name')}", xp=0.0)
+    daily = daily_xp_state(data)
+    tip = ""
+    if meta.get("capped") and applied <= 0:
+        tip = "今日友情经验已达上限"
+    elif meta.get("diminished"):
+        tip = "同类互动收益在下降，换种方式更开心"
+    elif meta.get("diversity"):
+        tip = "多样互动加成！"
+    return {
+        **data,
+        **after,
+        "gained": applied,
+        "xp_applied": applied,
+        "xp_meta": meta,
+        "leveled_up": leveled,
+        "capped": bool(meta.get("capped")),
+        "tip": tip,
+        "daily_xp": daily["xp"],
+        "daily_xp_left": daily["left"],
+        "daily_capped": daily["capped"],
+    }
+
+
+def activity_cooled(data: dict, *, now: float | None = None) -> bool:
+    """30 天无互动 → 活跃冷却（不掉级，只降加成体感）。"""
+    t_now = float(now if now is not None else time.time())
+    last = float(data.get("last_interact_ms") or data.get("last_meet_ms") or 0) / 1000.0
+    if last <= 0:
+        return False
+    return (t_now - last) >= ACTIVITY_COOL_DAYS * 86400.0
+
+
+def bond_yield_multiplier(data: dict | None, level: int) -> float:
+    """同家园小加成：好友阶段起；活跃冷却时减半。"""
+    if int(level) < BOND_YIELD_LEVEL:
+        return 1.0
+    if not privilege_unlocked(level, "bond_yield_small"):
+        return 1.0
+    mul = 1.0 + float(BOND_YIELD_BONUS)
+    if data and activity_cooled(data):
+        mul = 1.0 + float(BOND_YIELD_BONUS) * 0.5
+    return mul
+
+
+def stats(points: float, data: dict | None = None) -> dict:
     pts = clamp_points(points)
     level = 1
     while pts >= cumulative_before(level) + points_for_bar(level):
         level += 1
         if level >= MAX_IMPLEMENTED_LEVEL:
-            # 满级：进度顶格，不再升到未实装档
             level = MAX_IMPLEMENTED_LEVEL
             base = cumulative_before(level)
             need = points_for_bar(level)
             cur = min(float(need), max(0.0, pts - base))
             pct = min(100, int(cur * 100 / max(1, need)))
-            return {
-                "level": level,
-                "points": pts,
-                "bar_pct": pct,
-                "bar_cur": cur,
-                "bar_need": need,
-                "level_capped": True,
-                "max_implemented_level": MAX_IMPLEMENTED_LEVEL,
-            }
+            payload = _enrich_stage_fields(
+                {
+                    "level": level,
+                    "points": pts,
+                    "bar_pct": pct,
+                    "bar_cur": cur,
+                    "bar_need": need,
+                    "level_capped": True,
+                    "max_implemented_level": MAX_IMPLEMENTED_LEVEL,
+                }
+            )
+            if data is not None:
+                ensure_daily(data)
+                payload.update(_stats_extra(data, level))
+            return payload
     base = cumulative_before(level)
     need = points_for_bar(level)
     cur = pts - base
     pct = min(100, int(cur * 100 / max(1, need)))
+    payload = _enrich_stage_fields(
+        {
+            "level": level,
+            "points": pts,
+            "bar_pct": pct,
+            "bar_cur": cur,
+            "bar_need": need,
+            "level_capped": level >= MAX_IMPLEMENTED_LEVEL and cur >= need - 1e-6,
+            "max_implemented_level": MAX_IMPLEMENTED_LEVEL,
+        }
+    )
+    if data is not None:
+        ensure_daily(data)
+        payload.update(_stats_extra(data, level))
+    return payload
+
+
+def _stats_extra(data: dict, level: int) -> dict:
+    daily = daily_xp_state(data)
+    maintain = today_maintain_hints(data, level)
     return {
-        "level": level,
-        "points": pts,
-        "bar_pct": pct,
-        "bar_cur": cur,
-        "bar_need": need,
-        "level_capped": level >= MAX_IMPLEMENTED_LEVEL and cur >= need - 1e-6,
-        "max_implemented_level": MAX_IMPLEMENTED_LEVEL,
+        "daily_xp_left": daily["left"],
+        "daily_xp_cap": DAILY_XP_CAP,
+        "daily_xp": daily["xp"],
+        "xp_today": daily["xp"],
+        "activity_cool": activity_cooled(data),
+        "maintain_hints": maintain,
+        "maintain_tips": maintain,
+        "privileges": privileges_unlocked(level),
+        "memories": list(data.get("memories") or [])[-MEMORY_SLOT_MAX:],
+    }
+
+
+def next_unlock_preview(level: int) -> dict:
+    """下一等级解锁预览（关系卡用）。"""
+    lv = int(level)
+    if lv >= MAX_IMPLEMENTED_LEVEL:
+        return {
+            "level": lv,
+            "label": "已满阶",
+            "lines": ["羁绊已满 · 继续互动写入回忆"],
+        }
+    nxt = lv + 1
+    stage = stage_for_level(nxt)
+    lines = [str(x) for x in (stage.get("unlocks") or ())[:2]]
+    act = ACTION_BY_LEVEL.get(nxt)
+    if act:
+        lines.insert(0, action_label(act))
+    focus = str(stage.get("next_focus") or stage_for_level(lv).get("next_focus") or "")
+    return {
+        "level": nxt,
+        "stage_name": str(stage["name"]),
+        "title": str(stage["title"]),
+        "label": f"下一阶 · {stage['name']}",
+        "lines": lines,
+        "focus": focus,
+    }
+
+
+def today_maintain_hints(data: dict, level: int) -> list[str]:
+    """今日可维护：1～2 条低成本建议（对齐苍叶）。"""
+    ensure_daily(data)
+    hints: list[str] = []
+    daily = daily_xp_state(data)
+    if daily["capped"]:
+        return ["今日友情经验已满，聊两句也很好，不必再肝"]
+    ch = daily.get("channels") or {}
+    n = int(data.get("meet_count") or 0)
+    if n < 11:
+        hints.append("再一起点几次「遇」，熟悉彼此")
+    elif "meet" not in ch:
+        hints.append("靠近对方点一次「遇」或「话」")
+    if "quiz" not in ch and n >= 11:
+        hints.append("聊一聊问答，答对喜好记得加分")
+    if int(level) < HOME_GUEST_UNLOCK_LEVEL:
+        hints.append("升到「熟人」可邀请对方来家园做客")
+    elif "help" not in ch and int(level) >= FARM_HELP_ASYNC_LEVEL:
+        hints.append("进家园邀请做客，或异步帮忙浇水")
+    out: list[str] = []
+    for t in hints:
+        if t not in out:
+            out.append(t)
+        if len(out) >= 2:
+            break
+    if not out:
+        out.append(str(stage_for_level(level).get("next_focus") or "多样化互动更香"))
+    return out
+
+
+def grant_xp(
+    presence_dir: Path,
+    amount: float,
+    *,
+    channel: str = XP_CHANNEL_MEET,
+    note: str = "",
+    bypass_daily_cap: bool = False,
+) -> dict:
+    """多通道加友情经验（内部走苍叶同款 apply_xp_gain）。"""
+    _ = bypass_daily_cap
+    result = gain_friendship_xp(presence_dir, float(amount), channel=channel)
+    if note and float(result.get("gained") or 0) > 0:
+        try:
+            data = load(presence_dir)
+            append_memory(
+                data,
+                kind="xp",
+                text=note,
+                meta={"channel": channel, "gained": round(float(result.get("gained") or 0), 2)},
+            )
+            save(presence_dir, data)
+        except Exception:
+            pass
+    return result
+
+
+def _empty_friendship() -> dict:
+    return {
+        "pair": PAIR_KEY,
+        "points": 0.0,
+        "meet_count": 0,
+        "last_meet_ms": 0,
+        "last_interact_ms": 0,
+        "familiar_os_used": {},
+        "shared_facts": [],
+        "last_talk_mode": "",
+        "quiz_cooldown_talks": 0,
+        "long_history": [],
+        "last_long_choice": "",
+        "quarrel_cool_until_ms": 0,
+        "xp_day": "",
+        "xp_today": 0.0,
+        "xp_channels_today": {},
+        "async_help_today": 0,
+        "milestones": {},
+        "memories": [],
+        "mutual_consent": {},
+        "today_hints": [],
     }
 
 
@@ -163,20 +739,8 @@ def _path(presence_dir: Path) -> Path:
 
 
 def load(presence_dir: Path) -> dict:
+    empty = _empty_friendship()
     path = _path(presence_dir)
-    empty = {
-        "pair": PAIR_KEY,
-        "points": 0.0,
-        "meet_count": 0,
-        "last_meet_ms": 0,
-        "familiar_os_used": {},
-        "shared_facts": [],
-        "last_talk_mode": "",
-        "quiz_cooldown_talks": 0,
-        "long_history": [],
-        "last_long_choice": "",
-        "quarrel_cool_until_ms": 0,
-    }
     if not path.is_file():
         return dict(empty)
     try:
@@ -191,11 +755,24 @@ def load(presence_dir: Path) -> dict:
             hist = raw.get("long_history") or []
             if not isinstance(hist, list):
                 hist = []
-            return {
+            mem = raw.get("memories") or []
+            if not isinstance(mem, list):
+                mem = []
+            miles = raw.get("milestones") or {}
+            if not isinstance(miles, dict):
+                miles = {}
+            consent = raw.get("mutual_consent") or {}
+            if not isinstance(consent, dict):
+                consent = {}
+            ch = raw.get("xp_channels_today") or {}
+            if not isinstance(ch, dict):
+                ch = {}
+            data = {
                 "pair": PAIR_KEY,
                 "points": float(raw.get("points") or 0),
                 "meet_count": int(raw.get("meet_count") or 0),
                 "last_meet_ms": int(raw.get("last_meet_ms") or 0),
+                "last_interact_ms": int(raw.get("last_interact_ms") or raw.get("last_meet_ms") or 0),
                 "familiar_os_used": {str(k): list(v) if isinstance(v, list) else [] for k, v in used.items()},
                 "shared_facts": [str(x) for x in facts if str(x).strip()],
                 "last_talk_mode": str(raw.get("last_talk_mode") or ""),
@@ -203,7 +780,16 @@ def load(presence_dir: Path) -> dict:
                 "long_history": [str(x) for x in hist if str(x).strip()],
                 "last_long_choice": str(raw.get("last_long_choice") or ""),
                 "quarrel_cool_until_ms": int(raw.get("quarrel_cool_until_ms") or 0),
+                "xp_day": str(raw.get("xp_day") or ""),
+                "xp_today": float(raw.get("xp_today") or 0),
+                "xp_channels_today": {str(k): float(v or 0) for k, v in ch.items()},
+                "async_help_today": int(raw.get("async_help_today") or 0),
+                "milestones": {str(k): v for k, v in miles.items()},
+                "memories": [x for x in mem if isinstance(x, dict)][-MEMORY_SLOT_MAX:],
+                "mutual_consent": consent,
+                "today_hints": list(raw.get("today_hints") or []) if isinstance(raw.get("today_hints"), list) else [],
             }
+            return ensure_daily(data)
     except Exception:
         pass
     return dict(empty)
@@ -212,6 +798,7 @@ def load(presence_dir: Path) -> dict:
 def save(presence_dir: Path, data: dict) -> None:
     try:
         presence_dir.mkdir(parents=True, exist_ok=True)
+        ensure_daily(data)
         used = data.get("familiar_os_used") or {}
         if not isinstance(used, dict):
             used = {}
@@ -221,11 +808,24 @@ def save(presence_dir: Path, data: dict) -> None:
         hist = data.get("long_history") or []
         if not isinstance(hist, list):
             hist = []
+        mem = data.get("memories") or []
+        if not isinstance(mem, list):
+            mem = []
+        miles = data.get("milestones") or {}
+        if not isinstance(miles, dict):
+            miles = {}
+        consent = data.get("mutual_consent") or {}
+        if not isinstance(consent, dict):
+            consent = {}
+        ch = data.get("xp_channels_today") or {}
+        if not isinstance(ch, dict):
+            ch = {}
         payload = {
             "pair": PAIR_KEY,
             "points": clamp_points(float(data.get("points") or 0)),
             "meet_count": int(data.get("meet_count") or 0),
             "last_meet_ms": int(data.get("last_meet_ms") or 0),
+            "last_interact_ms": int(data.get("last_interact_ms") or 0),
             "familiar_os_used": {str(k): [str(x) for x in (v or [])] for k, v in used.items()},
             "shared_facts": [str(x) for x in facts if str(x).strip()],
             "last_talk_mode": str(data.get("last_talk_mode") or ""),
@@ -233,10 +833,158 @@ def save(presence_dir: Path, data: dict) -> None:
             "long_history": [str(x) for x in hist if str(x).strip()][-8:],
             "last_long_choice": str(data.get("last_long_choice") or ""),
             "quarrel_cool_until_ms": int(data.get("quarrel_cool_until_ms") or 0),
+            "xp_day": str(data.get("xp_day") or ""),
+            "xp_today": float(data.get("xp_today") or 0),
+            "xp_channels_today": {str(k): float(v or 0) for k, v in ch.items()},
+            "async_help_today": int(data.get("async_help_today") or 0),
+            "milestones": miles,
+            "memories": [x for x in mem if isinstance(x, dict)][-MEMORY_SLOT_MAX:],
+            "mutual_consent": consent,
+            "today_hints": list(data.get("today_hints") or [])[:4],
         }
         _path(presence_dir).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         pass
+
+
+def _channel_multiplier(data: dict, channel: str) -> float:
+    ensure_daily(data)
+    ch = data.setdefault("xp_channels_today", {})
+    if not isinstance(ch, dict):
+        ch = {}
+        data["xp_channels_today"] = ch
+    used = float(ch.get(channel) or 0)
+    if used >= CHANNEL_SOFT_CAP * 2:
+        return 0.25
+    if used >= CHANNEL_SOFT_CAP:
+        return 0.5
+    distinct = sum(1 for v in ch.values() if float(v or 0) > 0)
+    # 即将写入的新通道也算多样性（若当前通道尚未记过）
+    if used <= 0:
+        distinct += 1
+    bonus = 1.0 + (VARIETY_BONUS if distinct >= 2 else 0.0)
+    return bonus
+
+
+def append_memory(
+    data: dict,
+    *,
+    kind: str,
+    text: str,
+    meta: dict | None = None,
+) -> None:
+    mem = data.setdefault("memories", [])
+    if not isinstance(mem, list):
+        mem = []
+        data["memories"] = mem
+    entry = {
+        "ts": int(time.time() * 1000),
+        "kind": str(kind or "note"),
+        "text": str(text or "")[:80],
+        "meta": dict(meta or {}),
+    }
+    mem.append(entry)
+    data["memories"] = mem[-MEMORY_SLOT_MAX:]
+
+
+def note_milestone(presence_dir: Path, key: str, *, xp: float = 4.0) -> dict | None:
+    """关键事件：首次写入记忆，并可跳一点经验（受日上限）。"""
+    data = load(presence_dir)
+    ensure_daily(data)
+    k = str(key or "").strip()
+    if not k:
+        return None
+    miles = data.get("milestones")
+    if isinstance(miles, list):
+        if k in miles:
+            return None
+        miles.append(k)
+        data["milestones"] = miles[-16:]
+    else:
+        if not isinstance(miles, dict):
+            miles = {}
+        if miles.get(k):
+            return None
+        label = MILESTONE_LABELS.get(k, k)
+        miles[k] = {"ts": int(time.time() * 1000), "label": label}
+        data["milestones"] = miles
+    label = MILESTONE_LABELS.get(k, k)
+    append_memory(data, kind="milestone", text=label, meta={"id": k})
+    save(presence_dir, data)
+    if xp > 0:
+        return grant_xp(
+            presence_dir,
+            xp,
+            channel=XP_CHANNEL_MILESTONE,
+            note=label,
+            bypass_daily_cap=False,
+        )
+    return {**data, **stats(float(data.get("points") or 0), data)}
+
+
+def set_mutual_consent(
+    presence_dir: Path,
+    action: str,
+    kind: str,
+    *,
+    agreed: bool = True,
+) -> dict:
+    """亲密动作双方确认。"""
+    data = load(presence_dir)
+    consent = data.setdefault("mutual_consent", {})
+    if not isinstance(consent, dict):
+        consent = {}
+        data["mutual_consent"] = consent
+    slot = consent.setdefault(str(action), {})
+    if not isinstance(slot, dict):
+        slot = {}
+        consent[str(action)] = slot
+    slot[str(kind)] = bool(agreed)
+    slot["updated_ms"] = int(time.time() * 1000)
+    save(presence_dir, data)
+    return data
+
+
+def mutual_consent_ready(data: dict, action: str) -> bool:
+    slot = (data.get("mutual_consent") or {}).get(str(action)) if isinstance(data.get("mutual_consent"), dict) else None
+    if not isinstance(slot, dict):
+        return False
+    return bool(slot.get(KIND_AOBA)) and bool(slot.get(KIND_EIDEN))
+
+
+def can_use_intimate_action(presence_dir: Path, action: str, level: int) -> tuple[bool, str]:
+    if int(level) < MUTUAL_EMOTE_LEVEL:
+        return False, f"需达到挚友（Lv{MUTUAL_EMOTE_LEVEL}）"
+    if action not in unlocked_actions(level):
+        return False, "尚未解锁该动作"
+    data = load(presence_dir)
+    if mutual_consent_ready(data, action):
+        return True, "双方已确认"
+    return False, "需双方确认后才能用亲密动作"
+
+
+def record_async_farm_help(presence_dir: Path, *, plots: int = 1) -> dict:
+    """离线帮浇水：受限次数，涨少量友情并写记忆。"""
+    data = load(presence_dir)
+    st = stats(float(data.get("points") or 0), data)
+    level = int(st.get("level") or 1)
+    if level < FARM_HELP_ASYNC_LEVEL:
+        return {**data, **st, "helped": 0, "tip": f"好友阶段（Lv{FARM_HELP_ASYNC_LEVEL}）起可异步帮忙"}
+    ensure_daily(data)
+    used = int(data.get("async_help_today") or 0)
+    room = max(0, ASYNC_HELP_DAILY_MAX - used)
+    n = max(0, min(int(plots), room))
+    if n <= 0:
+        return {**data, **st, "helped": 0, "tip": "今日帮浇次数已用完"}
+    data["async_help_today"] = used + n
+    save(presence_dir, data)
+    note_milestone(presence_dir, "first_farm_help", xp=3.0)
+    return grant_xp(
+        presence_dir,
+        1.2 * n,
+        channel=XP_CHANNEL_FARM_HELP,
+        note=f"帮忙浇了 {n} 格水",
+    ) | {"helped": n}
 
 
 def record_meet(
@@ -262,16 +1010,22 @@ def record_meet(
     ):
         return {
             **data,
-            **stats(float(data.get("points") or 0)),
+            **stats(float(data.get("points") or 0), data),
             "phase": meet_phase(int(data.get("meet_count") or 0)),
         }
     data["meet_count"] = int(data.get("meet_count") or 0) + 1
-    gain = points_gain_for_meet(int(data["meet_count"]))
-    data["points"] = clamp_points(float(data.get("points") or 0) + gain)
     data["last_meet_ms"] = int(now_ms)
+    data["last_interact_ms"] = int(now_ms)
     save(presence_dir, data)
-    phase = meet_phase(int(data["meet_count"]))
-    return {**data, **stats(float(data["points"])), "phase": phase}
+    n = int(data["meet_count"])
+    if n == 1:
+        note_milestone(presence_dir, "first_meet", xp=3.0)
+    if n == 11:
+        note_milestone(presence_dir, "meet_intro", xp=5.0)
+    gain = points_gain_for_meet(n)
+    result = grant_xp(presence_dir, gain, channel=XP_CHANNEL_MEET, note="相遇")
+    phase = meet_phase(n)
+    return {**result, "phase": phase, "meet_count": n}
 
 
 def unlocked_actions(level: int) -> list[str]:
@@ -450,20 +1204,16 @@ def dialogue_lines_for_pair(
     *,
     meet_count: int,
 ) -> tuple[str, str]:
-    """发起方一句 + 另一方回一句（成对台词，避免前言不搭后语）。"""
+    """发起方一句 + 另一方回一句（成对台词，避免前言不搭后语）。
+
+    自我介绍只走「遇」阶段台词；「话」从第11次起用自由寒暄/短谈。
+    """
     n = int(meet_count or 0)
     other = PET_DISPLAY.get(other_kind, other_kind)
     self_n = PET_DISPLAY.get(initiator_kind, initiator_kind)
-    if n <= 11:
-        intro_pairs = (
-            (f"……你好，我是{self_n}。", f"……我是{other}。幸会。"),
-            (f"你是{other}吧？我们终于正式见面了。", "嗯……以后请多指教。"),
-            ("以后在桌面上碰面，就多多关照啦~", "好。碰面时打个招呼就行。"),
-            ("我也会怕，也会笑——先从招呼开始。", "……那我们现在算打过招呼了。"),
-            (f"从这边世界来的访客，就是我。请多指教，{other}。", f"请多指教，{self_n}。"),
-        )
-        idx = max(0, min(len(intro_pairs) - 1, n - 1))
-        return intro_pairs[idx]
+    if n < 11:
+        # 尚未正式相识：保守成对招呼（热区「话」通常不会到这里）
+        return (f"……你好，我是{self_n}。", f"……我是{other}。幸会。")
     # 熟后：优先成对寒暄/短谈，不再各自随机拼句
     pool = [x for x in SHORT_TALK_VARIANTS if x[0] == "greet"] or list(SHORT_TALK_VARIANTS)
     _style, a, b = random.choice(pool)
@@ -575,6 +1325,89 @@ def garbled_chat_line(*, length: int | None = None) -> str:
     if random.random() < 0.45:
         parts.append("~" * random.randint(1, 3))
     return "".join(parts)
+
+
+# 相遇「话」轻表情：乱码偏无语/疑问；普通闲聊偏点赞/眨眼/害羞
+GARBLE_EMOTE_POOL = ("speechless", "awkward", "question", "idea", "wink", "shy")
+SHORT_TALK_EMOTE_BY_STYLE: dict[str, tuple[str, ...]] = {
+    "garble": GARBLE_EMOTE_POOL,
+    "greet": ("like", "wink", "happy", "pop", "shy"),
+    "topic": ("idea", "wink", "like", "happy", "question"),
+    "qa": ("idea", "question", "wink", "like"),
+    "deep": ("shy", "like", "idea", "sad"),
+    "soft": ("shy", "like", "wink", "happy"),
+}
+
+
+def pick_talk_emote(style: str = "", *, garble: bool = False, avoid: str = "") -> str:
+    st = str(style or "").strip().lower()
+    if garble or st == "garble":
+        pool = GARBLE_EMOTE_POOL
+    else:
+        pool = SHORT_TALK_EMOTE_BY_STYLE.get(st) or ("like", "wink", "idea", "shy", "happy")
+    choices = [x for x in pool if x and x != str(avoid or "").strip().lower()] or list(pool)
+    return str(random.choice(choices))
+
+
+def looks_like_garbled_line(line: str) -> bool:
+    """判断是否像乱码占位句（▓░ 等或纯语气叠字）。"""
+    text = str(line or "").strip()
+    if not text:
+        return False
+    if any(ch in text for ch in "▓░▒■□●◆"):
+        return True
+    # 去掉空白与波浪后，几乎全是语气字
+    body = "".join(ch for ch in text if ch not in " \t~…。，、！？!?")
+    if len(body) < 3:
+        return False
+    moji = set("啊嗯哦唔嘿呀嘛呢吧啦噗嘻呜哇呐哟哈呵欸诶")
+    hit = sum(1 for ch in body if ch in moji)
+    return hit >= max(3, int(len(body) * 0.72))
+
+
+def pick_talk_line_emote(
+    *,
+    garbled: bool = False,
+    style: str = "",
+    talk_mode: str = "",
+    preferred: str = "",
+) -> str:
+    """按台词/风格抽轻表情；preferred 有值时优先。"""
+    pref = str(preferred or "").strip().lower()
+    if pref:
+        return pref
+    st = str(style or "").strip().lower()
+    mode = str(talk_mode or "").strip().lower()
+    if garbled or st == "garble":
+        return pick_talk_emote("garble", garble=True)
+    if mode == "quiz":
+        return pick_talk_emote("qa")
+    if mode == "tell":
+        return pick_talk_emote("topic")
+    if mode == "long" and not st:
+        st = "topic"
+    return pick_talk_emote(st or "greet")
+
+
+def attach_talk_emotes(plan: dict, *, style: str = "", garble: bool = False) -> dict:
+    """给短谈/开场两句补 emote1/emote2；乱码几乎必出表情。"""
+    out = dict(plan or {})
+    st = str(style or out.get("style") or "").strip().lower()
+    is_g = bool(garble or st == "garble")
+    e1 = pick_talk_emote(st, garble=is_g)
+    e2 = pick_talk_emote(st, garble=is_g, avoid=e1)
+    if is_g:
+        out["emote1"] = e1
+        out["emote2"] = e2
+        out["mood_emote"] = str(out.get("mood_emote") or e1)
+    else:
+        if random.random() < 0.88:
+            out["emote1"] = e1
+        if random.random() < 0.78:
+            out["emote2"] = e2
+        if out.get("emote1") and not out.get("mood_emote"):
+            out["mood_emote"] = str(out["emote1"])
+    return out
 
 
 def dialogues_path(presence_dir: Path, data_dir: Path | None = None) -> Path | None:
@@ -695,13 +1528,15 @@ def actions_available(level: int, meet_count: int) -> bool:
 
 
 def next_unlock_hint(level: int) -> str | None:
-    nxt = int(level) + 1
-    if nxt > MAX_IMPLEMENTED_LEVEL:
+    preview = next_unlock_preview(level)
+    if preview.get("label") == "已满阶":
         return "后续等级暂未开放"
-    act = ACTION_BY_LEVEL.get(nxt)
-    if not act:
-        return "后续等级暂未开放"
-    return action_label(act)
+    lines = preview.get("lines") or []
+    focus = str(preview.get("focus") or "")
+    head = "、".join(str(x) for x in lines[:2]) if lines else str(preview.get("stage_name") or "")
+    if focus:
+        return f"{preview.get('label')}: {head}（{focus}）"
+    return f"{preview.get('label')}: {head}" if head else str(preview.get("label"))
 
 
 def minipet_names(kinds: list[str], *, limit: int = 2) -> str:
@@ -807,7 +1642,7 @@ def build_familiar(self_kind: str, other_kind: str, presence_dir: Path | None = 
     return choice
 
 
-# —— 12+ 交流：普通对话知识点（告诉 / 你还记得吗）——
+# —— 11+ 交流：普通对话知识点（告诉 / 你还记得吗）——
 TELL_PREFIXES: tuple[str, ...] = (
     "我想告诉你——",
     "你知道吗？",
@@ -1019,19 +1854,22 @@ def quiz_answer_correct(fact: dict, user_text: str) -> bool:
     return False
 
 
-def add_friendship_points(presence_dir: Path, delta: float) -> dict:
-    """加减友情点数并回写（不整级跳）。"""
-    data = load(presence_dir)
-    data["points"] = clamp_points(float(data.get("points") or 0) + float(delta))
-    save(presence_dir, data)
-    return {**data, **stats(float(data["points"]))}
+def add_friendship_points(
+    presence_dir: Path,
+    delta: float,
+    *,
+    channel: str = XP_CHANNEL_TALK,
+    note: str = "",
+) -> dict:
+    """加减友情点数并回写（走日上限与多通道规则）。"""
+    return grant_xp(presence_dir, float(delta), channel=channel, note=note)
 
 
 def bump_friendship_level(presence_dir: Path, delta: int) -> dict:
-    """兼容旧调用：按级跳转。新逻辑优先用 add_friendship_points。
+    """兼容旧调用：按级跳转。新逻辑优先用 add_friendship_points / grant_xp。
     高于已实装动作档位时锁在最高级满格，不再升虚级。"""
     data = load(presence_dir)
-    st = stats(float(data.get("points") or 0))
+    st = stats(float(data.get("points") or 0), data)
     new_lv = max(1, int(st.get("level") or 1) + int(delta))
     if new_lv > MAX_IMPLEMENTED_LEVEL:
         new_lv = MAX_IMPLEMENTED_LEVEL
@@ -1040,8 +1878,9 @@ def bump_friendship_level(presence_dir: Path, delta: int) -> dict:
         data["points"] = clamp_points(
             float(cumulative_before(new_lv) + points_for_bar(new_lv) * 0.15)
         )
+    data["last_interact_ms"] = int(time.time() * 1000)
     save(presence_dir, data)
-    return {**data, **stats(float(data["points"]))}
+    return {**data, **stats(float(data["points"]), data)}
 
 
 def remember_shared_fact(presence_dir: Path, fact_id: str, *, talk_mode: str = "tell") -> None:
@@ -1073,9 +1912,9 @@ def plan_knowledge_talk(
     *,
     meet_count: int,
 ) -> dict:
-    """12+「话」：告诉知识点 或 提问你还记得吗（问答偏少，且不紧跟告诉）。"""
+    """「话」知识点：告诉 或 提问你还记得吗（问答偏少，且不紧跟告诉）。meet≥11。"""
     n = int(meet_count or 0)
-    if n < 12:
+    if n < LONG_TALK_MIN_MEETS:
         a0, b0 = dialogue_lines_for_pair(initiator_kind, other_kind, meet_count=n)
         return {"mode": "plain", "talk_kind": "short", "line1": a0, "line2": b0, "fact_id": "", "simple": False}
 
@@ -1094,17 +1933,21 @@ def plan_knowledge_talk(
         fact = knowledge_by_id(random.choice(shared)) or {}
         prefix = random.choice(QUIZ_PREFIXES)
         ask = str(fact.get("ask") or "这件事？")
-        return {
-            "mode": "quiz",
-            "talk_kind": "knowledge",
-            "fact_id": str(fact.get("id") or ""),
-            "line1": f"{prefix}{ask}",
-            "line2": "",
-            "simple": bool(fact.get("simple")),
-            "topic": str(fact.get("topic") or ""),
-            "hint": " / ".join(list(fact.get("answers") or ())[:2]) if fact.get("simple") else "",
-            "answer_key": quiz_primary_answer(fact),
-        }
+        return attach_talk_emotes(
+            {
+                "mode": "quiz",
+                "talk_kind": "knowledge",
+                "style": "qa",
+                "fact_id": str(fact.get("id") or ""),
+                "line1": f"{prefix}{ask}",
+                "line2": "",
+                "simple": bool(fact.get("simple")),
+                "topic": str(fact.get("topic") or ""),
+                "hint": " / ".join(list(fact.get("answers") or ())[:2]) if fact.get("simple") else "",
+                "answer_key": quiz_primary_answer(fact),
+            },
+            style="qa",
+        )
 
     unused = [f for f in KNOWLEDGE_FACTS if str(f.get("id") or "") not in shared]
     fact = dict(random.choice(unused or list(KNOWLEDGE_FACTS)))
@@ -1112,22 +1955,26 @@ def plan_knowledge_talk(
     marked, primary = format_tell_fact_line(fact)
     line1 = f"{prefix}{marked}。"
     line2 = random.choice(REMEMBER_ACK)
-    return {
-        "mode": "tell",
-        "talk_kind": "knowledge",
-        "fact_id": str(fact.get("id") or ""),
-        "line1": line1,
-        "line2": line2,
-        "simple": bool(fact.get("simple")),
-        "topic": str(fact.get("topic") or ""),
-        "hint": "",
-        "answer_key": primary,
-    }
+    return attach_talk_emotes(
+        {
+            "mode": "tell",
+            "talk_kind": "knowledge",
+            "style": "topic",
+            "fact_id": str(fact.get("id") or ""),
+            "line1": line1,
+            "line2": line2,
+            "simple": bool(fact.get("simple")),
+            "topic": str(fact.get("topic") or ""),
+            "hint": "",
+            "answer_key": primary,
+        },
+        style="topic",
+    )
 
 
 # —— 长谈情景（通顺开场 → 偶发一句乱码 → 灯泡/填写/选择 → selecttalk123）——
 # 开场不插「这件事」；写不好的气氛句用乱码占位，不硬凑怪句。
-LONG_TALK_MIN_MEETS = 12
+LONG_TALK_MIN_MEETS = 11  # 第11次自我介绍（遇）完成后，「话」即可短谈/长谈/问答
 
 _CHOICE_LISTEN = (
     {"id": "listen", "label": "继续听", "icon": "listen", "asset": ("outfit", "leaf"), "delta": 0.9, "reply": "你继续说，我听着。", "outcome": "认真听完了", "emote": "like"},
@@ -1453,14 +2300,21 @@ def plan_long_talk_scenario(presence_dir: Path | None, scenario_id: str) -> dict
     sid = str(scenario_id or "").strip() or "bond"
     sc = LONG_TALK_SCENARIOS.get(sid) or LONG_TALK_SCENARIOS.get("bond") or {}
     pair = random.choice(list(sc.get("open_lines") or (("……", "……"),)))
-    # 默认不开中段乱码；约 12% 塞一句乱码当气氛占位（不好写的废话不硬凑）
+    # 中段乱码加量：约 40% 塞 1～2 句乱码当气氛占位；每句配表情
     mid_lines: list[str] = []
-    if random.random() < 0.12:
-        mid_lines = [garbled_chat_line(length=random.randint(5, 9))]
+    mid_emotes: list[str] = []
+    if random.random() < 0.40:
+        mid_lines = [garbled_chat_line(length=random.randint(5, 11))]
+        mid_emotes = [pick_talk_emote("garble", garble=True)]
+        if random.random() < 0.55:
+            mid_lines.append(garbled_chat_line(length=random.randint(4, 9)))
+            mid_emotes.append(pick_talk_emote("garble", garble=True, avoid=mid_emotes[-1]))
     garb_n = len(mid_lines)
-    emote = str(sc.get("mood_emote") or "")
+    emote = str(sc.get("mood_emote") or "") or pick_talk_emote("topic")
     line1 = str(pair[0])
     line2 = str(pair[1])
+    e1 = emote
+    e2 = pick_talk_emote("topic", avoid=e1)
     return {
         "talk_kind": "long",
         "mode": "long",
@@ -1472,7 +2326,10 @@ def plan_long_talk_scenario(presence_dir: Path | None, scenario_id: str) -> dict
         "mood_hint": format_mood_hint(sc, ""),
         "mood_emote": emote,
         "emote_open": emote,
+        "emote1": e1,
+        "emote2": e2,
         "mid_lines": mid_lines,
+        "mid_emotes": mid_emotes,
         "topic_editable": True,
         "topic_needed": True,
         "line1": line1,
@@ -1506,7 +2363,7 @@ def apply_long_talk_choice(presence_dir: Path, scenario_id: str, choice_id: str)
     return {**raw, **stats(float(raw.get("points") or 0))}
 
 
-# 熟后短谈：通顺短句；写不好的气氛用乱码占位（少用）
+# 熟后短谈：通顺短句；乱码占位可多一点
 SHORT_TALK_VARIANTS: tuple[tuple[str, str, str], ...] = (
     ("greet", "又碰面了。今天还好吗？", "还行。看到你在，就松一点。"),
     ("greet", "嗨。要不要随便聊两句？", "好啊。你先开场。"),
@@ -1538,7 +2395,7 @@ STROLL_OPEN_LINES: tuple[tuple[str, str], ...] = (
     ("夜班巡逻开始？", "开始。我跟你并排。"),
 )
 
-# 并肩续聊：通顺为主；偶发乱码由脚本控制
+# 并肩续聊：通顺为主；乱码由脚本加量
 STROLL_CHAT_PAIRS: tuple[tuple[str, str], ...] = (
     ("刚才差点被鼠标带跑。", "我差点被撤销吓一跳。"),
     ("进度条占地方，好挤。", "来我这边，我给你留位置。"),
@@ -1564,7 +2421,7 @@ def pick_stroll_open_lines() -> tuple[str, str]:
 
 
 def plan_stroll_chat_script(*, count: int = 6) -> list[str]:
-    """并肩散步：通顺成对为主；偶尔一句乱码占位。"""
+    """并肩散步：通顺成对为主；乱码占位加量。"""
     n = max(4, int(count))
     if n % 2:
         n += 1
@@ -1577,18 +2434,18 @@ def plan_stroll_chat_script(*, count: int = 6) -> list[str]:
             break
         if a in out and b in out:
             continue
-        # 约 8%：用乱码占位，不硬凑怪话
-        if len(out) >= 2 and random.random() < 0.08:
-            out.append(garbled_chat_line(length=random.randint(5, 9)))
-            out.append(garbled_chat_line(length=random.randint(5, 9)))
+        # 约 28%：用乱码占位，不硬凑怪话
+        if len(out) >= 2 and random.random() < 0.28:
+            out.append(garbled_chat_line(length=random.randint(5, 11)))
+            out.append(garbled_chat_line(length=random.randint(5, 11)))
         else:
             out.append(str(a))
             out.append(str(b))
     while len(out) < n:
-        if random.random() < 0.08:
+        if random.random() < 0.28:
             out.extend([
-                garbled_chat_line(length=random.randint(5, 9)),
-                garbled_chat_line(length=random.randint(5, 9)),
+                garbled_chat_line(length=random.randint(5, 11)),
+                garbled_chat_line(length=random.randint(5, 11)),
             ])
         else:
             a, b = random.choice(STROLL_CHAT_PAIRS)
@@ -1597,35 +2454,51 @@ def plan_stroll_chat_script(*, count: int = 6) -> list[str]:
 
 
 def pick_stroll_filler_line() -> str:
-    if random.random() < 0.08:
-        return garbled_chat_line(length=random.randint(5, 9))
+    if random.random() < 0.28:
+        return garbled_chat_line(length=random.randint(5, 11))
     a, b = random.choice(STROLL_CHAT_PAIRS)
     return str(random.choice((a, b)))
 
 
 def plan_short_talk_varied(initiator_kind: str, other_kind: str, *, meet_count: int) -> dict:
-    """寒暄 / 选题 / 轻深度 / 轻问答；偶发乱码对；极少拌嘴。"""
+    """寒暄 / 选题 / 轻深度 / 轻问答；乱码对加量；极少拌嘴。"""
     n = int(meet_count or 0)
     if n < LONG_TALK_MIN_MEETS:
         a0, b0 = dialogue_lines_for_pair(initiator_kind, other_kind, meet_count=n)
-        return {"talk_kind": "short", "mode": "plain", "line1": a0, "line2": b0}
-    # 约 8%：双方各一句乱码（不好写的气氛占位，不当主菜）
-    if random.random() < 0.08:
-        g1 = garbled_chat_line(length=random.randint(5, 9))
-        g2 = garbled_chat_line(length=random.randint(5, 9))
-        return {
-            "talk_kind": "short",
-            "mode": "plain",
-            "style": "garble",
-            "line1": g1,
-            "line2": g2,
-            "initiator_line": g1,
-            "reply_line": g2,
-        }
+        return attach_talk_emotes(
+            {"talk_kind": "short", "mode": "plain", "style": "greet", "line1": a0, "line2": b0},
+            style="greet",
+        )
+    # 约 28%：双方各一句乱码（气氛占位，可多一点）
+    if random.random() < 0.28:
+        g1 = garbled_chat_line(length=random.randint(5, 11))
+        g2 = garbled_chat_line(length=random.randint(5, 11))
+        return attach_talk_emotes(
+            {
+                "talk_kind": "short",
+                "mode": "plain",
+                "style": "garble",
+                "line1": g1,
+                "line2": g2,
+                "initiator_line": g1,
+                "reply_line": g2,
+            },
+            style="garble",
+            garble=True,
+        )
     roll = random.random()
     if roll < 0.24:
         a0, b0 = dialogue_lines_for_pair(initiator_kind, other_kind, meet_count=n)
-        return {"talk_kind": "short", "mode": "plain", "style": "greet", "line1": a0, "line2": b0}
+        return attach_talk_emotes(
+            {
+                "talk_kind": "short",
+                "mode": "plain",
+                "style": "greet",
+                "line1": a0,
+                "line2": b0,
+            },
+            style="greet",
+        )
     style_roll = random.random()
     # 闲聊为主：寒暄/选题/无厘头问答；深聊与软聊少一些
     if style_roll < 0.28:
@@ -1640,15 +2513,18 @@ def plan_short_talk_varied(initiator_kind: str, other_kind: str, *, meet_count: 
         want = "soft"
     pool = [x for x in SHORT_TALK_VARIANTS if x[0] == want] or list(SHORT_TALK_VARIANTS)
     style, a, b = random.choice(pool)
-    return {
-        "talk_kind": "short",
-        "mode": "plain",
-        "style": style,
-        "line1": a,
-        "line2": b,
-        "initiator_line": a,
-        "reply_line": b,
-    }
+    return attach_talk_emotes(
+        {
+            "talk_kind": "short",
+            "mode": "plain",
+            "style": style,
+            "line1": a,
+            "line2": b,
+            "initiator_line": a,
+            "reply_line": b,
+        },
+        style=style,
+    )
 
 
 def plan_talk_session(
@@ -1658,7 +2534,7 @@ def plan_talk_session(
     *,
     meet_count: int,
 ) -> dict:
-    """短谈 / 知识点 / 长谈抽取（meet≥12）。问答偏少；吵架极稀有。"""
+    """短谈 / 知识点 / 长谈抽取（meet≥11，自我介绍完成后）。问答偏少；吵架极稀有。"""
     n = int(meet_count or 0)
     if n < LONG_TALK_MIN_MEETS:
         return plan_short_talk_varied(initiator_kind, other_kind, meet_count=n)

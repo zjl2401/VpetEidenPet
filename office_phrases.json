@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "id": "mail_hi",
+      "title": "邮件开头",
+      "text": "您好，\n\n"
+    },
+    {
+      "id": "mail_end",
+      "title": "邮件结尾",
+      "text": "祝好，\n"
+    },
+    {
+      "id": "daily_tpl",
+      "title": "日报模板",
+      "text": "【今日完成】\n1.\n【进行中】\n1.\n【风险/需协助】\n无\n"
+    },
+    {
+      "id": "meeting_late",
+      "title": "会议稍晚",
+      "text": "抱歉，我可能会晚到一两分钟，请先开始。"
+    },
+    {
+      "id": "ack",
+      "title": "收到确认",
+      "text": "收到，我这边跟进。"
+    }
+  ]
+}
