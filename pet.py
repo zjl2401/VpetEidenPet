@@ -93,6 +93,7 @@ import peer_friendship
 import friend_talk_anim
 import office_assist
 import owner_bond
+import companion_interactions
 import emote_registry
 import character_profile
 import companion_quotes
@@ -3149,6 +3150,7 @@ APP_CONFIG_FILE = DATA_DIR / "app_config.json"
 PET_PROFILE_FILE = DATA_DIR / "pet_profile.json"
 OWNER_AVATAR_FILE = DATA_DIR / "owner_avatar.png"
 OWNER_BOND_FILE = DATA_DIR / "owner_bond.json"
+COMPANION_INTERACTIONS_FILE = DATA_DIR / "companion_interactions.json"
 ACTIVE_CHARACTER_FILE = DATA_DIR / "active_character.json"
 DATE_SCRIPTS_DIR = DATA_DIR / "date_scripts"
 DIARY_FILE = DATA_DIR / "diary.json"
@@ -31156,6 +31158,113 @@ class DesktopPet:
             return
         self._run_date_script(script)
 
+    def _open_companion_checkin(self) -> None:
+        """Three small daily prompts make the long-term bond actionable, not just a bar."""
+        self._hide_main_menu()
+        prompts = companion_interactions.daily_prompts(COMPANION_INTERACTIONS_FILE)
+        win = tk.Toplevel(self.root)
+        win.title("今日陪伴")
+        self._apply_window_layer(win)
+        paper = OWNER_THEME["bg"]
+        win.configure(bg=paper)
+        frame = tk.Frame(win, bg=paper, padx=12, pady=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+        tk.Label(frame, text="今日陪伴", font=PIXEL_FONT, fg=OWNER_THEME["accent"], bg=paper).pack(anchor=tk.W)
+        tk.Label(
+            frame,
+            text="每天 3 个轻互动；完成后会记入羁绊，也可以只看看不回答。",
+            font=_ui_hint_font(8), fg=OWNER_THEME["muted"], bg=paper,
+        ).pack(anchor=tk.W, pady=(2, 8))
+
+        def answer(prompt: dict[str, str]) -> None:
+            if not companion_interactions.complete_prompt(COMPANION_INTERACTIONS_FILE, str(prompt["id"])):
+                return
+            self._grant_owner_bond(owner_bond.CH_MENU, amount=0.8, toast=False)
+            emote = {"check_in": "idea", "memory": "happy", "care": "shy", "home": "happy", "thanks": "like"}.get(
+                str(prompt["id"]), "happy"
+            )
+            try:
+                self._trigger_mood_action(emote)
+            except Exception:
+                pass
+            self._show_toast(str(prompt["reply"]), "#e8a0b8", duration_ms=3200)
+            try:
+                win.destroy()
+            except Exception:
+                pass
+
+        for prompt in prompts:
+            row = tk.Frame(frame, bg=OWNER_THEME["card"], padx=7, pady=5)
+            row.pack(fill=tk.X, pady=3)
+            done = bool(prompt.get("done"))
+            tk.Label(row, text="✓" if done else "♡", font=PIXEL_FONT, fg=OWNER_THEME["accent"], bg=OWNER_THEME["card"]).pack(side=tk.LEFT)
+            tk.Button(
+                row, text=str(prompt["question"]), anchor=tk.W, font=_ui_hint_font(9),
+                bg=OWNER_THEME["card"], fg=OWNER_THEME["muted"] if done else OWNER_THEME["ink"], relief=tk.FLAT,
+                state=tk.DISABLED if done else tk.NORMAL, command=lambda p=prompt: answer(p),
+            ).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
+        tk.Button(frame, text="管理图片槽", font=_ui_hint_font(8), bg=OWNER_THEME["accent"], fg="#ffffff", relief=tk.FLAT,
+                  command=lambda: (win.destroy(), self._open_custom_reaction_slots())).pack(anchor=tk.E, pady=(8, 0))
+        self._place_panel_popup(win)
+
+    def _open_custom_reaction_slots(self) -> None:
+        """Player-owned image slots for future/custom actions without changing the theme."""
+        self._hide_main_menu()
+        win = tk.Toplevel(self.root)
+        win.title("动作 / 表情图片槽")
+        self._apply_window_layer(win)
+        paper = OWNER_THEME["bg"]
+        win.configure(bg=paper)
+        frame = tk.Frame(win, bg=paper, padx=12, pady=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+        tk.Label(frame, text="动作 / 表情图片槽", font=PIXEL_FONT, fg=OWNER_THEME["accent"], bg=paper).pack(anchor=tk.W)
+        tk.Label(frame, text="保留 6 个位置给你放图片（PNG/JPG/WebP/GIF）。图片会复制到 data/custom_reactions，不会改动原立绘。",
+                 font=_ui_hint_font(8), fg=OWNER_THEME["muted"], bg=paper, wraplength=420, justify=tk.LEFT).pack(anchor=tk.W, pady=(2, 8))
+        cards = tk.Frame(frame, bg=paper)
+        cards.pack(fill=tk.BOTH, expand=True)
+        photos: list[ImageTk.PhotoImage] = []
+
+        def rebuild() -> None:
+            for child in cards.winfo_children():
+                child.destroy()
+            photos.clear()
+            state = companion_interactions.load(COMPANION_INTERACTIONS_FILE)
+            for idx, slot in enumerate(companion_interactions.SLOT_DEFS):
+                card = tk.Frame(cards, bg=OWNER_THEME["card"], padx=6, pady=6, highlightbackground=OWNER_THEME["line"], highlightthickness=1)
+                card.grid(row=idx // 2, column=idx % 2, sticky="nsew", padx=3, pady=3)
+                cards.grid_columnconfigure(idx % 2, weight=1)
+                image_path = companion_interactions.slot_path(COMPANION_INTERACTIONS_FILE, state, str(slot["id"]))
+                preview = None
+                if image_path:
+                    try:
+                        img = Image.open(image_path).convert("RGBA")
+                        img.thumbnail((92, 68), Image.Resampling.LANCZOS)
+                        preview = ImageTk.PhotoImage(img, master=win)
+                        photos.append(preview)
+                    except Exception:
+                        image_path = None
+                tk.Label(card, image=preview, text="＋\n图片留空" if not preview else "", compound=tk.CENTER,
+                         width=12, height=4, font=_ui_hint_font(8), fg=OWNER_THEME["muted"], bg="#ffffff").pack(side=tk.LEFT, padx=(0, 5))
+                detail = tk.Frame(card, bg=OWNER_THEME["card"])
+                detail.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+                tk.Label(detail, text=str(slot["label"]), font=_ui_hint_font(9), fg=OWNER_THEME["ink"], bg=OWNER_THEME["card"]).pack(anchor=tk.W)
+                tk.Label(detail, text=str(slot["hint"]), font=_ui_hint_font(7), fg=OWNER_THEME["muted"], bg=OWNER_THEME["card"], wraplength=120, justify=tk.LEFT).pack(anchor=tk.W)
+                def choose(slot_id=str(slot["id"])) -> None:
+                    path = filedialog.askopenfilename(title="选择动作或表情图片", filetypes=[("图片", "*.png *.jpg *.jpeg *.webp *.gif")])
+                    if not path:
+                        return
+                    try:
+                        companion_interactions.set_slot(COMPANION_INTERACTIONS_FILE, slot_id, Path(path))
+                        rebuild()
+                    except Exception:
+                        self._show_toast("图片导入失败，请换一张试试", "#ff8899")
+                tk.Button(detail, text="更换图片", font=_ui_hint_font(8), bg=OWNER_THEME["accent"], fg="#ffffff", relief=tk.FLAT, command=choose).pack(anchor=tk.W, pady=(4, 0))
+                if image_path:
+                    tk.Button(detail, text="清空", font=_ui_hint_font(7), bg=OWNER_THEME["card"], fg="#cc6680", relief=tk.FLAT,
+                              command=lambda s=str(slot["id"]): (companion_interactions.set_slot(COMPANION_INTERACTIONS_FILE, s, None), rebuild())).pack(anchor=tk.W)
+        rebuild()
+        self._place_panel_popup(win)
+
     def _run_date_script(self, script: dict) -> None:
         """离线约会小剧场：简单选项窗。"""
         nodes = script.get("nodes") if isinstance(script.get("nodes"), list) else []
@@ -32860,6 +32969,20 @@ class DesktopPet:
         cell_bg = HOME_THEME["chrome_cell"]
         panel = tk.Frame(host, bg=chrome, padx=6, pady=4)
         panel.pack(fill=tk.X)
+        # 轻量季节卡：给经营提供节奏和主题，但绝不制造错过/惩罚。
+        season = home_farm.current_season()
+        season_card = tk.Frame(panel, bg=season["accent"], padx=6, pady=3)
+        season_card.pack(fill=tk.X, pady=(0, 4))
+        tk.Label(
+            season_card,
+            text=f"{season['label']}季 · {season['event']}",
+            font=_ui_hint_font(9), fg="#ffffff", bg=season["accent"],
+        ).pack(side=tk.LEFT)
+        tk.Label(
+            season_card,
+            text=str(season["note"]),
+            font=_ui_hint_font(7), fg="#ffffff", bg=season["accent"],
+        ).pack(side=tk.RIGHT)
         # 工具：单独一行，避免和操作键挤在一起显示不全
         row_tools = tk.Frame(panel, bg=chrome)
         row_tools.pack(fill=tk.X, pady=(0, 4))
@@ -43882,6 +44005,8 @@ class DesktopPet:
                 ("计时器 ▶", self._open_tool_timer_dialog),
                 (f"番茄钟{' ✓' if pomo_on else ''} ▶", self._open_pomodoro_dialog),
                 ("陪我专注（契约）", self._start_focus_contract),
+                ("今日陪伴 ▶", self._open_companion_checkin),
+                ("动作 / 表情图片槽 ▶", self._open_custom_reaction_slots),
                 ("取消专注契约", self._cancel_focus_contract),
                 ("邀约小剧场", self._open_date_invite),
                 ("日程提醒", self._open_schedule_manager),
@@ -43896,6 +44021,7 @@ class DesktopPet:
         tip = " · ".join(str(t.get("text") or "")[:12] for t in tops) if tops else "暂无待办"
         self._show_sub_menu(
             [
+                ("办公总览 ▶", self._open_office_dashboard),
                 ("今日待办 ▶", self._open_office_todos),
                 ("剪贴板历史 ▶", self._open_office_clipboard),
                 ("常用语 ▶", self._open_office_phrases),
@@ -43906,6 +44032,35 @@ class DesktopPet:
             offset_x=280,
         )
         self._show_toast(f"待办：{tip}", "#88ccff", duration_ms=2200)
+
+    def _open_office_dashboard(self) -> None:
+        """A compact entry point keeps the practical tools discoverable in one place."""
+        self._hide_main_menu()
+        items = self.office.today_todos(include_done=True)
+        done = sum(1 for item in items if item.get("done"))
+        total = len(items)
+        win = tk.Toplevel(self.root)
+        win.title("办公总览")
+        self._apply_window_layer(win)
+        paper = OWNER_THEME["bg"]
+        win.configure(bg=paper)
+        frame = tk.Frame(win, bg=paper, padx=12, pady=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+        tk.Label(frame, text="办公总览", font=PIXEL_FONT, fg=OWNER_THEME["accent"], bg=paper).pack(anchor=tk.W)
+        tk.Label(frame, text=f"今日完成 {done}/{total} 项", font=_ui_body_font(10), fg=OWNER_THEME["ink"], bg=paper).pack(anchor=tk.W, pady=(5, 2))
+        bar = tk.Frame(frame, bg=OWNER_THEME["line"], height=8)
+        bar.pack(fill=tk.X)
+        bar.pack_propagate(False)
+        if total:
+            tk.Frame(bar, bg=OWNER_THEME["accent"], width=max(2, int(300 * done / total)), height=8).pack(side=tk.LEFT, fill=tk.Y)
+        next_task = next((str(item.get("text") or "") for item in items if not item.get("done")), "没有待办，给自己留一点空白吧。")
+        tk.Label(frame, text=f"下一件：{next_task}", font=_ui_hint_font(8), fg=OWNER_THEME["muted"], bg=paper, wraplength=330, justify=tk.LEFT).pack(anchor=tk.W, pady=(8, 6))
+        actions = tk.Frame(frame, bg=paper)
+        actions.pack(fill=tk.X)
+        for label, command in (("整理待办", self._open_office_todos), ("开始 25 分钟专注", self._start_focus_contract), ("常用语", self._open_office_phrases)):
+            tk.Button(actions, text=label, font=_ui_hint_font(8), bg=OWNER_THEME["accent"], fg="#ffffff", relief=tk.FLAT,
+                      command=lambda c=command: (win.destroy(), c())).pack(side=tk.LEFT, padx=(0, 5))
+        self._place_panel_popup(win)
 
     def _close_panel(self) -> None:
         self._cancel_timer_job("panel_hide_job")
