@@ -84,6 +84,32 @@ CROP_DEFS: dict[str, dict[str, Any]] = {
     },
 }
 
+# 季节不是倒计时处罚，而是给每天的田园决定一个不同的“小目标”。
+# 用现实月份换季，避免单机存档因长时间未开而错过内容。
+SEASONS: tuple[dict[str, Any], ...] = (
+    {"id": "spring", "label": "春", "months": (3, 4, 5), "accent": "#e88eaa", "favored": "berry", "event": "花信日", "note": "花与莓果更受欢迎"},
+    {"id": "summer", "label": "夏", "months": (6, 7, 8), "accent": "#e8bd58", "favored": "corn", "event": "萤火夜", "note": "玉米与钓鱼订单更常见"},
+    {"id": "autumn", "label": "秋", "months": (9, 10, 11), "accent": "#d58a50", "favored": "wheat", "event": "丰收茶会", "note": "小麦与果酱适合交付"},
+    {"id": "winter", "label": "冬", "months": (12, 1, 2), "accent": "#82b7d9", "favored": "fish", "event": "围炉信箱", "note": "慢慢整理库存，也会收到鲜鱼委托"},
+)
+
+
+def current_season(*, month: int | None = None) -> dict[str, Any]:
+    """Return the current low-pressure season card used by the farm HUD and orders."""
+    if month is None:
+        import datetime as _dt
+
+        month = _dt.datetime.now().month
+    for season in SEASONS:
+        if int(month) in season["months"]:
+            return dict(season)
+    return dict(SEASONS[0])
+
+
+def season_summary(*, month: int | None = None) -> str:
+    season = current_season(month=month)
+    return f"{season['label']}季·{season['event']}：{season['note']}"
+
 # 商店：金币买种子/木材
 SHOP_PRICES: dict[str, int] = {
     "seed_wheat": 3,
@@ -1451,10 +1477,17 @@ def ensure_daily_orders(wallet: dict, *, today: str | None = None) -> list[dict]
     if str(wallet.get("farm_orders_ymd") or "") == day and isinstance(wallet.get("farm_orders"), list):
         return list(wallet["farm_orders"])
     dig = sum(int(c) for c in day if c.isdigit()) or 1
+    season = current_season()
+    favored = str(season.get("favored") or "")
+    # 一单随季节变化、一单轮换；既有季节感，也不把作物锁死在当季。
+    favored_pool = [o for o in ORDER_POOL if favored in str(o.get("id") or "") or (favored == "fish" and o.get("item") == "fish")]
     picks: list[dict] = []
     for i in range(2):
-        o = dict(ORDER_POOL[(dig + i * 3) % len(ORDER_POOL)])
+        source = favored_pool if i == 0 and favored_pool else list(ORDER_POOL)
+        o = dict(source[(dig + i * 3) % len(source)])
         o["done"] = False
+        if i == 0:
+            o["label"] = f"{season['event']}·{o['label']}"
         picks.append(o)
     wallet["farm_orders_ymd"] = day
     wallet["farm_orders"] = picks
@@ -1537,4 +1570,3 @@ def ranch_mood_offline_bonus(wallet: dict) -> int:
     if mood >= 50:
         return 1
     return 0
-
